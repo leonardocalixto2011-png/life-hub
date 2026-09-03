@@ -1,0 +1,281 @@
+// Life Hub — shared life & business admin for a small trusted group.
+// Phase 1 scaffold: Auth.js (magic-link) + ventures + tasks.
+// Deadlines / subscriptions / budget / events / push are modelled now so the
+// schema is stable; their UI lands in later phases.
+// Migrations are deferred until DATABASE_URL points at a real Postgres.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth.js (v5) — magic-link. No public signup: an admin seeds User rows and
+// the signIn callback rejects any address without one. JWT sessions, so the
+// edge proxy never touches the DB.
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(MEMBER)
+  createdAt     DateTime  @default(now())
+
+  accounts          Account[]
+  sessions          Session[]
+  createdTasks      Task[]                  @relation("TaskCreatedBy")
+  assignedTasks     Task[]                  @relation("TaskAssignedTo")
+  createdDeadlines  Deadline[]
+  ownedSubscriptions Subscription[]
+  budgetEntries     BudgetEntry[]
+  createdEvents     Event[]
+  pushSubscriptions PushSubscription[]
+  notificationPref  NotificationPreference?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Ventures — the "which part of life/business" tag. Editable in-app so a new
+// venture never needs a migration.
+// ---------------------------------------------------------------------------
+
+model Venture {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  color     String   @default("#6366f1") // hex, drives UI chips
+  sortOrder Int      @default(0)
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  tasks         Task[]
+  deadlines     Deadline[]
+  subscriptions Subscription[]
+  budgetEntries BudgetEntry[]
+  events        Event[]
+}
+
+// ---------------------------------------------------------------------------
+// Tasks — shared-first: everyone sees every task. "Personal" just means it is
+// assigned to one person; the UI filters to "mine".
+// ---------------------------------------------------------------------------
+
+enum Priority {
+  LOW
+  MED
+  HIGH
+}
+
+enum TaskStatus {
+  OPEN
+  DONE
+}
+
+model Task {
+  id               String     @id @default(cuid())
+  title            String
+  notes            String?
+  ventureId        String?
+  venture          Venture?   @relation(fields: [ventureId], references: [id], onDelete: SetNull)
+  assignedToId     String?
+  assignedTo       User?      @relation("TaskAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdById      String
+  createdBy        User       @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  dueDate          DateTime?
+  isRecurring      Boolean    @default(false)
+  recurrence       String? // simple token e.g. "weekly" / "monthly" — expanded in Phase 3
+  priority         Priority   @default(MED)
+  status           TaskStatus @default(OPEN)
+  completedAt      DateTime?
+  remindDaysBefore Int[]      @default([]) // e.g. [3, 1] — read by the Phase 2 cron
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@index([status, dueDate])
+  @@index([ventureId])
+  @@index([assignedToId])
+}
+
+// ---------------------------------------------------------------------------
+// Deadlines — a dated milestone with multi-stage reminders (Phase 3 UI).
+// ---------------------------------------------------------------------------
+
+model Deadline {
+  id               String    @id @default(cuid())
+  title            String
+  notes            String?
+  dueDate          DateTime
+  ventureId        String?
+  venture          Venture?  @relation(fields: [ventureId], references: [id], onDelete: SetNull)
+  remindDaysBefore Int[]     @default([7, 3, 1])
+  createdById      String
+  createdBy        User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  doneAt           DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([dueDate])
+}
+
+// ---------------------------------------------------------------------------
+// Subscriptions — renewal + cancel-by tracking (Phase 3 UI).
+// ---------------------------------------------------------------------------
+
+enum BillingCycle {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  CUSTOM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+}
+
+model Subscription {
+  id           String             @id @default(cuid())
+  name         String
+  costCents    Int
+  currency     String             @default("CAD")
+  billingCycle BillingCycle       @default(MONTHLY)
+  renewalDate  DateTime
+  cancelByDate DateTime?
+  ventureId    String?
+  venture      Venture?           @relation(fields: [ventureId], references: [id], onDelete: SetNull)
+  ownerId      String?
+  owner        User?              @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  status       SubscriptionStatus @default(ACTIVE)
+  notes        String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([status, renewalDate])
+}
+
+// ---------------------------------------------------------------------------
+// Budget — simple income/expense log (Phase 3 UI).
+// ---------------------------------------------------------------------------
+
+enum EntryType {
+  INCOME
+  EXPENSE
+}
+
+model BudgetEntry {
+  id          String    @id @default(cuid())
+  type        EntryType
+  amountCents Int
+  currency    String    @default("CAD")
+  category    String // free text: "Supplies", "Ads", "Tuition"...
+  ventureId   String?
+  venture     Venture?  @relation(fields: [ventureId], references: [id], onDelete: SetNull)
+  description String?
+  date        DateTime  @default(now())
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now())
+
+  @@index([date])
+  @@index([type, date])
+}
+
+// ---------------------------------------------------------------------------
+// Events — shared calendar (Phase 4 UI). Attendees kept as a plain id array
+// to start; promote to a join table if RSVP state is ever needed.
+// ---------------------------------------------------------------------------
+
+model Event {
+  id          String   @id @default(cuid())
+  title       String
+  notes       String?
+  startAt     DateTime
+  endAt       DateTime
+  location    String?
+  ventureId   String?
+  venture     Venture? @relation(fields: [ventureId], references: [id], onDelete: SetNull)
+  attendeeIds String[] @default([])
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([startAt])
+}
+
+// ---------------------------------------------------------------------------
+// Notifications — Web Push subscriptions + per-user preferences (Phase 2).
+// ---------------------------------------------------------------------------
+
+model PushSubscription {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String    @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime  @default(now())
+  lastOkAt  DateTime?
+  lastError String?
+
+  @@index([userId])
+}
+
+model NotificationPreference {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushEnabled        Boolean  @default(true)
+  emailDigestEnabled Boolean  @default(true)
+  digestHour         Int      @default(7) // local hour 0–23
+  timezone           String   @default("America/Toronto")
+  updatedAt          DateTime @updatedAt
+}
