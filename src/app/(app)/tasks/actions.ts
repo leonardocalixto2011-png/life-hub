@@ -111,3 +111,50 @@ export async function deleteTask(formData: FormData) {
   revalidatePath("/tasks");
   redirect("/tasks");
 }
+
+// --- Plain-arg actions for inline editing + swipe gestures -------------------
+
+function refreshTaskPaths() {
+  revalidatePath("/today");
+  revalidatePath("/tasks");
+  revalidatePath("/agenda");
+}
+
+/** Toggle done from JS (no FormData). Returns nothing; undo = call with !done. */
+export async function setTaskDone(id: string, done: boolean) {
+  await requireUser();
+  z.string().cuid().parse(id);
+  await prisma.task.update({
+    where: { id },
+    data: done
+      ? { status: "DONE", completedAt: new Date() }
+      : { status: "OPEN", completedAt: null },
+  });
+  refreshTaskPaths();
+}
+
+const patchSchema = z.object({
+  id: z.string().cuid(),
+  // undefined = leave alone, null = clear, string = set
+  dueDate: z.union([z.string(), z.null()]).optional(),
+  ventureId: z.union([z.string().cuid(), z.null()]).optional(),
+  assignedToId: z.union([z.string().cuid(), z.null()]).optional(),
+  priority: z.enum(["LOW", "MED", "HIGH"]).optional(),
+});
+
+export async function setTaskFields(input: z.infer<typeof patchSchema>) {
+  await requireUser();
+  const p = patchSchema.parse(input);
+  await prisma.task.update({
+    where: { id: p.id },
+    data: {
+      ...(p.dueDate !== undefined
+        ? { dueDate: p.dueDate ? fromDateInput(p.dueDate) : null }
+        : {}),
+      ...(p.ventureId !== undefined ? { ventureId: p.ventureId } : {}),
+      ...(p.assignedToId !== undefined ? { assignedToId: p.assignedToId } : {}),
+      ...(p.priority !== undefined ? { priority: p.priority } : {}),
+    },
+  });
+  refreshTaskPaths();
+}

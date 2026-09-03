@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { format } from "date-fns";
 
-import { dashboard } from "@/lib/data";
+import { dashboard, listMembers, listVentures } from "@/lib/data";
 import { getUser } from "@/lib/session";
 import { countdownLabel, eventTimeRange, money } from "@/lib/format";
 import { TaskListCard } from "@/components/TaskListCard";
@@ -24,8 +24,14 @@ function SectionHead({ title, href, cta }: { title: string; href: string; cta: s
 }
 
 export default async function DashboardPage() {
-  const [user, d] = await Promise.all([getUser(), dashboard()]);
+  const [user, d, ventures, membersRaw] = await Promise.all([
+    getUser(),
+    dashboard(),
+    listVentures(),
+    listMembers(),
+  ]);
   const first = user?.name?.split(" ")[0];
+  const vOpts = ventures.map((v) => ({ id: v.id, name: v.name }));
 
   const nothing =
     d.overdue.length +
@@ -55,14 +61,14 @@ export default async function DashboardPage() {
       {d.overdue.length > 0 && (
         <section>
           <SectionHead title={`Overdue · ${d.overdue.length}`} href="/tasks" cta="All tasks" />
-          <TaskListCard tasks={d.overdue} />
+          <TaskListCard tasks={d.overdue} ventures={vOpts} members={membersRaw} />
         </section>
       )}
 
       {d.dueSoon.length > 0 && (
         <section>
           <SectionHead title="Tasks this week" href="/tasks" cta="All tasks" />
-          <TaskListCard tasks={d.dueSoon} />
+          <TaskListCard tasks={d.dueSoon} ventures={vOpts} members={membersRaw} />
         </section>
       )}
 

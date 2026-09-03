@@ -6,6 +6,7 @@ import { QuickAdd } from "@/components/QuickAdd";
 import { BottomNav } from "@/components/BottomNav";
 import { Avatar } from "@/components/Avatar";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { ToastHost } from "@/components/Toast";
 import { signOutAction } from "./auth-actions";
 
 export default async function AppLayout({
@@ -52,6 +53,7 @@ export default async function AppLayout({
 
       <main className="flex-1 overflow-y-auto">{children}</main>
 
+      <ToastHost />
       <BottomNav />
     </div>
   );

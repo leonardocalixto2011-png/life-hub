@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { listTasks, listVentures } from "@/lib/data";
+import { listMembers, listTasks, listVentures } from "@/lib/data";
 import { requireUser } from "@/lib/session";
 import { TaskListCard } from "@/components/TaskListCard";
 import { EmptyState, QUICK_ADD_EXAMPLES } from "@/components/EmptyState";
@@ -50,7 +50,7 @@ export default async function TasksPage({
 }) {
   const sp = await searchParams;
   const user = await requireUser();
-  const ventures = await listVentures();
+  const [ventures, members] = await Promise.all([listVentures(), listMembers()]);
 
   const includeDone = sp.show === "all";
   const mine = sp.mine === "1";
@@ -91,6 +91,8 @@ export default async function TasksPage({
 
       <TaskListCard
         tasks={tasks}
+        ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}
+        members={members}
         empty={
           mine ? (
             "No tasks assigned to you."
