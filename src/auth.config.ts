@@ -8,6 +8,8 @@ import type { NextAuthConfig } from "next-auth";
 export const authConfig = {
   pages: { signIn: "/login" },
   session: { strategy: "jwt" as const },
+  // Trust the deployment host (Vercel, custom domain) for callback URL building.
+  trustHost: true,
   providers: [],
   callbacks: {
     /** Gate every route except the public ones. */
