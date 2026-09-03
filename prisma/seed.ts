@@ -45,7 +45,7 @@ async function main() {
   // reuse ADMIN_EMAIL — add him with his own address.
   const people: { email: string; name: string; role: "ADMIN" | "MEMBER" }[] = [
     { email: "chantelleanderson.cma@gmail.com", name: "Chantelle", role: "MEMBER" },
-    // { email: "dan@his-own-address.com", name: "Dan", role: "MEMBER" },
+    { email: "leonardocalixto2011@gmail.com", name: "Dan", role: "MEMBER" },
   ];
   for (const p of people) {
     const email = p.email.toLowerCase();
