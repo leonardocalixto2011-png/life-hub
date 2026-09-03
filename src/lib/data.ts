@@ -80,6 +80,29 @@ export async function todayView() {
 
 export type TaskWithRefs = Awaited<ReturnType<typeof listTasks>>[number];
 
+/** One-off task titles created 3+ times — candidates to make recurring. */
+export async function recurringSuggestions() {
+  const rows = await prisma.task.findMany({
+    where: { isRecurring: false },
+    select: { id: true, title: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const groups = new Map<string, { title: string; count: number; latestId: string }>();
+  for (const r of rows) {
+    const key = r.title.trim().toLowerCase();
+    if (!key) continue;
+    const g = groups.get(key);
+    if (g) g.count += 1;
+    else groups.set(key, { title: r.title.trim(), count: 1, latestId: r.id });
+  }
+
+  return [...groups.values()]
+    .filter((g) => g.count >= 3)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 2);
+}
+
 // --------------------------------------------------------------------------
 // Deadlines
 // --------------------------------------------------------------------------

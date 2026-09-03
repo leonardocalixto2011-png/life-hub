@@ -57,6 +57,90 @@ export function digestSubject(d: DigestData): string {
   return `Life Hub — ${d.count} thing${d.count === 1 ? "" : "s"} to look at`;
 }
 
+// ---------------------------------------------------------------------------
+// Weekly rollup — one short paragraph, sent Monday mornings.
+// ---------------------------------------------------------------------------
+
+export async function collectWeekly() {
+  const now = new Date();
+  const start = startOfDay(now);
+  const end = endOfDay(new Date(now.getTime() + 7 * 864e5));
+
+  const [dueTasks, overdueTasks, deadlines, renewals, budget] = await Promise.all([
+    prisma.task.count({ where: { status: "OPEN", dueDate: { gte: start, lte: end } } }),
+    prisma.task.count({ where: { status: "OPEN", dueDate: { lt: start } } }),
+    prisma.deadline.count({ where: { doneAt: null, dueDate: { gte: start, lte: end } } }),
+    prisma.subscription.findMany({
+      where: { status: "ACTIVE", renewalDate: { gte: start, lte: end } },
+      select: { name: true, costCents: true, currency: true },
+    }),
+    (async () => {
+      const from = new Date(now.getFullYear(), now.getMonth(), 1);
+      const entries = await prisma.budgetEntry.findMany({
+        where: { date: { gte: from, lte: now } },
+        select: { type: true, amountCents: true },
+      });
+      let income = 0;
+      let expense = 0;
+      for (const e of entries) {
+        if (e.type === "INCOME") income += e.amountCents;
+        else expense += e.amountCents;
+      }
+      return { income, expense, net: income - expense };
+    })(),
+  ]);
+
+  const renewalTotal = renewals.reduce((n, r) => n + r.costCents, 0);
+  const currency = renewals[0]?.currency ?? "CAD";
+
+  return { now, dueTasks, overdueTasks, deadlines, renewals, renewalTotal, currency, budget };
+}
+
+export type WeeklyData = Awaited<ReturnType<typeof collectWeekly>>;
+
+export function weeklySubject() {
+  return "Life Hub — the week ahead";
+}
+
+export function weeklyText(w: WeeklyData): string {
+  const bits: string[] = [];
+  if (w.overdueTasks > 0) bits.push(`${w.overdueTasks} overdue task${w.overdueTasks === 1 ? "" : "s"}`);
+  bits.push(`${w.dueTasks} task${w.dueTasks === 1 ? "" : "s"} due`);
+  if (w.deadlines > 0) bits.push(`${w.deadlines} deadline${w.deadlines === 1 ? "" : "s"}`);
+  if (w.renewals.length > 0) {
+    bits.push(
+      `${w.renewals.length} subscription${w.renewals.length === 1 ? "" : "s"} renewing (${money(w.renewalTotal, w.currency)})`,
+    );
+  }
+
+  const net = w.budget.net;
+  const budgetNote =
+    net >= 0
+      ? `Budget this month is positive (${money(net)} net).`
+      : `Budget this month is down ${money(-net)}.`;
+
+  return `This week: ${bits.join(", ")}. ${budgetNote}`;
+}
+
+export function weeklyHtml(w: WeeklyData, appUrl: string): string {
+  const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
+  return `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;padding:24px">
+      <h1 style="font-size:18px;margin:0 0 4px">Life Hub — the week ahead</h1>
+      <p style="font-size:12px;color:#999;margin:0 0 12px">${esc(w.now.toDateString())}</p>
+      <p style="font-size:15px;line-height:1.6;color:#222">${esc(weeklyText(w))}</p>
+      ${
+        w.renewals.length
+          ? `<ul style="font-size:14px;color:#444;line-height:1.6">${w.renewals
+              .map((r) => `<li>${esc(r.name)} — ${esc(money(r.costCents, r.currency))}</li>`)
+              .join("")}</ul>`
+          : ""
+      }
+      <p style="margin:20px 0 0"><a href="${esc(appUrl)}/agenda" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:600">Open the agenda</a></p>
+    </div>
+  `;
+}
+
 function line(label: string, when: Date | null, extra?: string): string {
   return `• ${label}${when ? ` — ${dueLabel(when)}` : ""}${extra ? ` (${extra})` : ""}`;
 }

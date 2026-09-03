@@ -1,9 +1,15 @@
 import Link from "next/link";
 
-import { listMembers, listTasks, listVentures } from "@/lib/data";
+import {
+  listMembers,
+  listTasks,
+  listVentures,
+  recurringSuggestions,
+} from "@/lib/data";
 import { requireUser } from "@/lib/session";
 import { TaskListCard } from "@/components/TaskListCard";
 import { EmptyState, QUICK_ADD_EXAMPLES } from "@/components/EmptyState";
+import { RecurringNudge } from "@/components/RecurringNudge";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +56,12 @@ export default async function TasksPage({
 }) {
   const sp = await searchParams;
   const user = await requireUser();
-  const [ventures, members] = await Promise.all([listVentures(), listMembers()]);
+  const [ventures, members, suggestions] = await Promise.all([
+    listVentures(),
+    listMembers(),
+    recurringSuggestions(),
+  ]);
+  const noFilters = !sp.venture && sp.mine !== "1" && sp.show !== "all";
 
   const includeDone = sp.show === "all";
   const mine = sp.mine === "1";
@@ -64,6 +75,10 @@ export default async function TasksPage({
   return (
     <div className="space-y-3 p-3">
       <h1 className="text-lg font-bold">Tasks</h1>
+
+      {noFilters && suggestions.length > 0 && (
+        <RecurringNudge suggestions={suggestions} />
+      )}
 
       <div className="flex flex-wrap gap-1.5">
         <Chip href={qs(sp, { venture: undefined })} active={!sp.venture}>

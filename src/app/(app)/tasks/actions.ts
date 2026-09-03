@@ -2,11 +2,45 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { addMonths, addWeeks } from "date-fns";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
+
+/**
+ * Marking a recurring task done spawns its next occurrence: same fields, due date
+ * advanced by the recurrence interval (from the old due date, or today).
+ */
+async function completeTask(id: string) {
+  const task = await prisma.task.findUnique({ where: { id } });
+  if (!task) return;
+
+  await prisma.task.update({
+    where: { id },
+    data: { status: "DONE", completedAt: new Date() },
+  });
+
+  if (task.isRecurring && task.recurrence) {
+    const base = task.dueDate ?? new Date();
+    const nextDue =
+      task.recurrence === "weekly" ? addWeeks(base, 1) : addMonths(base, 1);
+    await prisma.task.create({
+      data: {
+        title: task.title,
+        notes: task.notes,
+        ventureId: task.ventureId,
+        assignedToId: task.assignedToId,
+        priority: task.priority,
+        isRecurring: true,
+        recurrence: task.recurrence,
+        dueDate: nextDue,
+        createdById: task.createdById,
+      },
+    });
+  }
+}
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -91,12 +125,14 @@ export async function toggleTask(formData: FormData) {
     done: formData.get("done"),
   });
 
-  await prisma.task.update({
-    where: { id },
-    data: done
-      ? { status: "DONE", completedAt: new Date() }
-      : { status: "OPEN", completedAt: null },
-  });
+  if (done) {
+    await completeTask(id);
+  } else {
+    await prisma.task.update({
+      where: { id },
+      data: { status: "OPEN", completedAt: null },
+    });
+  }
 
   revalidatePath("/today");
   revalidatePath("/tasks");
@@ -124,12 +160,14 @@ function refreshTaskPaths() {
 export async function setTaskDone(id: string, done: boolean) {
   await requireUser();
   z.string().cuid().parse(id);
-  await prisma.task.update({
-    where: { id },
-    data: done
-      ? { status: "DONE", completedAt: new Date() }
-      : { status: "OPEN", completedAt: null },
-  });
+  if (done) {
+    await completeTask(id);
+  } else {
+    await prisma.task.update({
+      where: { id },
+      data: { status: "OPEN", completedAt: null },
+    });
+  }
   refreshTaskPaths();
 }
 
@@ -141,6 +179,16 @@ const patchSchema = z.object({
   assignedToId: z.union([z.string().cuid(), z.null()]).optional(),
   priority: z.enum(["LOW", "MED", "HIGH"]).optional(),
 });
+
+export async function makeRecurring(id: string, recurrence: "weekly" | "monthly") {
+  await requireUser();
+  z.string().cuid().parse(id);
+  await prisma.task.update({
+    where: { id },
+    data: { isRecurring: true, recurrence },
+  });
+  refreshTaskPaths();
+}
 
 export async function setTaskFields(input: z.infer<typeof patchSchema>) {
   await requireUser();

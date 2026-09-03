@@ -86,6 +86,18 @@ export default async function SubscriptionsPage() {
   const yearTotal = active.reduce((n, s) => n + yearlyCents(s.costCents, s.billingCycle), 0);
   const currency = active[0]?.currency ?? "CAD";
 
+  // Creep signal: monthly value of subs added in the last 60 days.
+  const since = new Date(Date.now() - 60 * 864e5);
+  const recentNew = active.filter((s) => s.createdAt >= since);
+  const recentMonthly = recentNew.reduce(
+    (n, s) => n + monthlyCents(s.costCents, s.billingCycle),
+    0,
+  );
+  const creep =
+    recentNew.length >= 2 && recentMonthly > 0
+      ? { count: recentNew.length, monthly: recentMonthly }
+      : null;
+
   return (
     <div className="space-y-4 p-3">
       <h1 className="text-lg font-bold">Subscriptions</h1>
@@ -104,6 +116,16 @@ export default async function SubscriptionsPage() {
           </div>
         </div>
       </div>
+      {creep && (
+        <div className="card border-[#b45309] p-3 text-xs">
+          <span className="font-semibold" style={{ color: "#b45309" }}>
+            ↑ {money(creep.monthly, currency)}/mo added in the last 60 days
+          </span>{" "}
+          <span className="text-[var(--color-text-dim)]">
+            ({creep.count} new subscriptions) — worth a review.
+          </span>
+        </div>
+      )}
       {active.some((s) => s.currency !== currency) && (
         <p className="text-[0.68rem] text-[var(--color-text-dim)]">
           Totals assume {currency}; mixed currencies aren’t converted.
