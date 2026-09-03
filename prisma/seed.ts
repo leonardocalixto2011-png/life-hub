@@ -41,17 +41,24 @@ async function main() {
     console.log(`✔ admin user ${adminEmail}`);
   }
 
-  // Add teammates here once you have their emails, or invite them from the app:
-  //   { email: "dan@example.com",       name: "Dan",       role: "MEMBER" },
-  //   { email: "chantelle@example.com", name: "Chantelle", role: "MEMBER" },
-  const people: { email: string; name: string; role: "ADMIN" | "MEMBER" }[] = [];
+  // Teammates. NOTE: one email == one account (User.email is unique). Dan cannot
+  // reuse ADMIN_EMAIL — add him with his own address.
+  const people: { email: string; name: string; role: "ADMIN" | "MEMBER" }[] = [
+    { email: "chantelleanderson.cma@gmail.com", name: "Chantelle", role: "MEMBER" },
+    // { email: "dan@his-own-address.com", name: "Dan", role: "MEMBER" },
+  ];
   for (const p of people) {
+    const email = p.email.toLowerCase();
+    if (email === adminEmail) {
+      console.warn(`⚠ skipped ${p.name}: same email as the admin account`);
+      continue;
+    }
     await prisma.user.upsert({
-      where: { email: p.email.toLowerCase() },
+      where: { email },
       update: { name: p.name, role: p.role },
-      create: { email: p.email.toLowerCase(), name: p.name, role: p.role },
+      create: { email, name: p.name, role: p.role },
     });
-    console.log(`✔ member ${p.email}`);
+    console.log(`✔ member ${email}`);
   }
 }
 
