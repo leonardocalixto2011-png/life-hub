@@ -22,11 +22,13 @@ export default async function AppLayout({
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-2.5 backdrop-blur">
         <span className="font-bold tracking-tight">Life Hub</span>
         <div className="flex items-center gap-3">
-          <Link
-            href="/notifications"
-            aria-label="Notifications"
-            className="text-lg leading-none"
-          >
+          <Link href="/assistant" aria-label="Assistant" className="text-lg leading-none">
+            ✨
+          </Link>
+          <Link href="/calendar" aria-label="Calendar" className="text-lg leading-none">
+            📅
+          </Link>
+          <Link href="/notifications" aria-label="Notifications" className="text-lg leading-none">
             🔔
           </Link>
           <Avatar name={user.name} email={user.email} size={26} />

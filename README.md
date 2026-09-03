@@ -1,8 +1,9 @@
 # Life Hub
 
-Mobile-first PWA for a small trusted group to run life + business admin — tasks,
-deadlines, subscriptions, budget, events — with iPhone push notifications and an
-email digest fallback. Invite-only.
+Mobile-first PWA for a small trusted group to run life + business admin — a
+dashboard, tasks, deadlines, subscriptions, budget, a shared calendar, and a
+Claude-powered assistant (natural-language add + weekly briefing) — with iPhone
+push notifications and an email digest fallback. Invite-only.
 
 Stack: Next 16 (App Router) · React 19 · TypeScript · Tailwind v4 · Prisma 6 +
 Postgres · Auth.js v5 (magic-link) · Web Push · Resend · Vercel.
@@ -42,6 +43,11 @@ npm run dev            # http://localhost:3000
 
 Leave `AUTH_RESEND_KEY` **unset** — magic-link URLs print to the dev-server
 console instead of emailing, so you can sign in with zero email setup.
+
+`ANTHROPIC_API_KEY` is optional — without it the `/assistant` page shows a "not
+set up" card and everything else works. With it, natural-language add and the
+weekly briefing turn on. Model defaults to `claude-opus-5`; set
+`ANTHROPIC_MODEL=claude-haiku-4-5` (or `claude-sonnet-5`) to cut cost.
 
 ### Signing in locally
 
@@ -99,8 +105,13 @@ src/auth.ts                 full Auth.js: Prisma adapter + magic-link + invite g
 src/proxy.ts                route gate (Next 16 "middleware")
 src/lib/{prisma,session,data,format,email}.ts
 src/app/login/             magic-link request screen
-src/app/(app)/             authed shell: layout + Today + Tasks
-src/components/            QuickAdd, BottomNav, TaskRow, ...
+src/app/(app)/             authed shell + Today (dashboard) / Tasks / Deadlines /
+                           Subscriptions / Money / Calendar / Notifications / Assistant
+src/app/api/cron/digest/   daily digest (push + email), Bearer CRON_SECRET
+src/app/api/health/        DB ping
+src/lib/                   prisma, session, data (queries + dashboard aggregate),
+                           format, money, digest, push, ai, email
+src/components/            QuickAdd, BottomNav, TaskRow, Countdown, ...
 scripts/gen-vapid.mjs      VAPID keys (Phase 2)
 scripts/gen-icons.mjs      placeholder PWA icons
 ```

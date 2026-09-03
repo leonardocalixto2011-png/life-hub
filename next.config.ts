@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["web-push"],
+  serverExternalPackages: ["web-push", "@anthropic-ai/sdk"],
   async headers() {
     return [
       {

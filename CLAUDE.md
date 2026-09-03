@@ -27,7 +27,8 @@ Next 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind v4 ·
 Prisma 6.19 (`@prisma/client` pinned to match) · Auth.js v5 (`next-auth` beta) +
 `@auth/prisma-adapter` · `web-push` · `zod` · `date-fns`.
 
-## Status — Phases 1–3 DONE (verified locally; iOS push needs a real device)
+## Status — Phases 1–4 DONE — feature-complete (verified locally; iOS push + the
+## Claude assistant need real credentials / a device to fully exercise)
 
 - ✅ **Auth** — magic-link via the Auth.js `resend` provider, **JWT sessions** so
   the edge proxy never hits the DB. Split config: `src/auth.config.ts`
@@ -136,6 +137,39 @@ Prisma 6.19 (`@prisma/client` pinned to match) · Auth.js v5 (`next-auth` beta) 
   `cancelByDate` into their own dated push events needs a per-item "sent" ledger,
   deferred to a later pass.
 
+### Phase 4 — Calendar / Dashboard / Assistant / polish
+
+- ✅ **Events** — `/calendar` agenda grouped by day (6 weeks out), `<EventForm>`
+  (collapsible create; `/calendar/[id]` edit + delete). `datetime-local` inputs;
+  `endAt` auto-set to +1h if missing/invalid. Attendees = member checkboxes →
+  `attendeeIds` string array; shown as initial dots. `calendar/actions.ts`.
+  Header gains 📅 (calendar), ✨ (assistant) links next to 🔔.
+- ✅ **Dashboard** — `/today` is no longer tasks-only. `dashboard()` in
+  `lib/data.ts` aggregates in one parallel batch: overdue + this-week tasks,
+  this-week events, deadlines ≤~2wk, subs renewing / cancel-by ≤~2wk, and the
+  month's budget in/out/net. Each section links to its full page. `getUser()`
+  greeting.
+- ✅ **Assistant** (`/assistant`) — Claude via `@anthropic-ai/sdk`. `src/lib/ai.ts`:
+  `AI_MODEL` = `ANTHROPIC_MODEL ?? "claude-opus-5"`, `aiEnabled()`, lazy `ai()`.
+  `assistant/actions.ts`:
+  - `parseAndAdd(text)` — `client.messages.parse()` + `zodOutputFormat` extract
+    `{tasks[], events[]}` (relative dates resolved against today; venture/assignee
+    matched by name), then creates the rows (capped 20 each). `effort: "low"`.
+  - `weeklyBriefing()` — feeds the dashboard digest to `messages.create`, returns
+    a 4–6 sentence prose brief. `effort: "low"`, `max_tokens: 1024`.
+  - Both guard on `aiEnabled()`; page shows a "not set up" card with the env
+    instructions when `ANTHROPIC_API_KEY` is absent (verified — the AI calls
+    themselves are unverified locally, no key).
+  - Followed the `claude-api` skill: `claude-opus-5` default, no prefill, typed
+    error handling, `@anthropic-ai/sdk` in `serverExternalPackages`.
+- ✅ **Polish** — branded `src/app/not-found.tsx` + `src/app/error.tsx`,
+  `GET /api/health` → `{ok, db}` (503 on DB failure).
+- ✅ Verified in a browser: dashboard renders the seeded task/event/budget,
+  event create → agenda + dashboard "This week", `/assistant` unconfigured state,
+  `/api/health` green. `build` + `typecheck` clean.
+- Local demo data now also includes 1 event ("Photoshoot — Couca nail sets",
+  Sep 5).
+
 ## Owner asked for: Claude in the app (AI assistance)
 
 Not started. Planned for Phase 4 as a `src/lib/ai.ts` + `/api/assistant` route:
@@ -172,19 +206,18 @@ dev-server console.
 `npm run dev` · `build` · `typecheck` · `db:migrate` · `db:push` · `db:seed` ·
 `db:studio` · `gen:vapid` · `node scripts/gen-icons.mjs`
 
-## Phase 4 — next
+## Backlog (post-feature-complete)
 
-- Shared calendar / events (`Event` model exists) — attendee tagging, week/agenda
-  view.
-- **Dashboard home** — replace the bare `/today` with today's tasks + upcoming
-  deadlines + subs renewing this week + a budget snapshot.
-- **Claude assistant** (owner asked for this) — `src/lib/ai.ts` + `/api/assistant`:
-  natural-language quick-add, weekly summary, digest copy. Needs
-  `ANTHROPIC_API_KEY` + `@anthropic-ai/sdk`; read the `claude-api` skill first.
-- Polish: empty states, error boundaries, per-item dated reminders (the ledger
-  noted above).
+- **Per-item dated reminders** — deadline `remindDaysBefore` (7/3/1) and
+  subscription `cancelByDate` as their own dated push events, not just the 48h
+  digest summary. Needs a "sent" ledger table so the cron doesn't re-fire.
+- **Recurring tasks** — `Task.isRecurring` / `recurrence` are stored but nothing
+  regenerates the next occurrence on completion.
+- **Assistant** could also draft the digest email copy; currently the digest is
+  templated in `lib/digest.ts`.
+- Real-device iOS push test; deploy.
 
-## Deploy (when Phase 1+2 are signed off) — mirrors couca-app
+## Deploy — mirrors couca-app
 
 1. Neon project -> `DATABASE_URL` (pooled, `?pgbouncer=true`) + `DIRECT_URL` (direct).
 2. Vercel: import the repo, set every `.env.example` var (real values), deploy
@@ -193,6 +226,7 @@ dev-server console.
 4. Resend: verify the `hub.<domain>` sending domain, set `AUTH_RESEND_KEY` +
    `EMAIL_FROM`.
 5. VAPID keys + `CRON_SECRET` in Vercel; confirm the cron schedule.
-6. Note (from couca-app): Vercel Hobby only auto-deploys **public** repos or
+6. Optional: `ANTHROPIC_API_KEY` (+ `ANTHROPIC_MODEL`) to turn on `/assistant`.
+7. Note (from couca-app): Vercel Hobby only auto-deploys **public** repos or
    commits authored by the connected GitHub account — the local git email
    `leonardocalixto1998@yahoo.com` resolves to a different GitHub user.

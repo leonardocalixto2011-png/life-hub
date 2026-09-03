@@ -61,6 +61,28 @@ export function fromDateInput(value: string | null | undefined): Date | null {
   return new Date(y, m - 1, d, 12, 0, 0, 0);
 }
 
+/** `<input type="datetime-local">` value from a Date (local wall-clock). */
+export function toDateTimeInput(date: Date | null | undefined): string {
+  if (!date) return "";
+  return format(date, "yyyy-MM-dd'T'HH:mm");
+}
+
+export function fromDateTimeInput(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** "2:30 PM" or "2:30 PM – 4:00 PM" (same day) or with a date when multi-day. */
+export function eventTimeRange(startAt: Date, endAt: Date): string {
+  const sameDay =
+    startAt.getFullYear() === endAt.getFullYear() &&
+    startAt.getMonth() === endAt.getMonth() &&
+    startAt.getDate() === endAt.getDate();
+  if (sameDay) return `${format(startAt, "h:mm a")} – ${format(endAt, "h:mm a")}`;
+  return `${format(startAt, "MMM d, h:mm a")} – ${format(endAt, "MMM d, h:mm a")}`;
+}
+
 export function initials(name: string | null | undefined, email?: string | null): string {
   const src = name?.trim() || email?.split("@")[0] || "?";
   const parts = src.split(/[\s._-]+/).filter(Boolean);

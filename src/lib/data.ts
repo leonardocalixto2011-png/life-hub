@@ -168,3 +168,90 @@ export async function budgetMonth(month: Date, ventureSlug?: string) {
 export type BudgetEntryWithRefs = Awaited<
   ReturnType<typeof budgetMonth>
 >["entries"][number];
+
+// --------------------------------------------------------------------------
+// Events / calendar
+// --------------------------------------------------------------------------
+
+const eventInclude = {
+  venture: { select: { id: true, name: true, slug: true, color: true } },
+  createdBy: { select: { id: true, name: true, email: true } },
+} as const;
+
+export function listEvents(opts: { from?: Date; to?: Date } = {}) {
+  const range =
+    opts.from || opts.to
+      ? {
+          startAt: {
+            ...(opts.from ? { gte: opts.from } : {}),
+            ...(opts.to ? { lte: opts.to } : {}),
+          },
+        }
+      : {};
+  return prisma.event.findMany({
+    where: range,
+    include: eventInclude,
+    orderBy: { startAt: "asc" },
+  });
+}
+
+export function getEvent(id: string) {
+  return prisma.event.findUnique({ where: { id }, include: eventInclude });
+}
+
+export type EventWithRefs = Awaited<ReturnType<typeof listEvents>>[number];
+
+// --------------------------------------------------------------------------
+// Dashboard aggregate
+// --------------------------------------------------------------------------
+
+export async function dashboard() {
+  const now = new Date();
+  const todayStart = startOfDay(now);
+  const weekEnd = endOfDay(new Date(now.getTime() + 6 * 864e5));
+  const soon = endOfDay(new Date(now.getTime() + 13 * 864e5)); // ~2 weeks
+
+  const [tasks, deadlines, renewals, cancelBys, events, month] = await Promise.all([
+    prisma.task.findMany({
+      where: { status: "OPEN", dueDate: { lte: weekEnd } },
+      include: taskInclude,
+      orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
+    }),
+    prisma.deadline.findMany({
+      where: { doneAt: null, dueDate: { lte: soon } },
+      include: { venture: { select: { name: true, color: true } } },
+      orderBy: { dueDate: "asc" },
+      take: 5,
+    }),
+    prisma.subscription.findMany({
+      where: { status: "ACTIVE", renewalDate: { lte: soon } },
+      include: { venture: { select: { name: true, color: true } } },
+      orderBy: { renewalDate: "asc" },
+    }),
+    prisma.subscription.findMany({
+      where: { status: "ACTIVE", cancelByDate: { not: null, lte: soon } },
+      include: { venture: { select: { name: true, color: true } } },
+      orderBy: { cancelByDate: "asc" },
+    }),
+    prisma.event.findMany({
+      where: { endAt: { gte: todayStart }, startAt: { lte: weekEnd } },
+      include: eventInclude,
+      orderBy: { startAt: "asc" },
+    }),
+    budgetMonth(now),
+  ]);
+
+  const overdue = tasks.filter((t) => t.dueDate && t.dueDate < todayStart);
+  const dueSoon = tasks.filter((t) => !t.dueDate || t.dueDate >= todayStart);
+
+  return {
+    now,
+    overdue,
+    dueSoon,
+    deadlines,
+    renewals,
+    cancelBys,
+    events,
+    budget: { income: month.income, expense: month.expense, net: month.net },
+  };
+}
