@@ -47,6 +47,7 @@ export default async function AppLayout({
         ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}
         members={members}
         defaultAssigneeId={user.id}
+        aiEnabled={Boolean(process.env.ANTHROPIC_API_KEY)}
       />
 
       <main className="flex-1 overflow-y-auto">{children}</main>
