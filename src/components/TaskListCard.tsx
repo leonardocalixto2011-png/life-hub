@@ -20,13 +20,15 @@ export function TaskListCard({
   empty = "Nothing here.",
 }: {
   tasks: TaskWithRefs[];
-  empty?: string;
+  empty?: React.ReactNode;
 }) {
   if (tasks.length === 0) {
-    return (
+    return typeof empty === "string" ? (
       <p className="px-1 py-8 text-center text-sm text-[var(--color-text-dim)]">
         {empty}
       </p>
+    ) : (
+      <>{empty}</>
     );
   }
   return (

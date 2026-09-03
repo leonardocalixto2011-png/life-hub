@@ -6,6 +6,7 @@ import { getUser } from "@/lib/session";
 import { countdownLabel, eventTimeRange, money } from "@/lib/format";
 import { TaskListCard } from "@/components/TaskListCard";
 import { VentureChip } from "@/components/VentureChip";
+import { EmptyState, QUICK_ADD_EXAMPLES } from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -45,9 +46,10 @@ export default async function DashboardPage() {
       </div>
 
       {nothing && (
-        <div className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
-          All clear — nothing due this week. Add a task above to get going.
-        </div>
+        <EmptyState
+          title="All clear this week. Capture something — the box up top understands plain sentences:"
+          examples={QUICK_ADD_EXAMPLES}
+        />
       )}
 
       {d.overdue.length > 0 && (

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { listTasks, listVentures } from "@/lib/data";
 import { requireUser } from "@/lib/session";
 import { TaskListCard } from "@/components/TaskListCard";
+import { EmptyState, QUICK_ADD_EXAMPLES } from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -90,7 +91,16 @@ export default async function TasksPage({
 
       <TaskListCard
         tasks={tasks}
-        empty={mine ? "No tasks assigned to you." : "No tasks. Add one above."}
+        empty={
+          mine ? (
+            "No tasks assigned to you."
+          ) : (
+            <EmptyState
+              title="No tasks yet. The box up top takes plain sentences:"
+              examples={QUICK_ADD_EXAMPLES}
+            />
+          )
+        }
       />
     </div>
   );

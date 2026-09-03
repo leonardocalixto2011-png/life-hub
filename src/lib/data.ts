@@ -202,6 +202,81 @@ export function getEvent(id: string) {
 export type EventWithRefs = Awaited<ReturnType<typeof listEvents>>[number];
 
 // --------------------------------------------------------------------------
+// Merged agenda — tasks + deadlines + events on one timeline
+// --------------------------------------------------------------------------
+
+export type AgendaItem = {
+  kind: "task" | "deadline" | "event";
+  id: string;
+  title: string;
+  at: Date;
+  href: string;
+  allDay: boolean;
+  venture: { name: string; color: string | null } | null;
+  meta: string | null;
+};
+
+export async function agendaItems(days = 30) {
+  const now = new Date();
+  const from = startOfDay(now);
+  const to = endOfDay(new Date(now.getTime() + days * 864e5));
+
+  const [tasks, deadlines, events] = await Promise.all([
+    prisma.task.findMany({
+      where: { status: "OPEN", dueDate: { not: null, lte: to } },
+      include: { venture: { select: { name: true, color: true } }, assignedTo: { select: { name: true, email: true } } },
+      orderBy: { dueDate: "asc" },
+    }),
+    prisma.deadline.findMany({
+      where: { doneAt: null, dueDate: { lte: to } },
+      include: { venture: { select: { name: true, color: true } } },
+      orderBy: { dueDate: "asc" },
+    }),
+    prisma.event.findMany({
+      where: { endAt: { gte: from }, startAt: { lte: to } },
+      include: { venture: { select: { name: true, color: true } } },
+      orderBy: { startAt: "asc" },
+    }),
+  ]);
+
+  const items: AgendaItem[] = [
+    ...tasks.map((t): AgendaItem => ({
+      kind: "task",
+      id: t.id,
+      title: t.title,
+      at: t.dueDate!,
+      href: `/tasks/${t.id}`,
+      allDay: true,
+      venture: t.venture,
+      meta: t.assignedTo ? (t.assignedTo.name ?? t.assignedTo.email) : null,
+    })),
+    ...deadlines.map((d): AgendaItem => ({
+      kind: "deadline",
+      id: d.id,
+      title: d.title,
+      at: d.dueDate,
+      href: `/deadlines/${d.id}`,
+      allDay: true,
+      venture: d.venture,
+      meta: null,
+    })),
+    ...events.map((e): AgendaItem => ({
+      kind: "event",
+      id: e.id,
+      title: e.title,
+      at: e.startAt,
+      href: `/calendar/${e.id}`,
+      allDay: false,
+      venture: e.venture,
+      meta: e.location,
+    })),
+  ];
+
+  items.sort((a, b) => a.at.getTime() - b.at.getTime());
+  return { now, from, items };
+}
+
+// --------------------------------------------------------------------------
 // Dashboard aggregate
 // --------------------------------------------------------------------------
 
