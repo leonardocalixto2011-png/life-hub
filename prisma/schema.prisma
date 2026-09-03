@@ -279,3 +279,29 @@ model NotificationPreference {
   timezone           String   @default("America/Toronto")
   updatedAt          DateTime @updatedAt
 }
+
+// ---------------------------------------------------------------------------
+// Review inbox — parsed candidates from inbound email / SMS / share, waiting
+// for a human to accept, edit, or discard. Nothing here is live until accepted.
+// ---------------------------------------------------------------------------
+
+enum ReviewStatus {
+  PENDING
+  ACCEPTED
+  DISCARDED
+}
+
+model ReviewItem {
+  id            String       @id @default(cuid())
+  status        ReviewStatus @default(PENDING)
+  source        String // "email" | "sms" | "share"
+  sourceRef     String? // provider message id
+  sourceSnippet String? // first chars of the original message, for traceback
+  fromAddress   String?
+  draft         Json // shape matches the Draft type in quick-actions.ts
+  note          String? // e.g. "updates an existing subscription"
+  createdAt     DateTime     @default(now())
+  reviewedAt    DateTime?
+
+  @@index([status, createdAt])
+}

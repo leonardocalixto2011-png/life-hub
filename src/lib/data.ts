@@ -225,6 +225,24 @@ export function getEvent(id: string) {
 export type EventWithRefs = Awaited<ReturnType<typeof listEvents>>[number];
 
 // --------------------------------------------------------------------------
+// Review inbox
+// --------------------------------------------------------------------------
+
+export function listPendingReviews() {
+  return prisma.reviewItem.findMany({
+    where: { status: "PENDING" },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+}
+
+export function pendingReviewCount() {
+  return prisma.reviewItem.count({ where: { status: "PENDING" } });
+}
+
+export type ReviewRow = Awaited<ReturnType<typeof listPendingReviews>>[number];
+
+// --------------------------------------------------------------------------
 // Merged agenda — tasks + deadlines + events on one timeline
 // --------------------------------------------------------------------------
 
