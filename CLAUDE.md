@@ -27,7 +27,7 @@ Next 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind v4 ·
 Prisma 6.19 (`@prisma/client` pinned to match) · Auth.js v5 (`next-auth` beta) +
 `@auth/prisma-adapter` · `web-push` · `zod` · `date-fns`.
 
-## Status — Phase 1 DONE (verified end-to-end locally)
+## Status — Phases 1 & 2 DONE (verified locally; iOS push needs a real device)
 
 - ✅ **Auth** — magic-link via the Auth.js `resend` provider, **JWT sessions** so
   the edge proxy never hits the DB. Split config: `src/auth.config.ts`
@@ -65,6 +65,44 @@ Prisma 6.19 (`@prisma/client` pinned to match) · Auth.js v5 (`next-auth` beta) 
   local `prisma dev` Postgres: sign-in, quick-add (both modes), today buckets,
   filters, toggle, edit, delete, invite-only rejection.
 
+### Phase 2 — Notifications
+
+- ✅ **Service worker** `public/sw.js` — `push` + `notificationclick` (focus or
+  open `/today`). Registered app-wide by `<ServiceWorkerRegister>` in the app
+  layout; also served with no-cache + CSP headers via `next.config.ts`
+  (`headers()`), alongside global `X-Content-Type-Options` / `X-Frame-Options` /
+  `Referrer-Policy`.
+- ✅ **Push flow** — `src/components/PushToggle.tsx` shows a live status
+  (`On / Off / Blocked / N/A`), does the `Notification.requestPermission()` +
+  `pushManager.subscribe()` dance with the VAPID key, "Send test", "Turn off".
+  Actions in `src/app/(app)/notifications/actions.ts`: `savePushSubscription`
+  (upsert by endpoint + ensure a `NotificationPreference`), `removePushSubscription`,
+  `updateNotificationPrefs`, `sendTestPush`.
+- ✅ **`/notifications` page** — status + device count, `<PushToggle>`,
+  `<InstallHint>` (iOS Safari → Share → Add to Home Screen walkthrough, iOS 16.4+
+  note, non-iOS install steps), `<DigestPrefsForm>` (email toggle + preferred
+  hour + timezone; timezone pre-fills from `Intl`). 🔔 link in the app header.
+- ✅ **`src/lib/push.ts`** — `ensureWebPush()` (null-safe on missing VAPID),
+  `sendPushToUser()` fans out to all of a user's devices, prunes on 404/410,
+  records `lastError` / `lastOkAt`.
+- ✅ **Digest** — `src/lib/digest.ts` `collectDigest(48h)` gathers overdue +
+  due tasks, deadlines, subscription renewals, cancel-by dates (shared-first: one
+  list for everyone) → `digestText` / `digestHtml` / `digestSubject`.
+- ✅ **Cron** — `GET /api/cron/digest` (`runtime = "nodejs"`), rejects without
+  `Authorization: Bearer $CRON_SECRET` (401). Per user: summary push if
+  `pushEnabled` + has devices; email digest if `emailDigestEnabled`. Skips
+  entirely when nothing's due. `vercel.json` schedules it daily at `0 12 * * *`
+  (Vercel Hobby = once/day; `digestHour` is stored for when per-user timing is
+  possible). `proxy.ts` matcher now excludes all `/api/`.
+- ✅ VAPID keys generated (`npm run gen:vapid`) and in `.env`. Verified locally:
+  cron 401 without secret / 200 with it, digest email content correct (logged to
+  console — no `AUTH_RESEND_KEY`), cron respects `emailDigestEnabled` on/off, a
+  bad push subscription records `lastError` without breaking the run. `build` +
+  `typecheck` clean.
+- ⚠️ **NOT verifiable locally**: real push delivery + the full iOS path. Needs an
+  iPhone on iOS 16.4+, the PWA added to the Home Screen, served over HTTPS. Test
+  on a real device after deploy before relying on it.
+
 ## Owner asked for: Claude in the app (AI assistance)
 
 Not started. Planned for Phase 4 as a `src/lib/ai.ts` + `/api/assistant` route:
@@ -101,20 +139,11 @@ dev-server console.
 `npm run dev` · `build` · `typecheck` · `db:migrate` · `db:push` · `db:seed` ·
 `db:studio` · `gen:vapid` · `node scripts/gen-icons.mjs`
 
-## Phase 2 — Notifications (next)
+## Phase 3 — next
 
-- `public/sw.js` service worker (`push` + `notificationclick`), registered from a
-  client component; `/notifications/setup` page with the iOS Add-to-Home-Screen
-  walkthrough + a visible "Notifications: ON/OFF" status.
-- `subscribeUser` / `unsubscribeUser` server actions -> persist to
-  `PushSubscription`. VAPID keys via `npm run gen:vapid`.
-- `GET /api/cron/digest` (Bearer `CRON_SECRET`) - scan tasks/deadlines/renewals
-  due in the next 24-48h -> Web Push, fall back to a Resend email digest per
-  `NotificationPreference`. `vercel.json` cron entry (daily).
-- Security headers + `sw.js` cache/CSP headers in `next.config.ts` (per the Next
-  PWA guide).
-- **iOS push needs real-device testing** - "builds" != "works on an iPhone".
-  Requires iOS 16.4+, the PWA added to the Home Screen, HTTPS.
+Deadlines / Subscriptions / Budget UIs (see below). Also fold into the digest:
+multi-stage deadline reminders (7/3/1) and subscription cancel-by urgency, which
+Phase 2 only summarises.
 
 ## Phases 3-4
 

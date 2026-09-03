@@ -10,6 +10,8 @@ export default proxy;
 export const config = {
   // Run on everything except Next internals, the auth API, and static PWA assets.
   matcher: [
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons/).*)",
+    // Everything except API routes (they auth themselves), Next internals and
+    // static PWA assets.
+    "/((?!api/|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons/).*)",
   ],
 };
