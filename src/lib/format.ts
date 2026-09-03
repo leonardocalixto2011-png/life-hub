@@ -32,6 +32,21 @@ export function isOverdue(date: Date | null | undefined): boolean {
   return differenceInCalendarDays(date, new Date()) < 0;
 }
 
+/** Days until `date`, as a signed integer (negative = past). */
+export function daysUntil(date: Date): number {
+  return differenceInCalendarDays(date, new Date());
+}
+
+/** "Today" / "in 5 days" / "3 days ago" */
+export function countdownLabel(date: Date): string {
+  const d = daysUntil(date);
+  if (d === 0) return "Today";
+  if (d === 1) return "Tomorrow";
+  if (d === -1) return "Yesterday";
+  if (d < 0) return `${Math.abs(d)} days ago`;
+  return `in ${d} days`;
+}
+
 /** `<input type="date">` value (local calendar day). */
 export function toDateInput(date: Date | null | undefined): string {
   if (!date) return "";

@@ -27,7 +27,7 @@ Next 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind v4 ·
 Prisma 6.19 (`@prisma/client` pinned to match) · Auth.js v5 (`next-auth` beta) +
 `@auth/prisma-adapter` · `web-push` · `zod` · `date-fns`.
 
-## Status — Phases 1 & 2 DONE (verified locally; iOS push needs a real device)
+## Status — Phases 1–3 DONE (verified locally; iOS push needs a real device)
 
 - ✅ **Auth** — magic-link via the Auth.js `resend` provider, **JWT sessions** so
   the edge proxy never hits the DB. Split config: `src/auth.config.ts`
@@ -103,6 +103,39 @@ Prisma 6.19 (`@prisma/client` pinned to match) · Auth.js v5 (`next-auth` beta) 
   iPhone on iOS 16.4+, the PWA added to the Home Screen, served over HTTPS. Test
   on a real device after deploy before relying on it.
 
+### Phase 3 — Deadlines / Subscriptions / Budget
+
+- ✅ Bottom nav is now 5 tabs: Today · Tasks · Deadlines · Subs · Budget.
+- ✅ **Deadlines** — `/deadlines` list grouped Overdue / Next 7 days / Later /
+  Done, each row a `<Countdown>` (signed day count + relative label, red overdue,
+  amber ≤3d) + venture chip + "reminds 7/3/1d before". `<DeadlineForm>`
+  (collapsible create; `/deadlines/[id]` edit + delete). `remindDaysBefore`
+  entered as "7, 3, 1". Actions in `deadlines/actions.ts` (create/update/
+  toggleDone/delete). `remindDaysBefore` already feeds the digest window.
+- ✅ **Subscriptions** — `/subscriptions` with a monthly + yearly total card
+  (`lib/money.ts` `monthlyCents` normalises WEEKLY×52/12, QUARTERLY/3, YEARLY/12;
+  CUSTOM treated as monthly). Cancelled subs excluded from totals. Row shows
+  renewal countdown + a **cancel-by badge that turns red ≤14 days**. Owner +
+  venture. "mark cancelled" / "reactivate" inline (`setSubscriptionStatus`).
+  `<SubscriptionForm>` + `/subscriptions/[id]`. Mixed-currency note when
+  applicable; no FX conversion.
+- ✅ **Budget** — `/money?m=YYYY-MM&venture=<slug>`. Month `‹ ›` nav,
+  IN / OUT / NET summary (net red when negative), expense category breakdown with
+  bars, per-venture filter chips, entry list with inline delete.
+  `<EntryForm>` (type / amount / currency / category with datalist / venture /
+  date / note). `budgetMonth()` in `lib/data.ts`. Amounts stored as cents
+  (`dollarsToCents` / `centsToInput`).
+- ✅ Verified in a browser: deadline create + countdown render, subscription
+  create + correct monthly/yearly maths + red cancel-by badge + cancel/reactivate
+  affecting totals, budget income+expense with live NET, category bars, venture
+  filter. `build` + `typecheck` clean.
+- Left as demo data in the local dev DB: 1 deadline, 1 cancelled sub, 2 budget
+  entries, 1 task. Delete from the UI if you want a clean slate.
+- Deadline **multi-stage reminders** and subscription **cancel-by push** still
+  only appear in the digest's 48h summary — turning `remindDaysBefore` /
+  `cancelByDate` into their own dated push events needs a per-item "sent" ledger,
+  deferred to a later pass.
+
 ## Owner asked for: Claude in the app (AI assistance)
 
 Not started. Planned for Phase 4 as a `src/lib/ai.ts` + `/api/assistant` route:
@@ -139,18 +172,17 @@ dev-server console.
 `npm run dev` · `build` · `typecheck` · `db:migrate` · `db:push` · `db:seed` ·
 `db:studio` · `gen:vapid` · `node scripts/gen-icons.mjs`
 
-## Phase 3 — next
+## Phase 4 — next
 
-Deadlines / Subscriptions / Budget UIs (see below). Also fold into the digest:
-multi-stage deadline reminders (7/3/1) and subscription cancel-by urgency, which
-Phase 2 only summarises.
-
-## Phases 3-4
-
-3 — Deadlines (countdowns, 7/3/1 reminders), Subscriptions (renewal list,
-monthly total, cancel-by alerts), Budget (income/expense log, monthly totals,
-per-venture filter). 4 — shared calendar/events, dashboard home, the Claude
-assistant, polish.
+- Shared calendar / events (`Event` model exists) — attendee tagging, week/agenda
+  view.
+- **Dashboard home** — replace the bare `/today` with today's tasks + upcoming
+  deadlines + subs renewing this week + a budget snapshot.
+- **Claude assistant** (owner asked for this) — `src/lib/ai.ts` + `/api/assistant`:
+  natural-language quick-add, weekly summary, digest copy. Needs
+  `ANTHROPIC_API_KEY` + `@anthropic-ai/sdk`; read the `claude-api` skill first.
+- Polish: empty states, error boundaries, per-item dated reminders (the ledger
+  noted above).
 
 ## Deploy (when Phase 1+2 are signed off) — mirrors couca-app
 
