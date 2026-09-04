@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { createDeadline, deleteDeadline, updateDeadline } from "./actions";
+import { PrivacyToggle } from "@/components/PrivacyToggle";
 
 type Venture = { id: string; name: string };
 
@@ -14,6 +15,7 @@ type Existing = {
   dueDate: string; // yyyy-mm-dd
   ventureId: string | null;
   remindDaysBefore: number[];
+  visibility?: "PRIVATE" | "SHARED";
 };
 
 function Fields({ ventures, existing }: { ventures: Venture[]; existing?: Existing }) {
@@ -71,6 +73,8 @@ function Fields({ ventures, existing }: { ventures: Venture[]; existing?: Existi
         Notes
         <textarea name="notes" defaultValue={existing?.notes ?? ""} rows={2} className="field mt-1" />
       </label>
+
+      <PrivacyToggle defaultValue={existing?.visibility} />
     </>
   );
 }

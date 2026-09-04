@@ -9,6 +9,7 @@ import { ai, aiEnabled, AI_MODEL } from "@/lib/ai";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { dashboard, listMembers, listVentures } from "@/lib/data";
+import { notifyAssignment } from "@/lib/notify";
 import { dueLabel, fromDateInput, fromDateTimeInput, money } from "@/lib/format";
 
 const MAX_ITEMS = 20;
@@ -91,22 +92,27 @@ export async function parseAndAdd(
 
   const tasks = parsed.tasks.slice(0, MAX_ITEMS);
   const events = parsed.events.slice(0, MAX_ITEMS);
+  const assigned: { taskId: string; title: string; assigneeId: string }[] = [];
 
   await withHub(user.id, async (tx) => {
     for (const t of tasks) {
-      await tx.task.create({
+      const assignedToId = t.assigneeName
+        ? (mByName.get(t.assigneeName.toLowerCase()) ?? null)
+        : null;
+      const created = await tx.task.create({
         data: {
           title: t.title.slice(0, 200),
           hubId: hub.id,
           dueDate: fromDateInput(t.dueDate),
           ventureId: t.ventureName ? (vByName.get(t.ventureName.toLowerCase()) ?? null) : null,
-          assignedToId: t.assigneeName
-            ? (mByName.get(t.assigneeName.toLowerCase()) ?? null)
-            : null,
+          assignedToId,
           priority: t.priority ?? "MED",
           createdById: user.id,
         },
       });
+      if (assignedToId && assignedToId !== user.id) {
+        assigned.push({ taskId: created.id, title: created.title, assigneeId: assignedToId });
+      }
     }
 
     for (const e of events) {
@@ -128,6 +134,10 @@ export async function parseAndAdd(
     }
   });
 
+  for (const a of assigned) {
+    await notifyAssignment(a.taskId, a.title, a.assigneeId, user.name ?? user.email);
+  }
+
   revalidatePath("/today");
   revalidatePath("/tasks");
   revalidatePath("/calendar");
@@ -147,7 +157,7 @@ export async function weeklyBriefing(): Promise<{ ok: boolean; text: string }> {
     return { ok: false, text: "Assistant isn’t configured (no ANTHROPIC_API_KEY)." };
   }
 
-  const d = await withHub(user.id, (tx) => dashboard(tx, hub.id));
+  const d = await withHub(user.id, (tx) => dashboard(tx, hub.id, user.id));
   const lines: string[] = [];
   if (d.overdue.length) lines.push(`Overdue tasks: ${d.overdue.map((t) => t.title).join(", ")}`);
   if (d.dueSoon.length)

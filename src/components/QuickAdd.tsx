@@ -10,6 +10,7 @@ import {
   type Draft,
 } from "@/app/(app)/quick-actions";
 import { DraftCard } from "@/components/DraftCard";
+import { PrivacyToggle } from "@/components/PrivacyToggle";
 
 type Option = { id: string; name: string | null; email?: string | null };
 
@@ -173,6 +174,9 @@ export function QuickAdd({
                 ))}
               </select>
             </label>
+            <div className="col-span-2">
+              <PrivacyToggle />
+            </div>
           </div>
         )}
       </form>

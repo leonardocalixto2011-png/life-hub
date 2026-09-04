@@ -19,6 +19,7 @@ export type Draft = {
   priority: "LOW" | "MED" | "HIGH";
   ventureId: string | null;
   note: string | null;
+  visibility: "PRIVATE" | "SHARED";
 };
 
 const AiSchema = z.object({
@@ -110,6 +111,7 @@ export async function parseText(
     priority: it.priority ?? "MED",
     ventureId: it.ventureName ? (vByName.get(it.ventureName.toLowerCase()) ?? null) : null,
     note: it.note,
+    visibility: "SHARED",
   }));
 
   return { ok: true, drafts };

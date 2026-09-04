@@ -9,6 +9,7 @@ import type { HubTx } from "@/lib/hub-context";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
+import { notifyAssignment } from "@/lib/notify";
 
 /**
  * Marking a recurring task done spawns its next occurrence: same fields, due date
@@ -75,7 +76,7 @@ export async function createTask(formData: FormData) {
   const { user, hub } = await requireHub();
   const data = parse(createSchema, formData);
 
-  await withHub(user.id, (tx) =>
+  const task = await withHub(user.id, (tx) =>
     tx.task.create({
       data: {
         title: data.title,
@@ -93,6 +94,10 @@ export async function createTask(formData: FormData) {
     }),
   );
 
+  if (data.assignedToId && data.assignedToId !== user.id) {
+    await notifyAssignment(task.id, task.title, data.assignedToId, user.name ?? user.email);
+  }
+
   revalidatePath("/today");
   revalidatePath("/tasks");
 }
@@ -101,8 +106,9 @@ export async function updateTask(formData: FormData) {
   const { user } = await requireHub();
   const data = parse(updateSchema, formData);
 
-  await withHub(user.id, (tx) =>
-    tx.task.update({
+  const [before, after] = await withHub(user.id, async (tx) => {
+    const before = await tx.task.findUnique({ where: { id: data.id }, select: { assignedToId: true } });
+    const after = await tx.task.update({
       where: { id: data.id },
       data: {
         title: data.title,
@@ -115,8 +121,17 @@ export async function updateTask(formData: FormData) {
         recurrence: data.isRecurring ? data.recurrence : null,
         visibility: data.visibility,
       },
-    }),
-  );
+    });
+    return [before, after];
+  });
+
+  if (
+    data.assignedToId &&
+    data.assignedToId !== user.id &&
+    data.assignedToId !== before?.assignedToId
+  ) {
+    await notifyAssignment(after.id, after.title, data.assignedToId, user.name ?? user.email);
+  }
 
   revalidatePath("/today");
   revalidatePath("/tasks");
@@ -201,8 +216,13 @@ export async function makeRecurring(id: string, recurrence: "weekly" | "monthly"
 export async function setTaskFields(input: z.infer<typeof patchSchema>) {
   const { user } = await requireHub();
   const p = patchSchema.parse(input);
-  await withHub(user.id, (tx) =>
-    tx.task.update({
+
+  const [before, after] = await withHub(user.id, async (tx) => {
+    const before =
+      p.assignedToId !== undefined
+        ? await tx.task.findUnique({ where: { id: p.id }, select: { assignedToId: true } })
+        : null;
+    const after = await tx.task.update({
       where: { id: p.id },
       data: {
         ...(p.dueDate !== undefined
@@ -212,7 +232,18 @@ export async function setTaskFields(input: z.infer<typeof patchSchema>) {
         ...(p.assignedToId !== undefined ? { assignedToId: p.assignedToId } : {}),
         ...(p.priority !== undefined ? { priority: p.priority } : {}),
       },
-    }),
-  );
+    });
+    return [before, after];
+  });
+
+  if (
+    p.assignedToId !== undefined &&
+    p.assignedToId &&
+    p.assignedToId !== user.id &&
+    p.assignedToId !== before?.assignedToId
+  ) {
+    await notifyAssignment(after.id, after.title, p.assignedToId, user.name ?? user.email);
+  }
+
   refreshTaskPaths();
 }

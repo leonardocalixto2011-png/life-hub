@@ -1,4 +1,5 @@
 import { endOfDay, endOfMonth, startOfDay, startOfMonth } from "date-fns";
+import type { Prisma } from "@prisma/client";
 
 import type { HubTx } from "@/lib/hub-context";
 
@@ -22,6 +23,20 @@ export function listMembers(tx: HubTx, hubId: string) {
     );
 }
 
+/**
+ * App-level mirror of the RLS privacy clause (`visibility = 'SHARED' OR
+ * createdById = current_setting('app.user_id')`) — real defense-in-depth, not
+ * just belt-and-suspenders: this project's local dev Postgres silently
+ * authenticates any connection string as its superuser (see prisma dev's
+ * known trust-all-credentials behavior), so RLS is a no-op there regardless
+ * of APP_DATABASE_URL. Without this filter, private items would leak to
+ * every hub member in local dev even though they're correctly RLS-blocked in
+ * production. Keep this in sync with prisma/migrations/*_multihub_rls.
+ */
+function visibilityFilter(userId: string): Prisma.TaskWhereInput {
+  return { OR: [{ visibility: "SHARED" }, { createdById: userId }] };
+}
+
 const taskInclude = {
   venture: { select: { id: true, name: true, slug: true, color: true } },
   assignedTo: { select: { id: true, name: true, email: true } },
@@ -34,10 +49,11 @@ export type TaskFilter = {
   includeDone?: boolean;
 };
 
-export function listTasks(tx: HubTx, hubId: string, filter: TaskFilter = {}) {
+export function listTasks(tx: HubTx, hubId: string, userId: string, filter: TaskFilter = {}) {
   return tx.task.findMany({
     where: {
       hubId,
+      ...visibilityFilter(userId),
       ...(filter.includeDone ? {} : { status: "OPEN" }),
       ...(filter.ventureSlug ? { venture: { slug: filter.ventureSlug } } : {}),
       ...(filter.mineUserId ? { assignedToId: filter.mineUserId } : {}),
@@ -52,34 +68,38 @@ export function listTasks(tx: HubTx, hubId: string, filter: TaskFilter = {}) {
   });
 }
 
-export function getTask(tx: HubTx, hubId: string, id: string) {
-  return tx.task.findUnique({ where: { id, hubId }, include: taskInclude });
+export function getTask(tx: HubTx, hubId: string, userId: string, id: string) {
+  return tx.task.findFirst({
+    where: { id, hubId, ...visibilityFilter(userId) },
+    include: taskInclude,
+  });
 }
 
 /** Buckets for the "Today" view. */
-export async function todayView(tx: HubTx, hubId: string) {
+export async function todayView(tx: HubTx, hubId: string, userId: string) {
   const now = new Date();
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
   const weekEnd = endOfDay(new Date(now.getTime() + 6 * 864e5));
+  const vis = visibilityFilter(userId);
 
   const [overdue, today, upcoming, undatedCount] = await Promise.all([
     tx.task.findMany({
-      where: { hubId, status: "OPEN", dueDate: { lt: todayStart } },
+      where: { hubId, status: "OPEN", dueDate: { lt: todayStart }, ...vis },
       include: taskInclude,
       orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
     }),
     tx.task.findMany({
-      where: { hubId, status: "OPEN", dueDate: { gte: todayStart, lte: todayEnd } },
+      where: { hubId, status: "OPEN", dueDate: { gte: todayStart, lte: todayEnd }, ...vis },
       include: taskInclude,
       orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
     }),
     tx.task.findMany({
-      where: { hubId, status: "OPEN", dueDate: { gt: todayEnd, lte: weekEnd } },
+      where: { hubId, status: "OPEN", dueDate: { gt: todayEnd, lte: weekEnd }, ...vis },
       include: taskInclude,
       orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
     }),
-    tx.task.count({ where: { hubId, status: "OPEN", dueDate: null } }),
+    tx.task.count({ where: { hubId, status: "OPEN", dueDate: null, ...vis } }),
   ]);
 
   return { overdue, today, upcoming, undatedCount };
@@ -88,9 +108,9 @@ export async function todayView(tx: HubTx, hubId: string) {
 export type TaskWithRefs = Awaited<ReturnType<typeof listTasks>>[number];
 
 /** One-off task titles created 3+ times — candidates to make recurring. */
-export async function recurringSuggestions(tx: HubTx, hubId: string) {
+export async function recurringSuggestions(tx: HubTx, hubId: string, userId: string) {
   const rows = await tx.task.findMany({
-    where: { hubId, isRecurring: false },
+    where: { hubId, isRecurring: false, ...visibilityFilter(userId) },
     select: { id: true, title: true, createdAt: true },
     orderBy: { createdAt: "desc" },
   });
@@ -118,16 +138,32 @@ const deadlineInclude = {
   venture: { select: { id: true, name: true, slug: true, color: true } },
 } as const;
 
-export function listDeadlines(tx: HubTx, hubId: string, opts: { includeDone?: boolean } = {}) {
+function deadlineVisibility(userId: string): Prisma.DeadlineWhereInput {
+  return { OR: [{ visibility: "SHARED" }, { createdById: userId }] };
+}
+
+export function listDeadlines(
+  tx: HubTx,
+  hubId: string,
+  userId: string,
+  opts: { includeDone?: boolean } = {},
+) {
   return tx.deadline.findMany({
-    where: { hubId, ...(opts.includeDone ? {} : { doneAt: null }) },
+    where: {
+      hubId,
+      ...deadlineVisibility(userId),
+      ...(opts.includeDone ? {} : { doneAt: null }),
+    },
     include: deadlineInclude,
     orderBy: [{ doneAt: "asc" }, { dueDate: "asc" }],
   });
 }
 
-export function getDeadline(tx: HubTx, hubId: string, id: string) {
-  return tx.deadline.findUnique({ where: { id, hubId }, include: deadlineInclude });
+export function getDeadline(tx: HubTx, hubId: string, userId: string, id: string) {
+  return tx.deadline.findFirst({
+    where: { id, hubId, ...deadlineVisibility(userId) },
+    include: deadlineInclude,
+  });
 }
 
 export type DeadlineWithRefs = Awaited<ReturnType<typeof listDeadlines>>[number];
@@ -212,7 +248,16 @@ const eventInclude = {
   createdBy: { select: { id: true, name: true, email: true } },
 } as const;
 
-export function listEvents(tx: HubTx, hubId: string, opts: { from?: Date; to?: Date } = {}) {
+function eventVisibility(userId: string): Prisma.EventWhereInput {
+  return { OR: [{ visibility: "SHARED" }, { createdById: userId }] };
+}
+
+export function listEvents(
+  tx: HubTx,
+  hubId: string,
+  userId: string,
+  opts: { from?: Date; to?: Date } = {},
+) {
   const range =
     opts.from || opts.to
       ? {
@@ -223,14 +268,17 @@ export function listEvents(tx: HubTx, hubId: string, opts: { from?: Date; to?: D
         }
       : {};
   return tx.event.findMany({
-    where: { hubId, ...range },
+    where: { hubId, ...eventVisibility(userId), ...range },
     include: eventInclude,
     orderBy: { startAt: "asc" },
   });
 }
 
-export function getEvent(tx: HubTx, hubId: string, id: string) {
-  return tx.event.findUnique({ where: { id, hubId }, include: eventInclude });
+export function getEvent(tx: HubTx, hubId: string, userId: string, id: string) {
+  return tx.event.findFirst({
+    where: { id, hubId, ...eventVisibility(userId) },
+    include: eventInclude,
+  });
 }
 
 export type EventWithRefs = Awaited<ReturnType<typeof listEvents>>[number];
@@ -272,24 +320,24 @@ export type AgendaItem = {
   meta: string | null;
 };
 
-export async function agendaItems(tx: HubTx, hubId: string, days = 30) {
+export async function agendaItems(tx: HubTx, hubId: string, userId: string, days = 30) {
   const now = new Date();
   const from = startOfDay(now);
   const to = endOfDay(new Date(now.getTime() + days * 864e5));
 
   const [tasks, deadlines, events] = await Promise.all([
     tx.task.findMany({
-      where: { hubId, status: "OPEN", dueDate: { not: null, lte: to } },
+      where: { hubId, status: "OPEN", dueDate: { not: null, lte: to }, ...visibilityFilter(userId) },
       include: { venture: { select: { name: true, color: true } }, assignedTo: { select: { name: true, email: true } } },
       orderBy: { dueDate: "asc" },
     }),
     tx.deadline.findMany({
-      where: { hubId, doneAt: null, dueDate: { lte: to } },
+      where: { hubId, doneAt: null, dueDate: { lte: to }, ...deadlineVisibility(userId) },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { dueDate: "asc" },
     }),
     tx.event.findMany({
-      where: { hubId, endAt: { gte: from }, startAt: { lte: to } },
+      where: { hubId, endAt: { gte: from }, startAt: { lte: to }, ...eventVisibility(userId) },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { startAt: "asc" },
     }),
@@ -342,7 +390,10 @@ export type MyItem = AgendaItem & { hub: { id: string; name: string; color: stri
  * Assigned-to-me items across every hub the user belongs to. Unlike the rest
  * of this module, this intentionally loops per hub (via a separate withHub()
  * call per hub from the caller) rather than relying on RLS's natural
- * cross-hub union — see the plan §4.
+ * cross-hub union — see the plan §4. Tasks are filtered to `assignedToId`
+ * already being this user, so no separate visibility filter is needed there;
+ * deadlines have no assignee concept, so they're scoped by the visibility
+ * filter alone (shared items, or ones this user created).
  */
 export async function myItemsInHub(
   tx: HubTx,
@@ -358,7 +409,7 @@ export async function myItemsInHub(
       orderBy: { dueDate: "asc" },
     }),
     tx.deadline.findMany({
-      where: { hubId, doneAt: null, dueDate: { lte: to } },
+      where: { hubId, doneAt: null, dueDate: { lte: to }, ...deadlineVisibility(userId) },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { dueDate: "asc" },
     }),
@@ -392,7 +443,7 @@ export async function myItemsInHub(
 // Dashboard aggregate
 // --------------------------------------------------------------------------
 
-export async function dashboard(tx: HubTx, hubId: string) {
+export async function dashboard(tx: HubTx, hubId: string, userId: string) {
   const now = new Date();
   const todayStart = startOfDay(now);
   const weekEnd = endOfDay(new Date(now.getTime() + 6 * 864e5));
@@ -400,12 +451,12 @@ export async function dashboard(tx: HubTx, hubId: string) {
 
   const [tasks, deadlines, renewals, cancelBys, events, month] = await Promise.all([
     tx.task.findMany({
-      where: { hubId, status: "OPEN", dueDate: { lte: weekEnd } },
+      where: { hubId, status: "OPEN", dueDate: { lte: weekEnd }, ...visibilityFilter(userId) },
       include: taskInclude,
       orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
     }),
     tx.deadline.findMany({
-      where: { hubId, doneAt: null, dueDate: { lte: soon } },
+      where: { hubId, doneAt: null, dueDate: { lte: soon }, ...deadlineVisibility(userId) },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { dueDate: "asc" },
       take: 5,
@@ -421,7 +472,7 @@ export async function dashboard(tx: HubTx, hubId: string) {
       orderBy: { cancelByDate: "asc" },
     }),
     tx.event.findMany({
-      where: { hubId, endAt: { gte: todayStart }, startAt: { lte: weekEnd } },
+      where: { hubId, endAt: { gte: todayStart }, startAt: { lte: weekEnd }, ...eventVisibility(userId) },
       include: eventInclude,
       orderBy: { startAt: "asc" },
     }),

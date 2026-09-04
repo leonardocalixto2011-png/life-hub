@@ -30,6 +30,7 @@ const CommitSchema = z.object({
   priority: z.enum(["LOW", "MED", "HIGH"]),
   ventureId: z.string().nullable(),
   note: z.string().nullable(),
+  visibility: z.enum(["PRIVATE", "SHARED"]).default("SHARED"),
 });
 
 function toCents(s: string | null): number | null {
@@ -59,6 +60,7 @@ export async function commitDrafts(
             priority: d.priority,
             ventureId: d.ventureId,
             createdById: user.id,
+            visibility: d.visibility,
           },
         });
         created.push(`Task: ${d.title}`);
@@ -71,6 +73,7 @@ export async function commitDrafts(
             dueDate: fromDateInput(d.date) ?? new Date(),
             ventureId: d.ventureId,
             createdById: user.id,
+            visibility: d.visibility,
           },
         });
         created.push(`Deadline: ${d.title}`);
@@ -85,6 +88,7 @@ export async function commitDrafts(
             endAt: new Date(startAt.getTime() + 3_600_000),
             ventureId: d.ventureId,
             createdById: user.id,
+            visibility: d.visibility,
           },
         });
         created.push(`Event: ${d.title}`);

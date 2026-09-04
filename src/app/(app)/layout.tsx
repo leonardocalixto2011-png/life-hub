@@ -1,11 +1,12 @@
 import Link from "next/link";
 
-import { requireHub } from "@/lib/session";
+import { requireHub, listMyHubs } from "@/lib/session";
 import { withHub } from "@/lib/hub-context";
 import { listMembers, listVentures, pendingReviewCount } from "@/lib/data";
 import { QuickAdd } from "@/components/QuickAdd";
 import { BottomNav } from "@/components/BottomNav";
 import { Avatar } from "@/components/Avatar";
+import { HubSwitcher } from "@/components/HubSwitcher";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { ToastHost } from "@/components/Toast";
 import { signOutAction } from "./auth-actions";
@@ -16,15 +17,18 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const { user, hub } = await requireHub();
-  const [ventures, members, reviewCount] = await withHub(user.id, (tx) =>
-    Promise.all([listVentures(tx, hub.id), listMembers(tx, hub.id), pendingReviewCount(tx)]),
-  );
+  const [[ventures, members, reviewCount], hubs] = await Promise.all([
+    withHub(user.id, (tx) =>
+      Promise.all([listVentures(tx, hub.id), listMembers(tx, hub.id), pendingReviewCount(tx)]),
+    ),
+    listMyHubs(user.id),
+  ]);
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col">
       <ServiceWorkerRegister />
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-2.5 backdrop-blur">
-        <span className="font-bold tracking-tight">Life Hub</span>
+        <HubSwitcher hubs={hubs} currentHubId={hub.id} />
         <div className="flex items-center gap-2.5">
           <Link href="/inbox" aria-label="Review inbox" className="relative text-lg leading-none">
             📥

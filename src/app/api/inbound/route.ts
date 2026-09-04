@@ -142,6 +142,7 @@ export async function POST(req: Request) {
           priority: "MED",
           ventureId: null,
           note: body.slice(0, 500) || null,
+          visibility: "SHARED",
         } satisfies Draft,
       },
     });

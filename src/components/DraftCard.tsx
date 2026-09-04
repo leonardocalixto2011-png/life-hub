@@ -162,6 +162,17 @@ export function DraftCard({
           </select>
         </label>
       </div>
+
+      {(draft.kind === "task" || draft.kind === "deadline" || draft.kind === "event") && (
+        <label className="flex items-center gap-2 text-[0.7rem] font-semibold text-[var(--color-text-dim)]">
+          <input
+            type="checkbox"
+            checked={draft.visibility === "PRIVATE"}
+            onChange={(e) => onChange({ visibility: e.target.checked ? "PRIVATE" : "SHARED" })}
+          />
+          Private (only you see this)
+        </label>
+      )}
     </div>
   );
 }

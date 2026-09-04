@@ -66,8 +66,8 @@ export default async function TasksPage({
     Promise.all([
       listVentures(tx, hub.id),
       listMembers(tx, hub.id),
-      recurringSuggestions(tx, hub.id),
-      listTasks(tx, hub.id, {
+      recurringSuggestions(tx, hub.id, user.id),
+      listTasks(tx, hub.id, user.id, {
         ventureSlug: sp.venture,
         mineUserId: mine ? user.id : undefined,
         includeDone,

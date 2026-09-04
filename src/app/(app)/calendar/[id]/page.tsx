@@ -17,7 +17,7 @@ export default async function EventDetailPage({
   const { user, hub } = await requireHub();
   const { id } = await params;
   const [event, ventures, members] = await withHub(user.id, (tx) =>
-    Promise.all([getEvent(tx, hub.id, id), listVentures(tx, hub.id), listMembers(tx, hub.id)]),
+    Promise.all([getEvent(tx, hub.id, user.id, id), listVentures(tx, hub.id), listMembers(tx, hub.id)]),
   );
   if (!event) notFound();
 
@@ -38,6 +38,7 @@ export default async function EventDetailPage({
           endAt: toDateTimeInput(event.endAt),
           ventureId: event.ventureId,
           attendeeIds: event.attendeeIds,
+          visibility: event.visibility,
         }}
       />
     </div>

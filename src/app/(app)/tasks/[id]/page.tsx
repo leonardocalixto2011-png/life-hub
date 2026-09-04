@@ -17,7 +17,7 @@ export default async function TaskDetailPage({
   const { user, hub } = await requireHub();
   const { id } = await params;
   const [task, ventures, members] = await withHub(user.id, (tx) =>
-    Promise.all([getTask(tx, hub.id, id), listVentures(tx, hub.id), listMembers(tx, hub.id)]),
+    Promise.all([getTask(tx, hub.id, user.id, id), listVentures(tx, hub.id), listMembers(tx, hub.id)]),
   );
 
   if (!task) notFound();
@@ -38,6 +38,7 @@ export default async function TaskDetailPage({
           priority: task.priority,
           isRecurring: task.isRecurring,
           recurrence: (task.recurrence as "weekly" | "monthly" | null) ?? null,
+          visibility: task.visibility,
         }}
         ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}
         members={members}

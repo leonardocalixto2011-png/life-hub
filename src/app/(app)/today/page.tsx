@@ -27,7 +27,7 @@ function SectionHead({ title, href, cta }: { title: string; href: string; cta: s
 export default async function DashboardPage() {
   const { user, hub } = await requireHub();
   const [d, ventures, membersRaw] = await withHub(user.id, (tx) =>
-    Promise.all([dashboard(tx, hub.id), listVentures(tx, hub.id), listMembers(tx, hub.id)]),
+    Promise.all([dashboard(tx, hub.id, user.id), listVentures(tx, hub.id), listMembers(tx, hub.id)]),
   );
   const first = user.name?.split(" ")[0];
   const vOpts = ventures.map((v) => ({ id: v.id, name: v.name }));

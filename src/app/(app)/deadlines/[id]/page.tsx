@@ -17,7 +17,7 @@ export default async function DeadlineDetailPage({
   const { user, hub } = await requireHub();
   const { id } = await params;
   const [deadline, ventures] = await withHub(user.id, (tx) =>
-    Promise.all([getDeadline(tx, hub.id, id), listVentures(tx, hub.id)]),
+    Promise.all([getDeadline(tx, hub.id, user.id, id), listVentures(tx, hub.id)]),
   );
   if (!deadline) notFound();
 
@@ -35,6 +35,7 @@ export default async function DeadlineDetailPage({
           dueDate: toDateInput(deadline.dueDate),
           ventureId: deadline.ventureId,
           remindDaysBefore: deadline.remindDaysBefore,
+          visibility: deadline.visibility,
         }}
       />
     </div>

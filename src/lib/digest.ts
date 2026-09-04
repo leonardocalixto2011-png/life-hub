@@ -11,24 +11,30 @@ function tagHub<T>(rows: T[], hub: SessionHub): WithHub<T>[] {
   return rows.map((r) => ({ ...r, hubName: hub.name }));
 }
 
-async function collectDigestInHub(tx: HubTx, hubId: string, windowHours: number) {
+/** Mirrors data.ts's visibilityFilter — see that comment for why this is a
+ *  real backstop and not just belt-and-suspenders. */
+function vis(userId: string) {
+  return { OR: [{ visibility: "SHARED" as const }, { createdById: userId }] };
+}
+
+async function collectDigestInHub(tx: HubTx, hubId: string, userId: string, windowHours: number) {
   const now = new Date();
   const horizon = endOfDay(new Date(now.getTime() + windowHours * 3600_000));
   const todayStart = startOfDay(now);
 
   const [overdueTasks, dueTasks, deadlines, renewals, cancelBys] = await Promise.all([
     tx.task.findMany({
-      where: { hubId, status: "OPEN", dueDate: { lt: todayStart } },
+      where: { hubId, status: "OPEN", dueDate: { lt: todayStart }, ...vis(userId) },
       include: { venture: true, assignedTo: true },
       orderBy: { dueDate: "asc" },
     }),
     tx.task.findMany({
-      where: { hubId, status: "OPEN", dueDate: { gte: todayStart, lte: horizon } },
+      where: { hubId, status: "OPEN", dueDate: { gte: todayStart, lte: horizon }, ...vis(userId) },
       include: { venture: true, assignedTo: true },
       orderBy: { dueDate: "asc" },
     }),
     tx.deadline.findMany({
-      where: { hubId, doneAt: null, dueDate: { lte: horizon } },
+      where: { hubId, doneAt: null, dueDate: { lte: horizon }, ...vis(userId) },
       include: { venture: true },
       orderBy: { dueDate: "asc" },
     }),
@@ -59,7 +65,7 @@ export async function collectDigestForUser(userId: string, windowHours = 48) {
   const hubs = await listMyHubs(userId);
 
   const perHub = await withHub(userId, (tx) =>
-    Promise.all(hubs.map((hub) => collectDigestInHub(tx, hub.id, windowHours).then((d) => ({ hub, d })))),
+    Promise.all(hubs.map((hub) => collectDigestInHub(tx, hub.id, userId, windowHours).then((d) => ({ hub, d })))),
   );
 
   const overdueTasks = perHub.flatMap(({ hub, d }) => tagHub(d.overdueTasks, hub));
@@ -85,15 +91,15 @@ export function digestSubject(d: DigestData): string {
 // Weekly rollup — one short paragraph, sent Monday mornings.
 // ---------------------------------------------------------------------------
 
-async function collectWeeklyInHub(tx: HubTx, hubId: string) {
+async function collectWeeklyInHub(tx: HubTx, hubId: string, userId: string) {
   const now = new Date();
   const start = startOfDay(now);
   const end = endOfDay(new Date(now.getTime() + 7 * 864e5));
 
   const [dueTasks, overdueTasks, deadlines, renewals, budget] = await Promise.all([
-    tx.task.count({ where: { hubId, status: "OPEN", dueDate: { gte: start, lte: end } } }),
-    tx.task.count({ where: { hubId, status: "OPEN", dueDate: { lt: start } } }),
-    tx.deadline.count({ where: { hubId, doneAt: null, dueDate: { gte: start, lte: end } } }),
+    tx.task.count({ where: { hubId, status: "OPEN", dueDate: { gte: start, lte: end }, ...vis(userId) } }),
+    tx.task.count({ where: { hubId, status: "OPEN", dueDate: { lt: start }, ...vis(userId) } }),
+    tx.deadline.count({ where: { hubId, doneAt: null, dueDate: { gte: start, lte: end }, ...vis(userId) } }),
     tx.subscription.findMany({
       where: { hubId, status: "ACTIVE", renewalDate: { gte: start, lte: end } },
       select: { name: true, costCents: true, currency: true },
@@ -123,7 +129,7 @@ export async function collectWeeklyForUser(userId: string) {
   const hubs = await listMyHubs(userId);
 
   const perHub = await withHub(userId, (tx) =>
-    Promise.all(hubs.map((hub) => collectWeeklyInHub(tx, hub.id).then((w) => ({ hub, w })))),
+    Promise.all(hubs.map((hub) => collectWeeklyInHub(tx, hub.id, userId).then((w) => ({ hub, w })))),
   );
 
   const dueTasks = perHub.reduce((n, { w }) => n + w.dueTasks, 0);

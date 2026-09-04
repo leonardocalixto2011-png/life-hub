@@ -79,7 +79,7 @@ function Section({ title, items }: { title: string; items: DeadlineWithRefs[] })
 export default async function DeadlinesPage() {
   const { user, hub } = await requireHub();
   const [deadlines, ventures] = await withHub(user.id, (tx) =>
-    Promise.all([listDeadlines(tx, hub.id, { includeDone: true }), listVentures(tx, hub.id)]),
+    Promise.all([listDeadlines(tx, hub.id, user.id, { includeDone: true }), listVentures(tx, hub.id)]),
   );
 
   const open = deadlines.filter((d) => !d.doneAt);

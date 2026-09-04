@@ -1,6 +1,7 @@
 "use client";
 
 import { deleteTask, updateTask } from "@/app/(app)/tasks/actions";
+import { PrivacyToggle } from "@/components/PrivacyToggle";
 
 type Option = { id: string; name: string | null; email?: string | null };
 
@@ -19,6 +20,7 @@ export function TaskEditForm({
     priority: "LOW" | "MED" | "HIGH";
     isRecurring: boolean;
     recurrence: "weekly" | "monthly" | null;
+    visibility: "PRIVATE" | "SHARED";
   };
   ventures: { id: string; name: string }[];
   members: Option[];
@@ -107,6 +109,8 @@ export function TaskEditForm({
             <option value="monthly">Monthly</option>
           </select>
         </div>
+
+        <PrivacyToggle defaultValue={task.visibility} />
 
         <button type="submit" className="btn btn-primary w-full">
           Save

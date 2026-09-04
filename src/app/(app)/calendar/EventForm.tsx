@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { createEvent, deleteEvent, updateEvent } from "./actions";
+import { PrivacyToggle } from "@/components/PrivacyToggle";
 
 type Member = { id: string; name: string | null; email: string | null };
 type Venture = { id: string; name: string };
@@ -17,6 +18,7 @@ type Existing = {
   endAt: string;
   ventureId: string | null;
   attendeeIds: string[];
+  visibility?: "PRIVATE" | "SHARED";
 };
 
 function Fields({
@@ -103,6 +105,8 @@ function Fields({
         Notes
         <textarea name="notes" defaultValue={existing?.notes ?? ""} rows={2} className="field mt-1" />
       </label>
+
+      <PrivacyToggle defaultValue={existing?.visibility} />
     </>
   );
 }

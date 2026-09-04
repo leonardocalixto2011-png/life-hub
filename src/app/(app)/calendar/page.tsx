@@ -76,7 +76,7 @@ export default async function CalendarPage() {
   const { user, hub } = await requireHub();
   const [events, ventures, members] = await withHub(user.id, (tx) =>
     Promise.all([
-      listEvents(tx, hub.id, { from, to }),
+      listEvents(tx, hub.id, user.id, { from, to }),
       listVentures(tx, hub.id),
       listMembers(tx, hub.id),
     ]),
