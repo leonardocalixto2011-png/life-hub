@@ -14,9 +14,10 @@ Vercel · Resend).
   `node_modules`/`.next` and would sync `.env`). Own git repo.
 - **Ventures**: an editable `Venture` table, not an enum — a new venture needs no
   migration. Tasks / deadlines / subscriptions / budget all reference it.
-- **Task visibility**: shared-first. Everyone sees every task; "personal" = a task
-  assigned to one person. The UI filters to "mine". No private flag (cheap to add
-  later if wanted).
+- **Task visibility**: shared-first (Phase 1–5). Phase 6 added a real
+  Private/Shared flag on Task/Deadline/Event (`visibility`, default SHARED) —
+  see "Phase 6" below. "Mine" filtering (assigned-to-me) is a separate concept
+  from private/shared and still works the same as before.
 - **Email**: magic-link + digests send from a subdomain the owner controls
   (placeholder `hub.cmacservices.ca` in `.env` / `EMAIL_FROM`). Confirm the exact
   subdomain and verify it on Resend before Phase 2.
@@ -170,6 +171,89 @@ Prisma 6.19 (`@prisma/client` pinned to match) · Auth.js v5 (`next-auth` beta) 
 - Local demo data now also includes 1 event ("Photoshoot — Couca nail sets",
   Sep 5).
 
+### Phase 6 — Multi-hub, assignment & privacy
+
+Full plan at the time of building: `C:\Users\leona\.claude\plans\shiny-dazzling-charm.md`.
+
+- ✅ **Data model** — `Hub` + `HubMembership` (role OWNER|MEMBER, status
+  INVITED|ACTIVE), every content table (`Venture`, `Task`, `Deadline`,
+  `Subscription`, `BudgetEntry`, `Event`) gained a required `hubId`.
+  `Task`/`Deadline`/`Event` also gained `visibility` (PRIVATE|SHARED, default
+  SHARED). Existing data backfilled into one "Main Hub" via
+  `prisma/backfill-hubs.ts` (one-off, aborts if any Hub already exists).
+- ✅ **Postgres RLS** (`prisma/migrations/20260904130000_multihub_rls`) —
+  hub-membership + privacy enforced at the database layer, not just app code.
+  RLS only actually restricts anything once the app connects as a
+  **non-owning** role: `prisma/create-app-role.sql` creates `app_user`
+  (grant-only, no table ownership); the Prisma client for that role is
+  `appPrisma` (`src/lib/prisma.ts`, driven by `APP_DATABASE_URL`), used via
+  `withHub(userId, fn)` (`src/lib/hub-context.ts`), which opens a transaction
+  and does `SELECT set_config('app.user_id', userId, true)` before running
+  `fn` — `is_local = true` keeps it transaction-scoped, safe under
+  pgbouncer's transaction-pooling mode. Every hub-scoped read/write in the
+  app goes through this.
+  - **Local-dev-only gotcha, cost real debugging time**: `npx prisma dev`'s
+    embedded Postgres accepts *any* username/password on a connection string
+    and always authenticates as its own superuser — so `APP_DATABASE_URL`
+    (built for `app_user`) silently connects as the owner locally, and RLS
+    becomes a no-op regardless of how correct the policies are. `npm run
+    verify:isolation` (`scripts/verify-isolation.mjs`) sidesteps this by using
+    `SET LOCAL ROLE app_user` inside a trusted admin transaction instead of a
+    second connection string — that's the trustworthy way to prove RLS
+    locally. Browser-testing by hand will *not* catch an RLS bug locally for
+    this reason; see the next bullet for why it still mostly worked anyway.
+  - Because of the above, `src/lib/data.ts` (and `lib/digest.ts`) also filter
+    `hubId` and `visibility = 'SHARED' OR createdById = viewer` in app code —
+    real defense-in-depth (production Neon's real per-role auth means RLS
+    also applies there), not just a workaround for local testing. Keep any
+    new Task/Deadline/Event query in sync with both the RLS policy *and*
+    this app-level mirror.
+- ✅ **Hub switcher** (`src/components/HubSwitcher.tsx`, in the app header) —
+  cookie-backed current hub (`CURRENT_HUB_COOKIE`, resolved in
+  `src/lib/session.ts`'s `requireHub()`), "Create a hub", members/invites
+  link, `/mine` link. `/hubs/new` and `/hubs/invites` live *outside* the
+  `(app)` route group/layout (a user with zero active hubs would infinite-
+  loop-redirect otherwise, since the layout itself calls `requireHub()`).
+- ✅ **Invites** (`src/app/(app)/hubs/actions.ts`) — owner invites by email
+  (creates the `User` row if new + an INVITED `HubMembership`, emails a
+  link via `lib/email.ts`); accept/decline are self-scoped so they run
+  through the normal `withHub`/RLS path. Inviting *someone else* and
+  removing *someone else* both have to use the owner-role `prisma` client —
+  HubMembership's RLS policy is self-row-only by design, documented in the
+  migration file.
+- ✅ **Leave / remove** — unassigns (doesn't delete) the departing member's
+  assigned tasks in that hub, deletes their PRIVATE items in that hub, *then*
+  removes the membership row (order matters: cleanup runs while they're
+  still a recognized member, so RLS still lets the writes through).
+- ✅ **Assignment** — pickers already only offer the current hub's active
+  members (`listMembers` is hub-scoped). Assigning/reassigning a task fires a
+  direct push (`src/lib/notify.ts`) separate from the digest.
+- ✅ **Cross-hub "Mine"** (`/mine`, `data.ts`'s `myItemsInHub`) — loops the
+  user's hubs (each its own `withHub` call) rather than relying on RLS's
+  natural cross-hub union, so each hub's name/color can be attached for
+  display.
+- ✅ **Digest rework** (`lib/digest.ts`) — was one global digest for
+  everyone; now `collectDigestForUser` / `collectWeeklyForUser` loop each
+  user's hubs and merge, so a user's email/push only ever reflects hubs and
+  private items they can actually see.
+- ✅ Verified: `npm run verify:isolation` (8/8 — cross-hub reads/writes and
+  private-item access both blocked at the DB layer), plus by hand in a
+  browser as two real accounts sharing a hub with a private task.
+- **Deferred, not built this phase** (tracked here per the plan): per-member
+  weekly availability + "busy" blocks on the shared calendar; per-hub
+  activity feed; per-hub notification-preference granularity (there's still
+  only one global `NotificationPreference` row per user); personal data
+  export; rate limiting on invite/accept; a real Terms of Service / Privacy
+  Policy (needed before any external, non-trusted users — flagged, not built).
+- **Production rollout still pending** (run from your own terminal, not by
+  Claude — same convention as every other prod-DB step in this project):
+  1. `npx prisma db execute --file prisma/create-app-role.sql --schema prisma/schema.prisma`
+     against prod (edit the file's placeholder password first).
+  2. `npx tsx prisma/backfill-hubs.ts` against prod (creates the default hub
+     + memberships; aborts safely if a hub already exists).
+  3. Add `APP_DATABASE_URL` to Vercel — same host/db as `DATABASE_URL`, the
+     new `app_user` role, `?pgbouncer=true&connection_limit=1`.
+
 ## Owner asked for: Claude in the app (AI assistance)
 
 Not started. Planned for Phase 4 as a `src/lib/ai.ts` + `/api/assistant` route:
@@ -185,7 +269,10 @@ Node is at `C:\Program Files\nodejs` (winget; on PATH via `~/.bashrc`).
 npx prisma dev -n lifehub -d       # once - daemonises a local Postgres, prints a URL
 # put that URL in .env as DATABASE_URL (add &pgbouncer=true&connection_limit=1) + DIRECT_URL
 npm run db:migrate                 # or: npx prisma migrate deploy
-npm run db:seed                    # 5 ventures + ADMIN_EMAIL user
+npx prisma db execute --file prisma/create-app-role.sql --schema prisma/schema.prisma
+# put a low-priv app_user connection string in .env as APP_DATABASE_URL
+# (see Phase 6 above — connection_limit=5 locally, 1 in prod)
+npm run db:seed                    # 5 ventures + ADMIN_EMAIL user + a default hub
 npm run dev                        # http://localhost:3000
 ```
 
@@ -200,11 +287,20 @@ dev-server console.
 - `DATABASE_URL` needs `?sslmode=disable&pgbouncer=true&connection_limit=1` for
   the `prisma dev` proxy (transaction-mode; without `pgbouncer=true` ->
   `prepared statement "s0" already exists`).
+- The local `prisma dev` Postgres crashes/hangs somewhat often (a WASM/pglite
+  engine, not real Postgres) — symptoms are `Can't reach database server` or
+  `Transaction API error: Unable to start a transaction in the given time`
+  even though `netstat` still shows the port LISTENING. Fix: find its PID in
+  `%LOCALAPPDATA%\prisma-dev-nodejs\Data\<name>\server.json`, `taskkill //F
+  //PID <pid>`, delete the now-stale `...\Data\<name>\.lock` directory, then
+  `npx prisma dev -n lifehub` again. It also silently authenticates *any*
+  username/password as its own superuser — see Phase 6's RLS notes above,
+  this breaks naive local testing of `APP_DATABASE_URL`/RLS specifically.
 
 ## Commands
 
 `npm run dev` · `build` · `typecheck` · `db:migrate` · `db:push` · `db:seed` ·
-`db:studio` · `gen:vapid` · `node scripts/gen-icons.mjs`
+`db:studio` · `gen:vapid` · `verify:isolation` · `node scripts/gen-icons.mjs`
 
 ## Backlog (post-feature-complete)
 
