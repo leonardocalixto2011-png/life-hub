@@ -34,16 +34,73 @@ model User {
   role          UserRole  @default(MEMBER)
   createdAt     DateTime  @default(now())
 
-  accounts          Account[]
-  sessions          Session[]
-  createdTasks      Task[]                  @relation("TaskCreatedBy")
-  assignedTasks     Task[]                  @relation("TaskAssignedTo")
-  createdDeadlines  Deadline[]
+  accounts           Account[]
+  sessions           Session[]
+  createdTasks       Task[]                  @relation("TaskCreatedBy")
+  assignedTasks      Task[]                  @relation("TaskAssignedTo")
+  createdDeadlines   Deadline[]
   ownedSubscriptions Subscription[]
-  budgetEntries     BudgetEntry[]
-  createdEvents     Event[]
-  pushSubscriptions PushSubscription[]
-  notificationPref  NotificationPreference?
+  budgetEntries      BudgetEntry[]
+  createdEvents      Event[]
+  pushSubscriptions  PushSubscription[]
+  notificationPref   NotificationPreference?
+  createdHubs        Hub[]                   @relation("HubCreatedBy")
+  hubMemberships     HubMembership[]
+}
+
+// ---------------------------------------------------------------------------
+// Hubs — independent workspaces. A person can belong to several; every piece
+// of content below lives inside exactly one hub. Isolation between hubs is
+// enforced at the database layer (Postgres RLS, see migrations), not just in
+// application queries.
+// ---------------------------------------------------------------------------
+
+enum HubRole {
+  OWNER
+  MEMBER
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+}
+
+enum Visibility {
+  PRIVATE
+  SHARED
+}
+
+model Hub {
+  id          String   @id @default(cuid())
+  name        String
+  color       String   @default("#6366f1")
+  plan        String   @default("free") // placeholder for future Stripe billing
+  createdById String
+  createdBy   User     @relation("HubCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+
+  memberships   HubMembership[]
+  ventures      Venture[]
+  tasks         Task[]
+  deadlines     Deadline[]
+  subscriptions Subscription[]
+  budgetEntries BudgetEntry[]
+  events        Event[]
+}
+
+model HubMembership {
+  id        String           @id @default(cuid())
+  hubId     String
+  hub       Hub              @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      HubRole          @default(MEMBER)
+  status    MembershipStatus @default(INVITED)
+  joinedAt  DateTime?
+  createdAt DateTime         @default(now())
+
+  @@unique([hubId, userId])
+  @@index([userId, status])
 }
 
 model Account {
@@ -87,7 +144,9 @@ model VerificationToken {
 
 model Venture {
   id        String   @id @default(cuid())
-  slug      String   @unique
+  hubId     String
+  hub       Hub      @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  slug      String
   name      String
   color     String   @default("#6366f1") // hex, drives UI chips
   sortOrder Int      @default(0)
@@ -99,6 +158,8 @@ model Venture {
   subscriptions Subscription[]
   budgetEntries BudgetEntry[]
   events        Event[]
+
+  @@unique([hubId, slug])
 }
 
 // ---------------------------------------------------------------------------
@@ -119,6 +180,9 @@ enum TaskStatus {
 
 model Task {
   id               String     @id @default(cuid())
+  hubId            String
+  hub              Hub        @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  visibility       Visibility @default(SHARED)
   title            String
   notes            String?
   ventureId        String?
@@ -137,7 +201,7 @@ model Task {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
-  @@index([status, dueDate])
+  @@index([hubId, status, dueDate])
   @@index([ventureId])
   @@index([assignedToId])
 }
@@ -147,20 +211,23 @@ model Task {
 // ---------------------------------------------------------------------------
 
 model Deadline {
-  id               String    @id @default(cuid())
+  id               String     @id @default(cuid())
+  hubId            String
+  hub              Hub        @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  visibility       Visibility @default(SHARED)
   title            String
   notes            String?
   dueDate          DateTime
   ventureId        String?
-  venture          Venture?  @relation(fields: [ventureId], references: [id], onDelete: SetNull)
-  remindDaysBefore Int[]     @default([7, 3, 1])
+  venture          Venture?   @relation(fields: [ventureId], references: [id], onDelete: SetNull)
+  remindDaysBefore Int[]      @default([7, 3, 1])
   createdById      String
-  createdBy        User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy        User       @relation(fields: [createdById], references: [id], onDelete: Restrict)
   doneAt           DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
-  @@index([dueDate])
+  @@index([hubId, dueDate])
 }
 
 // ---------------------------------------------------------------------------
@@ -182,6 +249,8 @@ enum SubscriptionStatus {
 
 model Subscription {
   id           String             @id @default(cuid())
+  hubId        String
+  hub          Hub                @relation(fields: [hubId], references: [id], onDelete: Cascade)
   name         String
   costCents    Int
   currency     String             @default("CAD")
@@ -197,7 +266,7 @@ model Subscription {
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
-  @@index([status, renewalDate])
+  @@index([hubId, status, renewalDate])
 }
 
 // ---------------------------------------------------------------------------
@@ -211,6 +280,8 @@ enum EntryType {
 
 model BudgetEntry {
   id          String    @id @default(cuid())
+  hubId       String
+  hub         Hub       @relation(fields: [hubId], references: [id], onDelete: Cascade)
   type        EntryType
   amountCents Int
   currency    String    @default("CAD")
@@ -223,8 +294,8 @@ model BudgetEntry {
   createdBy   User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime  @default(now())
 
-  @@index([date])
-  @@index([type, date])
+  @@index([hubId, date])
+  @@index([hubId, type, date])
 }
 
 // ---------------------------------------------------------------------------
@@ -233,21 +304,24 @@ model BudgetEntry {
 // ---------------------------------------------------------------------------
 
 model Event {
-  id          String   @id @default(cuid())
+  id          String     @id @default(cuid())
+  hubId       String
+  hub         Hub        @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  visibility  Visibility @default(SHARED)
   title       String
   notes       String?
   startAt     DateTime
   endAt       DateTime
   location    String?
   ventureId   String?
-  venture     Venture? @relation(fields: [ventureId], references: [id], onDelete: SetNull)
-  attendeeIds String[] @default([])
+  venture     Venture?   @relation(fields: [ventureId], references: [id], onDelete: SetNull)
+  attendeeIds String[]   @default([])
   createdById String
-  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdBy   User       @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
-  @@index([startAt])
+  @@index([hubId, startAt])
 }
 
 // ---------------------------------------------------------------------------
