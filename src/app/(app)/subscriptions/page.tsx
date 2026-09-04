@@ -6,6 +6,8 @@ import {
   listVentures,
   type SubscriptionWithRefs,
 } from "@/lib/data";
+import { withHub } from "@/lib/hub-context";
+import { requireHub } from "@/lib/session";
 import { countdownLabel, daysUntil, money } from "@/lib/format";
 import { BILLING_LABEL, monthlyCents, yearlyCents } from "@/lib/money";
 import { VentureChip } from "@/components/VentureChip";
@@ -74,11 +76,14 @@ function Row({ s }: { s: SubscriptionWithRefs }) {
 }
 
 export default async function SubscriptionsPage() {
-  const [subs, ventures, members] = await Promise.all([
-    listSubscriptions({ includeCancelled: true }),
-    listVentures(),
-    listMembers(),
-  ]);
+  const { user, hub } = await requireHub();
+  const [subs, ventures, members] = await withHub(user.id, (tx) =>
+    Promise.all([
+      listSubscriptions(tx, hub.id, { includeCancelled: true }),
+      listVentures(tx, hub.id),
+      listMembers(tx, hub.id),
+    ]),
+  );
 
   const active = subs.filter((s) => s.status === "ACTIVE");
   const cancelled = subs.filter((s) => s.status === "CANCELLED");

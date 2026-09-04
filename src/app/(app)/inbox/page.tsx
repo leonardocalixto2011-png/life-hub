@@ -1,15 +1,18 @@
 import Link from "next/link";
 
 import { listPendingReviews, listVentures } from "@/lib/data";
-import { requireUser } from "@/lib/session";
+import { withHub } from "@/lib/hub-context";
+import { requireHub } from "@/lib/session";
 import type { Draft } from "@/lib/parse";
 import { ReviewCard } from "./ReviewCard";
 
 export const dynamic = "force-dynamic";
 
 export default async function InboxPage() {
-  await requireUser();
-  const [items, ventures] = await Promise.all([listPendingReviews(), listVentures()]);
+  const { user, hub } = await requireHub();
+  const [items, ventures] = await withHub(user.id, (tx) =>
+    Promise.all([listPendingReviews(tx), listVentures(tx, hub.id)]),
+  );
   const vOpts = ventures.map((v) => ({ id: v.id, name: v.name }));
 
   return (

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { requireHub } from "@/lib/session";
 import { commitDrafts } from "@/app/(app)/quick-actions";
 import type { Draft } from "@/lib/parse";
 
@@ -12,7 +12,7 @@ export async function acceptReview(
   id: string,
   draft: Draft,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireUser();
+  await requireHub();
   z.string().cuid().parse(id);
 
   const item = await prisma.reviewItem.findUnique({ where: { id } });
@@ -34,7 +34,7 @@ export async function acceptReview(
 }
 
 export async function discardReview(id: string): Promise<{ ok: boolean }> {
-  await requireUser();
+  await requireHub();
   z.string().cuid().parse(id);
   await prisma.reviewItem.updateMany({
     where: { id, status: "PENDING" },

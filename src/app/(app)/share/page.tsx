@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { requireUser } from "@/lib/session";
+import { requireHub } from "@/lib/session";
+import { withHub } from "@/lib/hub-context";
 import { listVentures } from "@/lib/data";
 import { ShareCapture } from "./ShareCapture";
 
@@ -13,9 +14,9 @@ export default async function SharePage({
 }: {
   searchParams: Promise<SP>;
 }) {
-  await requireUser();
+  const { user, hub } = await requireHub();
   const sp = await searchParams;
-  const ventures = await listVentures();
+  const ventures = await withHub(user.id, (tx) => listVentures(tx, hub.id));
 
   const shared = [sp.title, sp.text, sp.url]
     .map((s) => s?.trim())

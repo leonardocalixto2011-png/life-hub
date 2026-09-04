@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { sendPushToUser } from "@/lib/push";
-import { collectWeekly, weeklyHtml, weeklySubject, weeklyText } from "@/lib/digest";
+import { collectWeeklyForUser, weeklyHtml, weeklySubject, weeklyText } from "@/lib/digest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,11 +18,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const w = await collectWeekly();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const subject = weeklySubject();
-  const text = weeklyText(w);
-  const html = weeklyHtml(w, appUrl);
 
   const users = await prisma.user.findMany({
     where: { email: { not: null } },
@@ -36,9 +33,15 @@ export async function GET(req: Request) {
 
   let pushed = 0;
   let emailed = 0;
+  const summaries: string[] = [];
 
   await Promise.all(
     users.map(async (u) => {
+      const w = await collectWeeklyForUser(u.id);
+      const text = weeklyText(w);
+      const html = weeklyHtml(w, appUrl);
+      summaries.push(text);
+
       const pref = u.notificationPref;
       if ((pref?.pushEnabled ?? true) && u._count.pushSubscriptions > 0) {
         const r = await sendPushToUser(u.id, {
@@ -56,5 +59,5 @@ export async function GET(req: Request) {
     }),
   );
 
-  return NextResponse.json({ ok: true, pushed, emailed, summary: text });
+  return NextResponse.json({ ok: true, pushed, emailed, summary: summaries.join(" | ") });
 }

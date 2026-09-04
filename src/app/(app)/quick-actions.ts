@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { withHub } from "@/lib/hub-context";
+import { requireHub } from "@/lib/session";
 import { fromDateInput, fromDateTimeInput } from "@/lib/format";
 import { parseText, type Draft, type DraftKind, type ParseOutcome } from "@/lib/parse";
 
@@ -12,11 +12,11 @@ export type { Draft, DraftKind };
 export type ParseResult = ParseOutcome;
 
 export async function parseQuickAdd(text: string): Promise<ParseResult> {
-  await requireUser();
+  const { user, hub } = await requireHub();
   if (text.trim().length > 2000) {
     return { ok: false, error: "Keep it under 2000 characters." };
   }
-  return parseText(text);
+  return withHub(user.id, (tx) => parseText(text, { tx, hubId: hub.id }));
 }
 
 const CommitSchema = z.object({
@@ -41,93 +41,103 @@ function toCents(s: string | null): number | null {
 export async function commitDrafts(
   raw: unknown,
 ): Promise<{ ok: boolean; created: string[]; error?: string }> {
-  const user = await requireUser();
+  const { user, hub } = await requireHub();
   const list = z.array(CommitSchema).max(10).safeParse(raw);
   if (!list.success) return { ok: false, created: [], error: "Invalid draft data." };
 
   const created: string[] = [];
 
-  for (const d of list.data) {
-    if (d.kind === "task") {
-      await prisma.task.create({
-        data: {
-          title: d.title,
-          notes: d.note,
-          dueDate: fromDateInput(d.date),
-          priority: d.priority,
-          ventureId: d.ventureId,
-          createdById: user.id,
-        },
-      });
-      created.push(`Task: ${d.title}`);
-    } else if (d.kind === "deadline") {
-      await prisma.deadline.create({
-        data: {
-          title: d.title,
-          notes: d.note,
-          dueDate: fromDateInput(d.date) ?? new Date(),
-          ventureId: d.ventureId,
-          createdById: user.id,
-        },
-      });
-      created.push(`Deadline: ${d.title}`);
-    } else if (d.kind === "event") {
-      const startAt = fromDateTimeInput(d.time) ?? fromDateInput(d.date) ?? new Date();
-      await prisma.event.create({
-        data: {
-          title: d.title,
-          notes: d.note,
-          startAt,
-          endAt: new Date(startAt.getTime() + 3_600_000),
-          ventureId: d.ventureId,
-          createdById: user.id,
-        },
-      });
-      created.push(`Event: ${d.title}`);
-    } else if (d.kind === "subscription") {
-      const existing = await prisma.subscription.findFirst({
-        where: { status: "ACTIVE", name: { equals: d.title, mode: "insensitive" } },
-      });
-      const renewalDate = fromDateInput(d.date) ?? new Date();
-      if (existing) {
-        await prisma.subscription.update({
-          where: { id: existing.id },
-          data: { renewalDate, billingCycle: d.billingCycle, costCents: toCents(d.amount) ?? existing.costCents },
-        });
-        created.push(`Updated subscription: ${existing.name}`);
-      } else {
-        await prisma.subscription.create({
+  const result = await withHub(user.id, async (tx) => {
+    for (const d of list.data) {
+      if (d.kind === "task") {
+        await tx.task.create({
           data: {
-            name: d.title,
-            costCents: toCents(d.amount) ?? 0,
-            billingCycle: d.billingCycle,
-            renewalDate,
-            ventureId: d.ventureId,
-            ownerId: user.id,
+            title: d.title,
             notes: d.note,
+            hubId: hub.id,
+            dueDate: fromDateInput(d.date),
+            priority: d.priority,
+            ventureId: d.ventureId,
+            createdById: user.id,
           },
         });
-        created.push(`Subscription: ${d.title}`);
+        created.push(`Task: ${d.title}`);
+      } else if (d.kind === "deadline") {
+        await tx.deadline.create({
+          data: {
+            title: d.title,
+            notes: d.note,
+            hubId: hub.id,
+            dueDate: fromDateInput(d.date) ?? new Date(),
+            ventureId: d.ventureId,
+            createdById: user.id,
+          },
+        });
+        created.push(`Deadline: ${d.title}`);
+      } else if (d.kind === "event") {
+        const startAt = fromDateTimeInput(d.time) ?? fromDateInput(d.date) ?? new Date();
+        await tx.event.create({
+          data: {
+            title: d.title,
+            notes: d.note,
+            hubId: hub.id,
+            startAt,
+            endAt: new Date(startAt.getTime() + 3_600_000),
+            ventureId: d.ventureId,
+            createdById: user.id,
+          },
+        });
+        created.push(`Event: ${d.title}`);
+      } else if (d.kind === "subscription") {
+        const existing = await tx.subscription.findFirst({
+          where: { hubId: hub.id, status: "ACTIVE", name: { equals: d.title, mode: "insensitive" } },
+        });
+        const renewalDate = fromDateInput(d.date) ?? new Date();
+        if (existing) {
+          await tx.subscription.update({
+            where: { id: existing.id },
+            data: { renewalDate, billingCycle: d.billingCycle, costCents: toCents(d.amount) ?? existing.costCents },
+          });
+          created.push(`Updated subscription: ${existing.name}`);
+        } else {
+          await tx.subscription.create({
+            data: {
+              name: d.title,
+              hubId: hub.id,
+              costCents: toCents(d.amount) ?? 0,
+              billingCycle: d.billingCycle,
+              renewalDate,
+              ventureId: d.ventureId,
+              ownerId: user.id,
+              notes: d.note,
+            },
+          });
+          created.push(`Subscription: ${d.title}`);
+        }
+      } else if (d.kind === "budget") {
+        const cents = toCents(d.amount);
+        if (cents == null || cents <= 0) {
+          return { ok: false, created, error: `"${d.title}" needs an amount.` };
+        }
+        await tx.budgetEntry.create({
+          data: {
+            type: d.entryType,
+            amountCents: cents,
+            hubId: hub.id,
+            category: d.title,
+            description: d.note,
+            date: fromDateInput(d.date) ?? new Date(),
+            ventureId: d.ventureId,
+            createdById: user.id,
+          },
+        });
+        created.push(`${d.entryType === "INCOME" ? "Income" : "Expense"}: ${d.title}`);
       }
-    } else if (d.kind === "budget") {
-      const cents = toCents(d.amount);
-      if (cents == null || cents <= 0) {
-        return { ok: false, created, error: `"${d.title}" needs an amount.` };
-      }
-      await prisma.budgetEntry.create({
-        data: {
-          type: d.entryType,
-          amountCents: cents,
-          category: d.title,
-          description: d.note,
-          date: fromDateInput(d.date) ?? new Date(),
-          ventureId: d.ventureId,
-          createdById: user.id,
-        },
-      });
-      created.push(`${d.entryType === "INCOME" ? "Income" : "Expense"}: ${d.title}`);
     }
-  }
+    return { ok: true, created };
+  });
+
+  if (!result.ok) return result;
 
   revalidatePath("/today");
   revalidatePath("/tasks");
@@ -137,5 +147,5 @@ export async function commitDrafts(
   revalidatePath("/money");
   revalidatePath("/calendar");
 
-  return { ok: true, created };
+  return result;
 }

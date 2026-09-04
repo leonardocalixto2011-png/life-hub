@@ -2,7 +2,8 @@ import Link from "next/link";
 import { format } from "date-fns";
 
 import { dashboard, listMembers, listVentures } from "@/lib/data";
-import { getUser } from "@/lib/session";
+import { withHub } from "@/lib/hub-context";
+import { requireHub } from "@/lib/session";
 import { countdownLabel, eventTimeRange, money } from "@/lib/format";
 import { TaskListCard } from "@/components/TaskListCard";
 import { VentureChip } from "@/components/VentureChip";
@@ -24,13 +25,11 @@ function SectionHead({ title, href, cta }: { title: string; href: string; cta: s
 }
 
 export default async function DashboardPage() {
-  const [user, d, ventures, membersRaw] = await Promise.all([
-    getUser(),
-    dashboard(),
-    listVentures(),
-    listMembers(),
-  ]);
-  const first = user?.name?.split(" ")[0];
+  const { user, hub } = await requireHub();
+  const [d, ventures, membersRaw] = await withHub(user.id, (tx) =>
+    Promise.all([dashboard(tx, hub.id), listVentures(tx, hub.id), listMembers(tx, hub.id)]),
+  );
+  const first = user.name?.split(" ")[0];
   const vOpts = ventures.map((v) => ({ id: v.id, name: v.name }));
 
   const nothing =

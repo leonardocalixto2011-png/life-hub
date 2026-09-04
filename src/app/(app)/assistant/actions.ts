@@ -6,8 +6,8 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 import { ai, aiEnabled, AI_MODEL } from "@/lib/ai";
-import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { withHub } from "@/lib/hub-context";
+import { requireHub } from "@/lib/session";
 import { dashboard, listMembers, listVentures } from "@/lib/data";
 import { dueLabel, fromDateInput, fromDateTimeInput, money } from "@/lib/format";
 
@@ -37,7 +37,7 @@ const ParsedSchema = z.object({
 export async function parseAndAdd(
   text: string,
 ): Promise<{ ok: boolean; message: string }> {
-  const user = await requireUser();
+  const { user, hub } = await requireHub();
   if (!aiEnabled()) {
     return { ok: false, message: "Assistant isn’t configured (no ANTHROPIC_API_KEY)." };
   }
@@ -47,7 +47,9 @@ export async function parseAndAdd(
     return { ok: false, message: "Too long — keep it under 4000 characters." };
   }
 
-  const [ventures, members] = await Promise.all([listVentures(), listMembers()]);
+  const [ventures, members] = await withHub(user.id, (tx) =>
+    Promise.all([listVentures(tx, hub.id), listMembers(tx, hub.id)]),
+  );
   const today = new Date();
 
   const system = [
@@ -90,37 +92,41 @@ export async function parseAndAdd(
   const tasks = parsed.tasks.slice(0, MAX_ITEMS);
   const events = parsed.events.slice(0, MAX_ITEMS);
 
-  for (const t of tasks) {
-    await prisma.task.create({
-      data: {
-        title: t.title.slice(0, 200),
-        dueDate: fromDateInput(t.dueDate),
-        ventureId: t.ventureName ? (vByName.get(t.ventureName.toLowerCase()) ?? null) : null,
-        assignedToId: t.assigneeName
-          ? (mByName.get(t.assigneeName.toLowerCase()) ?? null)
-          : null,
-        priority: t.priority ?? "MED",
-        createdById: user.id,
-      },
-    });
-  }
+  await withHub(user.id, async (tx) => {
+    for (const t of tasks) {
+      await tx.task.create({
+        data: {
+          title: t.title.slice(0, 200),
+          hubId: hub.id,
+          dueDate: fromDateInput(t.dueDate),
+          ventureId: t.ventureName ? (vByName.get(t.ventureName.toLowerCase()) ?? null) : null,
+          assignedToId: t.assigneeName
+            ? (mByName.get(t.assigneeName.toLowerCase()) ?? null)
+            : null,
+          priority: t.priority ?? "MED",
+          createdById: user.id,
+        },
+      });
+    }
 
-  for (const e of events) {
-    const startAt = fromDateTimeInput(e.startAt);
-    if (!startAt) continue;
-    let endAt = fromDateTimeInput(e.endAt) ?? new Date(startAt.getTime() + 3_600_000);
-    if (endAt <= startAt) endAt = new Date(startAt.getTime() + 3_600_000);
-    await prisma.event.create({
-      data: {
-        title: e.title.slice(0, 200),
-        startAt,
-        endAt,
-        location: e.location,
-        ventureId: e.ventureName ? (vByName.get(e.ventureName.toLowerCase()) ?? null) : null,
-        createdById: user.id,
-      },
-    });
-  }
+    for (const e of events) {
+      const startAt = fromDateTimeInput(e.startAt);
+      if (!startAt) continue;
+      let endAt = fromDateTimeInput(e.endAt) ?? new Date(startAt.getTime() + 3_600_000);
+      if (endAt <= startAt) endAt = new Date(startAt.getTime() + 3_600_000);
+      await tx.event.create({
+        data: {
+          title: e.title.slice(0, 200),
+          hubId: hub.id,
+          startAt,
+          endAt,
+          location: e.location,
+          ventureId: e.ventureName ? (vByName.get(e.ventureName.toLowerCase()) ?? null) : null,
+          createdById: user.id,
+        },
+      });
+    }
+  });
 
   revalidatePath("/today");
   revalidatePath("/tasks");
@@ -136,12 +142,12 @@ export async function parseAndAdd(
 }
 
 export async function weeklyBriefing(): Promise<{ ok: boolean; text: string }> {
-  await requireUser();
+  const { user, hub } = await requireHub();
   if (!aiEnabled()) {
     return { ok: false, text: "Assistant isn’t configured (no ANTHROPIC_API_KEY)." };
   }
 
-  const d = await dashboard();
+  const d = await withHub(user.id, (tx) => dashboard(tx, hub.id));
   const lines: string[] = [];
   if (d.overdue.length) lines.push(`Overdue tasks: ${d.overdue.map((t) => t.title).join(", ")}`);
   if (d.dueSoon.length)

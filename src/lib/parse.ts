@@ -4,6 +4,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 import { ai, aiEnabled, AI_MODEL } from "@/lib/ai";
 import { listVentures } from "@/lib/data";
+import type { HubTx } from "@/lib/hub-context";
 
 export type DraftKind = "task" | "event" | "deadline" | "subscription" | "budget";
 
@@ -45,15 +46,24 @@ export type ParseOutcome =
  * Turn freeform text (quick-add line, forwarded email, SMS) into reviewable
  * drafts. No auth — callers gate. Returns an error string when AI is off or the
  * text yields nothing actionable.
+ *
+ * `hub` is omitted on the inbound-email path (src/app/api/inbound/route.ts),
+ * which runs before any user/hub is known — ReviewItem has no hub concept yet
+ * (see plan §5, known gap), so venture-name matching is simply skipped there
+ * and drafts come back with ventureId: null for the user to fill in on Accept.
  */
-export async function parseText(text: string, maxItems = 10): Promise<ParseOutcome> {
+export async function parseText(
+  text: string,
+  hub?: { tx: HubTx; hubId: string },
+  maxItems = 10,
+): Promise<ParseOutcome> {
   const clean = text.trim();
   if (!clean) return { ok: false, error: "Nothing to parse." };
   if (!aiEnabled()) {
     return { ok: false, error: "Parsing needs ANTHROPIC_API_KEY set on the server." };
   }
 
-  const ventures = await listVentures();
+  const ventures = hub ? await listVentures(hub.tx, hub.hubId) : [];
   const today = new Date();
 
   const system = [

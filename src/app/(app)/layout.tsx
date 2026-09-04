@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { requireUser } from "@/lib/session";
+import { requireHub } from "@/lib/session";
+import { withHub } from "@/lib/hub-context";
 import { listMembers, listVentures, pendingReviewCount } from "@/lib/data";
 import { QuickAdd } from "@/components/QuickAdd";
 import { BottomNav } from "@/components/BottomNav";
@@ -14,12 +15,10 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await requireUser();
-  const [ventures, members, reviewCount] = await Promise.all([
-    listVentures(),
-    listMembers(),
-    pendingReviewCount(),
-  ]);
+  const { user, hub } = await requireHub();
+  const [ventures, members, reviewCount] = await withHub(user.id, (tx) =>
+    Promise.all([listVentures(tx, hub.id), listMembers(tx, hub.id), pendingReviewCount(tx)]),
+  );
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col">

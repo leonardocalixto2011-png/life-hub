@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { withHub } from "@/lib/hub-context";
+import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
 
@@ -24,7 +24,7 @@ const createSchema = z.object({
 });
 
 export async function createEntry(fd: FormData) {
-  const user = await requireUser();
+  const { user, hub } = await requireHub();
   const res = createSchema.safeParse(Object.fromEntries(fd.entries()));
   if (!res.success) throw new Error(res.error.issues[0]?.message ?? "Invalid input");
   const d = res.data;
@@ -32,25 +32,28 @@ export async function createEntry(fd: FormData) {
   const amountCents = dollarsToCents(d.amount);
   if (amountCents == null || amountCents <= 0) throw new Error("Amount must be a positive number");
 
-  await prisma.budgetEntry.create({
-    data: {
-      type: d.type,
-      amountCents,
-      currency: d.currency,
-      category: d.category,
-      ventureId: d.ventureId,
-      description: d.description,
-      date: fromDateInput(d.date) ?? new Date(),
-      createdById: user.id,
-    },
-  });
+  await withHub(user.id, (tx) =>
+    tx.budgetEntry.create({
+      data: {
+        type: d.type,
+        amountCents,
+        hubId: hub.id,
+        currency: d.currency,
+        category: d.category,
+        ventureId: d.ventureId,
+        description: d.description,
+        date: fromDateInput(d.date) ?? new Date(),
+        createdById: user.id,
+      },
+    }),
+  );
 
   revalidatePath("/money");
 }
 
 export async function deleteEntry(fd: FormData) {
-  await requireUser();
+  const { user } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
-  await prisma.budgetEntry.delete({ where: { id } });
+  await withHub(user.id, (tx) => tx.budgetEntry.delete({ where: { id } }));
   revalidatePath("/money");
 }

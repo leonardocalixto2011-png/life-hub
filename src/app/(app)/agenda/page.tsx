@@ -2,6 +2,8 @@ import Link from "next/link";
 import { format, isSameDay } from "date-fns";
 
 import { agendaItems, type AgendaItem } from "@/lib/data";
+import { withHub } from "@/lib/hub-context";
+import { requireHub } from "@/lib/session";
 import { daysUntil } from "@/lib/format";
 import { VentureChip } from "@/components/VentureChip";
 import { EmptyState, QUICK_ADD_EXAMPLES } from "@/components/EmptyState";
@@ -39,7 +41,8 @@ function Row({ item }: { item: AgendaItem }) {
 }
 
 export default async function AgendaPage() {
-  const { now, items } = await agendaItems(30);
+  const { user, hub } = await requireHub();
+  const { now, items } = await withHub(user.id, (tx) => agendaItems(tx, hub.id, 30));
 
   const overdue = items.filter((i) => daysUntil(i.at) < 0);
   const upcoming = items.filter((i) => daysUntil(i.at) >= 0);

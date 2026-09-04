@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { withHub } from "@/lib/hub-context";
+import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
@@ -25,6 +25,7 @@ const fields = {
   dueDate: z.string().min(1, "Due date is required"),
   ventureId: z.preprocess(emptyToNull, z.string().cuid().nullable()),
   remindDaysBefore: remindDays,
+  visibility: z.enum(["PRIVATE", "SHARED"]).default("SHARED"),
 };
 
 const createSchema = z.object(fields);
@@ -37,59 +38,65 @@ function parse<T extends z.ZodTypeAny>(schema: T, fd: FormData): z.infer<T> {
 }
 
 export async function createDeadline(fd: FormData) {
-  const user = await requireUser();
+  const { user, hub } = await requireHub();
   const d = parse(createSchema, fd);
-  await prisma.deadline.create({
-    data: {
-      title: d.title,
-      notes: d.notes,
-      dueDate: fromDateInput(d.dueDate)!,
-      ventureId: d.ventureId,
-      remindDaysBefore: d.remindDaysBefore,
-      createdById: user.id,
-    },
-  });
+  await withHub(user.id, (tx) =>
+    tx.deadline.create({
+      data: {
+        title: d.title,
+        notes: d.notes,
+        hubId: hub.id,
+        dueDate: fromDateInput(d.dueDate)!,
+        ventureId: d.ventureId,
+        remindDaysBefore: d.remindDaysBefore,
+        createdById: user.id,
+        visibility: d.visibility,
+      },
+    }),
+  );
   revalidatePath("/deadlines");
   revalidatePath("/today");
 }
 
 export async function updateDeadline(fd: FormData) {
-  await requireUser();
+  const { user } = await requireHub();
   const d = parse(updateSchema, fd);
-  await prisma.deadline.update({
-    where: { id: d.id },
-    data: {
-      title: d.title,
-      notes: d.notes,
-      dueDate: fromDateInput(d.dueDate)!,
-      ventureId: d.ventureId,
-      remindDaysBefore: d.remindDaysBefore,
-    },
-  });
+  await withHub(user.id, (tx) =>
+    tx.deadline.update({
+      where: { id: d.id },
+      data: {
+        title: d.title,
+        notes: d.notes,
+        dueDate: fromDateInput(d.dueDate)!,
+        ventureId: d.ventureId,
+        remindDaysBefore: d.remindDaysBefore,
+        visibility: d.visibility,
+      },
+    }),
+  );
   revalidatePath("/deadlines");
   revalidatePath(`/deadlines/${d.id}`);
   redirect("/deadlines");
 }
 
 export async function toggleDeadlineDone(fd: FormData) {
-  await requireUser();
+  const { user } = await requireHub();
   const schema = z.object({
     id: z.string().cuid(),
     done: z.preprocess((v) => v === "true" || v === true, z.boolean()),
   });
   const { id, done } = schema.parse({ id: fd.get("id"), done: fd.get("done") });
-  await prisma.deadline.update({
-    where: { id },
-    data: { doneAt: done ? new Date() : null },
-  });
+  await withHub(user.id, (tx) =>
+    tx.deadline.update({ where: { id }, data: { doneAt: done ? new Date() : null } }),
+  );
   revalidatePath("/deadlines");
   revalidatePath("/today");
 }
 
 export async function deleteDeadline(fd: FormData) {
-  await requireUser();
+  const { user } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
-  await prisma.deadline.delete({ where: { id } });
+  await withHub(user.id, (tx) => tx.deadline.delete({ where: { id } }));
   revalidatePath("/deadlines");
   redirect("/deadlines");
 }

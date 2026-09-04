@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { requireHub } from "@/lib/session";
 import { sendPushToUser } from "@/lib/push";
 
 const subSchema = z.object({
@@ -16,7 +16,7 @@ export async function savePushSubscription(
   raw: unknown,
   userAgent?: string,
 ): Promise<{ ok: boolean }> {
-  const user = await requireUser();
+  const { user } = await requireHub();
   const sub = subSchema.parse(raw);
 
   await prisma.pushSubscription.upsert({
@@ -43,7 +43,7 @@ export async function savePushSubscription(
 }
 
 export async function removePushSubscription(endpoint: string): Promise<{ ok: boolean }> {
-  await requireUser();
+  await requireHub();
   await prisma.pushSubscription.deleteMany({ where: { endpoint } });
   revalidatePath("/notifications");
   return { ok: true };
@@ -56,7 +56,7 @@ const prefsSchema = z.object({
 });
 
 export async function updateNotificationPrefs(formData: FormData) {
-  const user = await requireUser();
+  const { user } = await requireHub();
   const data = prefsSchema.parse({
     emailDigestEnabled: formData.get("emailDigestEnabled"),
     digestHour: formData.get("digestHour"),
@@ -73,7 +73,7 @@ export async function updateNotificationPrefs(formData: FormData) {
 }
 
 export async function sendTestPush(): Promise<{ sent: number; failed: number; pruned: number }> {
-  const user = await requireUser();
+  const { user } = await requireHub();
   return sendPushToUser(user.id, {
     title: "Life Hub",
     body: "Test notification — you're all set. 🎉",

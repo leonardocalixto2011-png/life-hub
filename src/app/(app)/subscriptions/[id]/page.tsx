@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getSubscription, listMembers, listVentures } from "@/lib/data";
-import { requireUser } from "@/lib/session";
+import { withHub } from "@/lib/hub-context";
+import { requireHub } from "@/lib/session";
 import { toDateInput } from "@/lib/format";
 import { centsToInput } from "@/lib/money";
 import { SubscriptionForm } from "../SubscriptionForm";
@@ -14,13 +15,15 @@ export default async function SubscriptionDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireUser();
+  const { user, hub } = await requireHub();
   const { id } = await params;
-  const [sub, ventures, members] = await Promise.all([
-    getSubscription(id),
-    listVentures(),
-    listMembers(),
-  ]);
+  const [sub, ventures, members] = await withHub(user.id, (tx) =>
+    Promise.all([
+      getSubscription(tx, hub.id, id),
+      listVentures(tx, hub.id),
+      listMembers(tx, hub.id),
+    ]),
+  );
   if (!sub) notFound();
 
   return (

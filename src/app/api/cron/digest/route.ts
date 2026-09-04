@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { sendPushToUser } from "@/lib/push";
 import {
-  collectDigest,
+  collectDigestForUser,
   digestHtml,
   digestSubject,
   digestText,
@@ -25,7 +25,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const digest = await collectDigest(48);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   const users = await prisma.user.findMany({
@@ -40,37 +39,39 @@ export async function GET(req: Request) {
 
   let pushed = 0;
   let emailed = 0;
+  let totalCount = 0;
 
-  if (digest.count > 0) {
-    const subject = digestSubject(digest);
-    const text = digestText(digest);
-    const html = digestHtml(digest, appUrl);
+  await Promise.all(
+    users.map(async (u) => {
+      const digest = await collectDigestForUser(u.id, 48);
+      totalCount += digest.count;
+      if (digest.count === 0) return;
 
-    await Promise.all(
-      users.map(async (u) => {
-        const pref = u.notificationPref;
+      const pref = u.notificationPref;
+      const subject = digestSubject(digest);
+      const text = digestText(digest);
+      const html = digestHtml(digest, appUrl);
 
-        if ((pref?.pushEnabled ?? true) && u._count.pushSubscriptions > 0) {
-          const r = await sendPushToUser(u.id, {
-            title: "Life Hub — daily digest",
-            body: `${digest.count} thing${digest.count === 1 ? "" : "s"} due in the next 48h. Tap to review.`,
-            url: "/today",
-            tag: "digest",
-          });
-          if (r.sent > 0) pushed++;
-        }
+      if ((pref?.pushEnabled ?? true) && u._count.pushSubscriptions > 0) {
+        const r = await sendPushToUser(u.id, {
+          title: "Life Hub — daily digest",
+          body: `${digest.count} thing${digest.count === 1 ? "" : "s"} due in the next 48h. Tap to review.`,
+          url: "/today",
+          tag: "digest",
+        });
+        if (r.sent > 0) pushed++;
+      }
 
-        if ((pref?.emailDigestEnabled ?? true) && u.email) {
-          await sendEmail({ to: u.email, subject, html, text });
-          emailed++;
-        }
-      }),
-    );
-  }
+      if ((pref?.emailDigestEnabled ?? true) && u.email) {
+        await sendEmail({ to: u.email, subject, html, text });
+        emailed++;
+      }
+    }),
+  );
 
   return NextResponse.json({
     ok: true,
-    count: digest.count,
+    count: totalCount,
     pushed,
     emailed,
     ranAt: new Date().toISOString(),

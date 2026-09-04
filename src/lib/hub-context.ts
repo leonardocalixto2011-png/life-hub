@@ -20,8 +20,15 @@ export async function withHub<T>(
   userId: string,
   fn: (tx: HubTx) => Promise<T>,
 ): Promise<T> {
-  return appPrisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
-    return fn(tx);
-  });
+  return appPrisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
+      return fn(tx);
+    },
+    // Generous vs. Prisma's 2s/5s defaults — Next's App Router renders a
+    // layout and its page concurrently, so two withHub() calls can briefly
+    // compete for a connection. Real Postgres acquires near-instantly
+    // regardless; this only matters for the local single-process dev engine.
+    { maxWait: 15_000, timeout: 15_000 },
+  );
 }

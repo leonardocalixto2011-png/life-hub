@@ -5,19 +5,20 @@ import { redirect } from "next/navigation";
 import { addMonths, addWeeks } from "date-fns";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import type { HubTx } from "@/lib/hub-context";
+import { withHub } from "@/lib/hub-context";
+import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 
 /**
  * Marking a recurring task done spawns its next occurrence: same fields, due date
  * advanced by the recurrence interval (from the old due date, or today).
  */
-async function completeTask(id: string) {
-  const task = await prisma.task.findUnique({ where: { id } });
+async function completeTask(tx: HubTx, id: string) {
+  const task = await tx.task.findUnique({ where: { id } });
   if (!task) return;
 
-  await prisma.task.update({
+  await tx.task.update({
     where: { id },
     data: { status: "DONE", completedAt: new Date() },
   });
@@ -26,10 +27,11 @@ async function completeTask(id: string) {
     const base = task.dueDate ?? new Date();
     const nextDue =
       task.recurrence === "weekly" ? addWeeks(base, 1) : addMonths(base, 1);
-    await prisma.task.create({
+    await tx.task.create({
       data: {
         title: task.title,
         notes: task.notes,
+        hubId: task.hubId,
         ventureId: task.ventureId,
         assignedToId: task.assignedToId,
         priority: task.priority,
@@ -37,6 +39,7 @@ async function completeTask(id: string) {
         recurrence: task.recurrence,
         dueDate: nextDue,
         createdById: task.createdById,
+        visibility: task.visibility,
       },
     });
   }
@@ -53,6 +56,7 @@ const baseFields = {
   priority: z.enum(["LOW", "MED", "HIGH"]).default("MED"),
   isRecurring: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
   recurrence: z.preprocess(emptyToNull, z.enum(["weekly", "monthly"]).nullable()),
+  visibility: z.enum(["PRIVATE", "SHARED"]).default("SHARED"),
 };
 
 const createSchema = z.object(baseFields);
@@ -68,44 +72,51 @@ function parse<T extends z.ZodTypeAny>(schema: T, formData: FormData): z.infer<T
 }
 
 export async function createTask(formData: FormData) {
-  const user = await requireUser();
+  const { user, hub } = await requireHub();
   const data = parse(createSchema, formData);
 
-  await prisma.task.create({
-    data: {
-      title: data.title,
-      notes: data.notes,
-      ventureId: data.ventureId,
-      assignedToId: data.assignedToId,
-      dueDate: fromDateInput(data.dueDate),
-      priority: data.priority,
-      isRecurring: data.isRecurring,
-      recurrence: data.isRecurring ? data.recurrence : null,
-      createdById: user.id,
-    },
-  });
+  await withHub(user.id, (tx) =>
+    tx.task.create({
+      data: {
+        title: data.title,
+        notes: data.notes,
+        hubId: hub.id,
+        ventureId: data.ventureId,
+        assignedToId: data.assignedToId,
+        dueDate: fromDateInput(data.dueDate),
+        priority: data.priority,
+        isRecurring: data.isRecurring,
+        recurrence: data.isRecurring ? data.recurrence : null,
+        createdById: user.id,
+        visibility: data.visibility,
+      },
+    }),
+  );
 
   revalidatePath("/today");
   revalidatePath("/tasks");
 }
 
 export async function updateTask(formData: FormData) {
-  await requireUser();
+  const { user } = await requireHub();
   const data = parse(updateSchema, formData);
 
-  await prisma.task.update({
-    where: { id: data.id },
-    data: {
-      title: data.title,
-      notes: data.notes,
-      ventureId: data.ventureId,
-      assignedToId: data.assignedToId,
-      dueDate: fromDateInput(data.dueDate),
-      priority: data.priority,
-      isRecurring: data.isRecurring,
-      recurrence: data.isRecurring ? data.recurrence : null,
-    },
-  });
+  await withHub(user.id, (tx) =>
+    tx.task.update({
+      where: { id: data.id },
+      data: {
+        title: data.title,
+        notes: data.notes,
+        ventureId: data.ventureId,
+        assignedToId: data.assignedToId,
+        dueDate: fromDateInput(data.dueDate),
+        priority: data.priority,
+        isRecurring: data.isRecurring,
+        recurrence: data.isRecurring ? data.recurrence : null,
+        visibility: data.visibility,
+      },
+    }),
+  );
 
   revalidatePath("/today");
   revalidatePath("/tasks");
@@ -119,29 +130,28 @@ const toggleSchema = z.object({
 });
 
 export async function toggleTask(formData: FormData) {
-  await requireUser();
+  const { user } = await requireHub();
   const { id, done } = toggleSchema.parse({
     id: formData.get("id"),
     done: formData.get("done"),
   });
 
-  if (done) {
-    await completeTask(id);
-  } else {
-    await prisma.task.update({
-      where: { id },
-      data: { status: "OPEN", completedAt: null },
-    });
-  }
+  await withHub(user.id, async (tx) => {
+    if (done) {
+      await completeTask(tx, id);
+    } else {
+      await tx.task.update({ where: { id }, data: { status: "OPEN", completedAt: null } });
+    }
+  });
 
   revalidatePath("/today");
   revalidatePath("/tasks");
 }
 
 export async function deleteTask(formData: FormData) {
-  await requireUser();
+  const { user } = await requireHub();
   const id = z.string().cuid().parse(formData.get("id"));
-  await prisma.task.delete({ where: { id } });
+  await withHub(user.id, (tx) => tx.task.delete({ where: { id } }));
 
   revalidatePath("/today");
   revalidatePath("/tasks");
@@ -158,16 +168,15 @@ function refreshTaskPaths() {
 
 /** Toggle done from JS (no FormData). Returns nothing; undo = call with !done. */
 export async function setTaskDone(id: string, done: boolean) {
-  await requireUser();
+  const { user } = await requireHub();
   z.string().cuid().parse(id);
-  if (done) {
-    await completeTask(id);
-  } else {
-    await prisma.task.update({
-      where: { id },
-      data: { status: "OPEN", completedAt: null },
-    });
-  }
+  await withHub(user.id, async (tx) => {
+    if (done) {
+      await completeTask(tx, id);
+    } else {
+      await tx.task.update({ where: { id }, data: { status: "OPEN", completedAt: null } });
+    }
+  });
   refreshTaskPaths();
 }
 
@@ -181,28 +190,29 @@ const patchSchema = z.object({
 });
 
 export async function makeRecurring(id: string, recurrence: "weekly" | "monthly") {
-  await requireUser();
+  const { user } = await requireHub();
   z.string().cuid().parse(id);
-  await prisma.task.update({
-    where: { id },
-    data: { isRecurring: true, recurrence },
-  });
+  await withHub(user.id, (tx) =>
+    tx.task.update({ where: { id }, data: { isRecurring: true, recurrence } }),
+  );
   refreshTaskPaths();
 }
 
 export async function setTaskFields(input: z.infer<typeof patchSchema>) {
-  await requireUser();
+  const { user } = await requireHub();
   const p = patchSchema.parse(input);
-  await prisma.task.update({
-    where: { id: p.id },
-    data: {
-      ...(p.dueDate !== undefined
-        ? { dueDate: p.dueDate ? fromDateInput(p.dueDate) : null }
-        : {}),
-      ...(p.ventureId !== undefined ? { ventureId: p.ventureId } : {}),
-      ...(p.assignedToId !== undefined ? { assignedToId: p.assignedToId } : {}),
-      ...(p.priority !== undefined ? { priority: p.priority } : {}),
-    },
-  });
+  await withHub(user.id, (tx) =>
+    tx.task.update({
+      where: { id: p.id },
+      data: {
+        ...(p.dueDate !== undefined
+          ? { dueDate: p.dueDate ? fromDateInput(p.dueDate) : null }
+          : {}),
+        ...(p.ventureId !== undefined ? { ventureId: p.ventureId } : {}),
+        ...(p.assignedToId !== undefined ? { assignedToId: p.assignedToId } : {}),
+        ...(p.priority !== undefined ? { priority: p.priority } : {}),
+      },
+    }),
+  );
   refreshTaskPaths();
 }

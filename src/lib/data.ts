@@ -1,19 +1,25 @@
 import { endOfDay, endOfMonth, startOfDay, startOfMonth } from "date-fns";
 
-import { prisma } from "@/lib/prisma";
+import type { HubTx } from "@/lib/hub-context";
 
-export function listVentures() {
-  return prisma.venture.findMany({
-    where: { archived: false },
+export function listVentures(tx: HubTx, hubId: string) {
+  return tx.venture.findMany({
+    where: { hubId, archived: false },
     orderBy: { sortOrder: "asc" },
   });
 }
 
-export function listMembers() {
-  return prisma.user.findMany({
-    orderBy: [{ name: "asc" }, { email: "asc" }],
-    select: { id: true, name: true, email: true, role: true },
-  });
+/** Active members of a hub — the source for assignee pickers and the members list. */
+export function listMembers(tx: HubTx, hubId: string) {
+  return tx.hubMembership
+    .findMany({
+      where: { hubId, status: "ACTIVE" },
+      include: { user: { select: { id: true, name: true, email: true, role: true } } },
+      orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
+    })
+    .then((rows) =>
+      rows.map((m) => ({ ...m.user, hubRole: m.role, joinedAt: m.joinedAt })),
+    );
 }
 
 const taskInclude = {
@@ -28,9 +34,10 @@ export type TaskFilter = {
   includeDone?: boolean;
 };
 
-export function listTasks(filter: TaskFilter = {}) {
-  return prisma.task.findMany({
+export function listTasks(tx: HubTx, hubId: string, filter: TaskFilter = {}) {
+  return tx.task.findMany({
     where: {
+      hubId,
       ...(filter.includeDone ? {} : { status: "OPEN" }),
       ...(filter.ventureSlug ? { venture: { slug: filter.ventureSlug } } : {}),
       ...(filter.mineUserId ? { assignedToId: filter.mineUserId } : {}),
@@ -45,34 +52,34 @@ export function listTasks(filter: TaskFilter = {}) {
   });
 }
 
-export function getTask(id: string) {
-  return prisma.task.findUnique({ where: { id }, include: taskInclude });
+export function getTask(tx: HubTx, hubId: string, id: string) {
+  return tx.task.findUnique({ where: { id, hubId }, include: taskInclude });
 }
 
 /** Buckets for the "Today" view. */
-export async function todayView() {
+export async function todayView(tx: HubTx, hubId: string) {
   const now = new Date();
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
   const weekEnd = endOfDay(new Date(now.getTime() + 6 * 864e5));
 
   const [overdue, today, upcoming, undatedCount] = await Promise.all([
-    prisma.task.findMany({
-      where: { status: "OPEN", dueDate: { lt: todayStart } },
+    tx.task.findMany({
+      where: { hubId, status: "OPEN", dueDate: { lt: todayStart } },
       include: taskInclude,
       orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
     }),
-    prisma.task.findMany({
-      where: { status: "OPEN", dueDate: { gte: todayStart, lte: todayEnd } },
+    tx.task.findMany({
+      where: { hubId, status: "OPEN", dueDate: { gte: todayStart, lte: todayEnd } },
       include: taskInclude,
       orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
     }),
-    prisma.task.findMany({
-      where: { status: "OPEN", dueDate: { gt: todayEnd, lte: weekEnd } },
+    tx.task.findMany({
+      where: { hubId, status: "OPEN", dueDate: { gt: todayEnd, lte: weekEnd } },
       include: taskInclude,
       orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
     }),
-    prisma.task.count({ where: { status: "OPEN", dueDate: null } }),
+    tx.task.count({ where: { hubId, status: "OPEN", dueDate: null } }),
   ]);
 
   return { overdue, today, upcoming, undatedCount };
@@ -81,9 +88,9 @@ export async function todayView() {
 export type TaskWithRefs = Awaited<ReturnType<typeof listTasks>>[number];
 
 /** One-off task titles created 3+ times — candidates to make recurring. */
-export async function recurringSuggestions() {
-  const rows = await prisma.task.findMany({
-    where: { isRecurring: false },
+export async function recurringSuggestions(tx: HubTx, hubId: string) {
+  const rows = await tx.task.findMany({
+    where: { hubId, isRecurring: false },
     select: { id: true, title: true, createdAt: true },
     orderBy: { createdAt: "desc" },
   });
@@ -111,16 +118,16 @@ const deadlineInclude = {
   venture: { select: { id: true, name: true, slug: true, color: true } },
 } as const;
 
-export function listDeadlines(opts: { includeDone?: boolean } = {}) {
-  return prisma.deadline.findMany({
-    where: opts.includeDone ? {} : { doneAt: null },
+export function listDeadlines(tx: HubTx, hubId: string, opts: { includeDone?: boolean } = {}) {
+  return tx.deadline.findMany({
+    where: { hubId, ...(opts.includeDone ? {} : { doneAt: null }) },
     include: deadlineInclude,
     orderBy: [{ doneAt: "asc" }, { dueDate: "asc" }],
   });
 }
 
-export function getDeadline(id: string) {
-  return prisma.deadline.findUnique({ where: { id }, include: deadlineInclude });
+export function getDeadline(tx: HubTx, hubId: string, id: string) {
+  return tx.deadline.findUnique({ where: { id, hubId }, include: deadlineInclude });
 }
 
 export type DeadlineWithRefs = Awaited<ReturnType<typeof listDeadlines>>[number];
@@ -134,16 +141,20 @@ const subscriptionInclude = {
   owner: { select: { id: true, name: true, email: true } },
 } as const;
 
-export function listSubscriptions(opts: { includeCancelled?: boolean } = {}) {
-  return prisma.subscription.findMany({
-    where: opts.includeCancelled ? {} : { status: "ACTIVE" },
+export function listSubscriptions(
+  tx: HubTx,
+  hubId: string,
+  opts: { includeCancelled?: boolean } = {},
+) {
+  return tx.subscription.findMany({
+    where: { hubId, ...(opts.includeCancelled ? {} : { status: "ACTIVE" }) },
     include: subscriptionInclude,
     orderBy: [{ status: "asc" }, { renewalDate: "asc" }],
   });
 }
 
-export function getSubscription(id: string) {
-  return prisma.subscription.findUnique({ where: { id }, include: subscriptionInclude });
+export function getSubscription(tx: HubTx, hubId: string, id: string) {
+  return tx.subscription.findUnique({ where: { id, hubId }, include: subscriptionInclude });
 }
 
 export type SubscriptionWithRefs = Awaited<ReturnType<typeof listSubscriptions>>[number];
@@ -158,13 +169,13 @@ const budgetInclude = {
 } as const;
 
 /** `month` is any date inside the target month. */
-export async function budgetMonth(month: Date, ventureSlug?: string) {
+export async function budgetMonth(tx: HubTx, hubId: string, month: Date, ventureSlug?: string) {
   const from = startOfMonth(month);
   const to = endOfMonth(month);
   const ventureFilter = ventureSlug ? { venture: { slug: ventureSlug } } : {};
 
-  const entries = await prisma.budgetEntry.findMany({
-    where: { date: { gte: from, lte: to }, ...ventureFilter },
+  const entries = await tx.budgetEntry.findMany({
+    where: { hubId, date: { gte: from, lte: to }, ...ventureFilter },
     include: budgetInclude,
     orderBy: { date: "desc" },
   });
@@ -201,7 +212,7 @@ const eventInclude = {
   createdBy: { select: { id: true, name: true, email: true } },
 } as const;
 
-export function listEvents(opts: { from?: Date; to?: Date } = {}) {
+export function listEvents(tx: HubTx, hubId: string, opts: { from?: Date; to?: Date } = {}) {
   const range =
     opts.from || opts.to
       ? {
@@ -211,15 +222,15 @@ export function listEvents(opts: { from?: Date; to?: Date } = {}) {
           },
         }
       : {};
-  return prisma.event.findMany({
-    where: range,
+  return tx.event.findMany({
+    where: { hubId, ...range },
     include: eventInclude,
     orderBy: { startAt: "asc" },
   });
 }
 
-export function getEvent(id: string) {
-  return prisma.event.findUnique({ where: { id }, include: eventInclude });
+export function getEvent(tx: HubTx, hubId: string, id: string) {
+  return tx.event.findUnique({ where: { id, hubId }, include: eventInclude });
 }
 
 export type EventWithRefs = Awaited<ReturnType<typeof listEvents>>[number];
@@ -227,17 +238,21 @@ export type EventWithRefs = Awaited<ReturnType<typeof listEvents>>[number];
 // --------------------------------------------------------------------------
 // Review inbox
 // --------------------------------------------------------------------------
+//
+// ReviewItem has no hubId yet (see plan §5, known gap not solved this phase)
+// — it stays global; accepted items land in whichever hub is current for the
+// user who clicks Accept.
 
-export function listPendingReviews() {
-  return prisma.reviewItem.findMany({
+export function listPendingReviews(tx: HubTx) {
+  return tx.reviewItem.findMany({
     where: { status: "PENDING" },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
 }
 
-export function pendingReviewCount() {
-  return prisma.reviewItem.count({ where: { status: "PENDING" } });
+export function pendingReviewCount(tx: HubTx) {
+  return tx.reviewItem.count({ where: { status: "PENDING" } });
 }
 
 export type ReviewRow = Awaited<ReturnType<typeof listPendingReviews>>[number];
@@ -257,24 +272,24 @@ export type AgendaItem = {
   meta: string | null;
 };
 
-export async function agendaItems(days = 30) {
+export async function agendaItems(tx: HubTx, hubId: string, days = 30) {
   const now = new Date();
   const from = startOfDay(now);
   const to = endOfDay(new Date(now.getTime() + days * 864e5));
 
   const [tasks, deadlines, events] = await Promise.all([
-    prisma.task.findMany({
-      where: { status: "OPEN", dueDate: { not: null, lte: to } },
+    tx.task.findMany({
+      where: { hubId, status: "OPEN", dueDate: { not: null, lte: to } },
       include: { venture: { select: { name: true, color: true } }, assignedTo: { select: { name: true, email: true } } },
       orderBy: { dueDate: "asc" },
     }),
-    prisma.deadline.findMany({
-      where: { doneAt: null, dueDate: { lte: to } },
+    tx.deadline.findMany({
+      where: { hubId, doneAt: null, dueDate: { lte: to } },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { dueDate: "asc" },
     }),
-    prisma.event.findMany({
-      where: { endAt: { gte: from }, startAt: { lte: to } },
+    tx.event.findMany({
+      where: { hubId, endAt: { gte: from }, startAt: { lte: to } },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { startAt: "asc" },
     }),
@@ -318,43 +333,99 @@ export async function agendaItems(days = 30) {
 }
 
 // --------------------------------------------------------------------------
+// Cross-hub "Mine" view
+// --------------------------------------------------------------------------
+
+export type MyItem = AgendaItem & { hub: { id: string; name: string; color: string } };
+
+/**
+ * Assigned-to-me items across every hub the user belongs to. Unlike the rest
+ * of this module, this intentionally loops per hub (via a separate withHub()
+ * call per hub from the caller) rather than relying on RLS's natural
+ * cross-hub union — see the plan §4.
+ */
+export async function myItemsInHub(
+  tx: HubTx,
+  hubId: string,
+  userId: string,
+): Promise<Omit<MyItem, "hub">[]> {
+  const to = endOfDay(new Date(Date.now() + 60 * 864e5));
+
+  const [tasks, deadlines] = await Promise.all([
+    tx.task.findMany({
+      where: { hubId, status: "OPEN", assignedToId: userId, dueDate: { not: null, lte: to } },
+      include: { venture: { select: { name: true, color: true } } },
+      orderBy: { dueDate: "asc" },
+    }),
+    tx.deadline.findMany({
+      where: { hubId, doneAt: null, dueDate: { lte: to } },
+      include: { venture: { select: { name: true, color: true } } },
+      orderBy: { dueDate: "asc" },
+    }),
+  ]);
+
+  return [
+    ...tasks.map((t): Omit<MyItem, "hub"> => ({
+      kind: "task",
+      id: t.id,
+      title: t.title,
+      at: t.dueDate!,
+      href: `/tasks/${t.id}`,
+      allDay: true,
+      venture: t.venture,
+      meta: null,
+    })),
+    ...deadlines.map((d): Omit<MyItem, "hub"> => ({
+      kind: "deadline",
+      id: d.id,
+      title: d.title,
+      at: d.dueDate,
+      href: `/deadlines/${d.id}`,
+      allDay: true,
+      venture: d.venture,
+      meta: null,
+    })),
+  ];
+}
+
+// --------------------------------------------------------------------------
 // Dashboard aggregate
 // --------------------------------------------------------------------------
 
-export async function dashboard() {
+export async function dashboard(tx: HubTx, hubId: string) {
   const now = new Date();
   const todayStart = startOfDay(now);
   const weekEnd = endOfDay(new Date(now.getTime() + 6 * 864e5));
   const soon = endOfDay(new Date(now.getTime() + 13 * 864e5)); // ~2 weeks
 
   const [tasks, deadlines, renewals, cancelBys, events, month] = await Promise.all([
-    prisma.task.findMany({
-      where: { status: "OPEN", dueDate: { lte: weekEnd } },
+    tx.task.findMany({
+      where: { hubId, status: "OPEN", dueDate: { lte: weekEnd } },
       include: taskInclude,
       orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
     }),
-    prisma.deadline.findMany({
-      where: { doneAt: null, dueDate: { lte: soon } },
+    tx.deadline.findMany({
+      where: { hubId, doneAt: null, dueDate: { lte: soon } },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { dueDate: "asc" },
       take: 5,
     }),
-    prisma.subscription.findMany({
-      where: { status: "ACTIVE", renewalDate: { lte: soon } },
+    tx.subscription.findMany({
+      where: { hubId, status: "ACTIVE", renewalDate: { lte: soon } },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { renewalDate: "asc" },
     }),
-    prisma.subscription.findMany({
-      where: { status: "ACTIVE", cancelByDate: { not: null, lte: soon } },
+    tx.subscription.findMany({
+      where: { hubId, status: "ACTIVE", cancelByDate: { not: null, lte: soon } },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { cancelByDate: "asc" },
     }),
-    prisma.event.findMany({
-      where: { endAt: { gte: todayStart }, startAt: { lte: weekEnd } },
+    tx.event.findMany({
+      where: { hubId, endAt: { gte: todayStart }, startAt: { lte: weekEnd } },
       include: eventInclude,
       orderBy: { startAt: "asc" },
     }),
-    budgetMonth(now),
+    budgetMonth(tx, hubId, now),
   ]);
 
   const overdue = tasks.filter((t) => t.dueDate && t.dueDate < todayStart);

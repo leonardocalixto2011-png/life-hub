@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { withHub } from "@/lib/hub-context";
+import { requireHub } from "@/lib/session";
 import { fromDateTimeInput } from "@/lib/format";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
@@ -17,6 +17,7 @@ const fields = {
   startAt: z.string().min(1, "Start time is required"),
   endAt: z.preprocess(emptyToNull, z.string().nullable()),
   ventureId: z.preprocess(emptyToNull, z.string().cuid().nullable()),
+  visibility: z.enum(["PRIVATE", "SHARED"]).default("SHARED"),
 };
 
 const createSchema = z.object(fields);
@@ -42,37 +43,39 @@ function buildData(d: z.infer<typeof createSchema>, attendeeIds: string[]) {
     endAt,
     ventureId: d.ventureId,
     attendeeIds,
+    visibility: d.visibility,
   };
 }
 
 export async function createEvent(fd: FormData) {
-  const user = await requireUser();
+  const { user, hub } = await requireHub();
   const d = parse(createSchema, fd);
   const attendeeIds = fd.getAll("attendeeIds").map(String).filter(Boolean);
-  await prisma.event.create({
-    data: { ...buildData(d, attendeeIds), createdById: user.id },
-  });
+  await withHub(user.id, (tx) =>
+    tx.event.create({
+      data: { ...buildData(d, attendeeIds), hubId: hub.id, createdById: user.id },
+    }),
+  );
   revalidatePath("/calendar");
   revalidatePath("/today");
 }
 
 export async function updateEvent(fd: FormData) {
-  await requireUser();
+  const { user } = await requireHub();
   const d = parse(updateSchema, fd);
   const attendeeIds = fd.getAll("attendeeIds").map(String).filter(Boolean);
-  await prisma.event.update({
-    where: { id: d.id },
-    data: buildData(d, attendeeIds),
-  });
+  await withHub(user.id, (tx) =>
+    tx.event.update({ where: { id: d.id }, data: buildData(d, attendeeIds) }),
+  );
   revalidatePath("/calendar");
   revalidatePath("/today");
   redirect("/calendar");
 }
 
 export async function deleteEvent(fd: FormData) {
-  await requireUser();
+  const { user } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
-  await prisma.event.delete({ where: { id } });
+  await withHub(user.id, (tx) => tx.event.delete({ where: { id } }));
   revalidatePath("/calendar");
   redirect("/calendar");
 }

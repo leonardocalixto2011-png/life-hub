@@ -2,6 +2,8 @@ import Link from "next/link";
 import { addMonths, format, isValid, parse as parseDate, subMonths } from "date-fns";
 
 import { budgetMonth, listVentures, type BudgetEntryWithRefs } from "@/lib/data";
+import { withHub } from "@/lib/hub-context";
+import { requireHub } from "@/lib/session";
 import { money } from "@/lib/format";
 import { VentureChip } from "@/components/VentureChip";
 import { EntryForm } from "./EntryForm";
@@ -65,10 +67,10 @@ export default async function MoneyPage({
 }) {
   const sp = await searchParams;
   const month = monthFromParam(sp.m);
-  const [ventures, data] = await Promise.all([
-    listVentures(),
-    budgetMonth(month, sp.venture),
-  ]);
+  const { user, hub } = await requireHub();
+  const [ventures, data] = await withHub(user.id, (tx) =>
+    Promise.all([listVentures(tx, hub.id), budgetMonth(tx, hub.id, month, sp.venture)]),
+  );
   const currency = data.entries[0]?.currency ?? "CAD";
   const maxCat = data.categories[0]?.cents ?? 1;
 

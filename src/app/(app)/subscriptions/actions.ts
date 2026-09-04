@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { withHub } from "@/lib/hub-context";
+import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
 
@@ -52,35 +52,38 @@ function data(d: z.infer<typeof createSchema>) {
 }
 
 export async function createSubscription(fd: FormData) {
-  await requireUser();
-  await prisma.subscription.create({ data: data(parse(createSchema, fd)) });
+  const { user, hub } = await requireHub();
+  const d = data(parse(createSchema, fd));
+  await withHub(user.id, (tx) => tx.subscription.create({ data: { ...d, hubId: hub.id } }));
   revalidatePath("/subscriptions");
 }
 
 export async function updateSubscription(fd: FormData) {
-  await requireUser();
+  const { user } = await requireHub();
   const d = parse(updateSchema, fd);
-  await prisma.subscription.update({ where: { id: d.id }, data: data(d) });
+  await withHub(user.id, (tx) =>
+    tx.subscription.update({ where: { id: d.id }, data: data(d) }),
+  );
   revalidatePath("/subscriptions");
   revalidatePath(`/subscriptions/${d.id}`);
   redirect("/subscriptions");
 }
 
 export async function setSubscriptionStatus(fd: FormData) {
-  await requireUser();
+  const { user } = await requireHub();
   const schema = z.object({
     id: z.string().cuid(),
     status: z.enum(["ACTIVE", "CANCELLED"]),
   });
   const { id, status } = schema.parse({ id: fd.get("id"), status: fd.get("status") });
-  await prisma.subscription.update({ where: { id }, data: { status } });
+  await withHub(user.id, (tx) => tx.subscription.update({ where: { id }, data: { status } }));
   revalidatePath("/subscriptions");
 }
 
 export async function deleteSubscription(fd: FormData) {
-  await requireUser();
+  const { user } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
-  await prisma.subscription.delete({ where: { id } });
+  await withHub(user.id, (tx) => tx.subscription.delete({ where: { id } }));
   revalidatePath("/subscriptions");
   redirect("/subscriptions");
 }

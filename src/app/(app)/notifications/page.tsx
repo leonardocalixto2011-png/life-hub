@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { requireHub } from "@/lib/session";
 import { PushToggle } from "@/components/PushToggle";
 import { InstallHint } from "@/components/InstallHint";
 import { DigestPrefsForm } from "./DigestPrefsForm";
@@ -9,7 +9,7 @@ import { DigestPrefsForm } from "./DigestPrefsForm";
 export const dynamic = "force-dynamic";
 
 export default async function NotificationsPage() {
-  const user = await requireUser();
+  const { user } = await requireHub();
 
   const [pref, deviceCount] = await Promise.all([
     prisma.notificationPreference.findUnique({ where: { userId: user.id } }),

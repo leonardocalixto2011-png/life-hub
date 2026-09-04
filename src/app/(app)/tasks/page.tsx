@@ -6,7 +6,8 @@ import {
   listVentures,
   recurringSuggestions,
 } from "@/lib/data";
-import { requireUser } from "@/lib/session";
+import { withHub } from "@/lib/hub-context";
+import { requireHub } from "@/lib/session";
 import { TaskListCard } from "@/components/TaskListCard";
 import { EmptyState, QUICK_ADD_EXAMPLES } from "@/components/EmptyState";
 import { RecurringNudge } from "@/components/RecurringNudge";
@@ -55,22 +56,24 @@ export default async function TasksPage({
   searchParams: Promise<SP>;
 }) {
   const sp = await searchParams;
-  const user = await requireUser();
-  const [ventures, members, suggestions] = await Promise.all([
-    listVentures(),
-    listMembers(),
-    recurringSuggestions(),
-  ]);
+  const { user, hub } = await requireHub();
   const noFilters = !sp.venture && sp.mine !== "1" && sp.show !== "all";
 
   const includeDone = sp.show === "all";
   const mine = sp.mine === "1";
 
-  const tasks = await listTasks({
-    ventureSlug: sp.venture,
-    mineUserId: mine ? user.id : undefined,
-    includeDone,
-  });
+  const [ventures, members, suggestions, tasks] = await withHub(user.id, (tx) =>
+    Promise.all([
+      listVentures(tx, hub.id),
+      listMembers(tx, hub.id),
+      recurringSuggestions(tx, hub.id),
+      listTasks(tx, hub.id, {
+        ventureSlug: sp.venture,
+        mineUserId: mine ? user.id : undefined,
+        includeDone,
+      }),
+    ]),
+  );
 
   return (
     <div className="space-y-3 p-3">

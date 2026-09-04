@@ -1,6 +1,8 @@
 import Link from "next/link";
 
 import { listDeadlines, listVentures, type DeadlineWithRefs } from "@/lib/data";
+import { withHub } from "@/lib/hub-context";
+import { requireHub } from "@/lib/session";
 import { daysUntil } from "@/lib/format";
 import { Countdown } from "@/components/Countdown";
 import { VentureChip } from "@/components/VentureChip";
@@ -75,10 +77,10 @@ function Section({ title, items }: { title: string; items: DeadlineWithRefs[] })
 }
 
 export default async function DeadlinesPage() {
-  const [deadlines, ventures] = await Promise.all([
-    listDeadlines({ includeDone: true }),
-    listVentures(),
-  ]);
+  const { user, hub } = await requireHub();
+  const [deadlines, ventures] = await withHub(user.id, (tx) =>
+    Promise.all([listDeadlines(tx, hub.id, { includeDone: true }), listVentures(tx, hub.id)]),
+  );
 
   const open = deadlines.filter((d) => !d.doneAt);
   const done = deadlines.filter((d) => d.doneAt);
