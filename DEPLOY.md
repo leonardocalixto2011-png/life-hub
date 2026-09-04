@@ -122,3 +122,12 @@ allow it. Push does not work from Safari itself — only the installed PWA.
 Add it in Vercel, point DNS, then set `NEXT_PUBLIC_APP_URL` to the new URL and
 redeploy. `trustHost: true` is set so auth callbacks follow the host
 automatically.
+
+## Note: manual "Redeploy" vs. git push
+
+Vercel Hobby's dashboard **Redeploy** button can be blocked ("commit author
+doesn't have permission... Hobby teams do not support collaboration") even
+when the git-integration auto-deploy on `git push` works fine — they're
+different permission checks. If Redeploy is blocked (e.g. after adding an env
+var, which needs a fresh deployment to take effect), push a small commit
+instead of fighting the button.
