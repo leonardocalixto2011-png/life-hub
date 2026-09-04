@@ -42,8 +42,7 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-type InboundPayload = {
-  type?: string;
+type ResendPayload = {
   data?: {
     from?: string | { address?: string; name?: string };
     subject?: string;
@@ -54,30 +53,70 @@ type InboundPayload = {
   };
 };
 
-export async function POST(req: Request) {
-  const secret = process.env.RESEND_WEBHOOK_SECRET;
-  const raw = await req.text();
+type CloudflarePayload = {
+  data?: {
+    from?: string;
+    to?: string;
+    subject?: string;
+    text?: string;
+    html?: string;
+    messageId?: string;
+  };
+};
 
-  if (secret) {
-    if (!verifySvix(secret, req.headers, raw)) {
-      return NextResponse.json({ error: "bad signature" }, { status: 401 });
+type Extracted = { from: string | null; subject: string; body: string; sourceRef: string | null };
+
+/** Two inbound paths land here: Resend Inbound (Svix-signed) or a Cloudflare
+ * Email Worker (shared-secret header, see workers/inbound-email). Whichever
+ * ends up working, both feed the same review-inbox pipeline below. */
+async function extract(req: Request, raw: string): Promise<Extracted | NextResponse> {
+  const cfSecret = req.headers.get("x-inbound-secret");
+
+  if (cfSecret) {
+    const expected = process.env.INBOUND_SECRET;
+    if (!expected || cfSecret !== expected) {
+      return NextResponse.json({ error: "bad secret" }, { status: 401 });
     }
+    let payload: CloudflarePayload;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return NextResponse.json({ error: "bad json" }, { status: 400 });
+    }
+    const d = payload.data ?? {};
+    return {
+      from: d.from ?? null,
+      subject: d.subject ?? "",
+      body: d.text?.trim() || (d.html ? stripHtml(d.html) : ""),
+      sourceRef: d.messageId ?? null,
+    };
   }
 
-  let payload: InboundPayload;
+  const resendSecret = process.env.RESEND_WEBHOOK_SECRET;
+  if (resendSecret && !verifySvix(resendSecret, req.headers, raw)) {
+    return NextResponse.json({ error: "bad signature" }, { status: 401 });
+  }
+  let payload: ResendPayload;
   try {
     payload = JSON.parse(raw);
   } catch {
     return NextResponse.json({ error: "bad json" }, { status: 400 });
   }
-
   const d = payload.data ?? {};
-  const from = typeof d.from === "string" ? d.from : (d.from?.address ?? null);
-  const subject = d.subject ?? "";
-  const body = d.text?.trim() || (d.html ? stripHtml(d.html) : "");
-  const sourceRef = d.message_id ?? d.email_id ?? null;
+  return {
+    from: typeof d.from === "string" ? d.from : (d.from?.address ?? null),
+    subject: d.subject ?? "",
+    body: d.text?.trim() || (d.html ? stripHtml(d.html) : ""),
+    sourceRef: d.message_id ?? d.email_id ?? null,
+  };
+}
 
-  // Nothing to work with, or not an inbound event — ack so Resend stops retrying.
+export async function POST(req: Request) {
+  const raw = await req.text();
+  const extracted = await extract(req, raw);
+  if (extracted instanceof NextResponse) return extracted;
+
+  const { from, subject, body, sourceRef } = extracted;
   if (!body && !subject) return NextResponse.json({ ok: true, skipped: "empty" });
 
   const text = `${subject}\n\n${body}`.slice(0, 6000);

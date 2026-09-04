@@ -1,0 +1,12 @@
+name = "life-hub-inbound"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Not sensitive — where forwarded mail gets POSTed. Change if the app URL changes.
+[vars]
+INBOUND_URL = "https://life-hub-yhn1.vercel.app/api/inbound"
+
+# INBOUND_SECRET is a secret, not a var — set it with:
+#   npx wrangler secret put INBOUND_SECRET
+# (must match INBOUND_SECRET in the Vercel project's env vars)
