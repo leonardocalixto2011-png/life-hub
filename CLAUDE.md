@@ -601,9 +601,37 @@ findings. Full catalogue (incl. deferred items) in the plan file.
   `DebtForm`/`SubscriptionForm` relabelled "— (no owner)" (neither model
   has a privacy column).
 - **Deferred (audited, catalogued in the plan)**: cron fan-out
-  concurrency limiting, a batch of low-value indexes,
-  `BILL_PAYMENT`-email→structured-amount, inline debt status toggle,
-  `/money`→`/budget` rename.
+  concurrency limiting, a batch of low-value indexes, inline debt status
+  toggle, `/money`→`/budget` rename.
+
+### Phase 9c — Mail-detected bills carry a structured amount
+
+Plan file `shiny-dazzling-charm.md`. A `BILL_PAYMENT` email becomes a
+`Task` on accept; the classifier's extracted dollar figure previously
+survived only as a `"$X — "` prefix in the note string.
+
+- ✅ **`Task.amountCents Int?`** (additive nullable, migration
+  `20260905130222_task_amount`, no RLS change — Task's per-item policy is
+  unaffected by a new scalar). `taskInclude` uses `include` only, so it
+  flows into `TaskWithRefs` automatically.
+- ✅ **Commit path** — `commitDraftsCore`'s task branch sets
+  `amountCents: toCents(d.amount)` (the `Draft.amount` plumbing already
+  existed for budget/subscription kinds); `classify.ts` `toDraft` drops
+  the `amountNote` prefix — the amount now rides in `draft.amount`.
+- ✅ **Manual entry + display** — `tasks/actions.ts` `baseFields` gains an
+  `amount` field → `dollarsToCents`; `TaskEditForm` has an "Amount (if a
+  bill)" input; `DraftCard`'s `showAmount` includes `task`; `TaskRow`
+  renders a `money()` chip (so `/tasks` **and** `/today` show it via
+  `TaskListCard`).
+- ✅ **Forecast** — `upcomingSummary(tx, hubId, userId)` now also sums
+  `Task.amountCents` for `status: OPEN` tasks with an amount, filtered by
+  `visibilityFilter(userId)` so a PRIVATE task's amount never enters
+  another member's `/money` "Upcoming" total. Shown as "+ $X bills" in the
+  breakdown line, only when non-zero. The separate "N bills detected from
+  your mail, not yet reviewed" line still counts *un*accepted PENDING
+  `ReviewItem`s.
+- **Deferred**: digest showing bill amounts; fuzzy-matching a detected
+  bill to an existing `Debt` by name.
 
 ## Commands
 
