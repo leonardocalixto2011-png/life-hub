@@ -21,6 +21,16 @@ const MIN_AUTO_FILE_CONFIDENCE_UNTRUSTED_EVENT = 0.85; // "high-confidence, low-
 const MAX_MESSAGES_PER_RUN = 8;
 
 /**
+ * Belt-and-suspenders against MAX_MESSAGES_PER_RUN alone: Claude call
+ * latency varies, and the external scheduler (cron-job.org) enforces its
+ * own ~30s request timeout, well under Vercel's 60s ceiling. Stop starting
+ * new messages once this budget is spent so the route always returns a
+ * clean response instead of risking the scheduler killing the connection
+ * mid-batch — remaining messages just pick up on the next scheduled run.
+ */
+const RUN_TIME_BUDGET_MS = 20_000;
+
+/**
  * Money categories only auto-file for an already-trusted sender — "anything
  * involving money with an unclear or first-seen amount... goes to review"
  * (prompt §3). Events can auto-file for a first-seen sender too, but only at
@@ -46,19 +56,30 @@ async function pollMailAccount(account: MailAccount): Promise<void> {
     const after = account.lastSyncedAt ?? new Date(Date.now() - DEFAULT_LOOKBACK_MS);
     const ids = await listRecentMessageIds(accessToken, after);
 
-    const messages = [];
-    for (const id of ids) {
-      messages.push(await getMessage(accessToken, id));
+    // Gmail's messages.list returns ids newest-first. Fetching full content
+    // for all of them (up to 25) before trimming to MAX_MESSAGES_PER_RUN was
+    // itself enough sequential Gmail API calls to blow past the external
+    // scheduler's own (shorter than Vercel's) request timeout on a real
+    // backlog — so take only the oldest slice of ids up front, and fetch
+    // full messages for just those.
+    const idsToFetch = ids.slice(-MAX_MESSAGES_PER_RUN).reverse();
+    const batch = [];
+    for (const id of idsToFetch) {
+      batch.push(await getMessage(accessToken, id));
     }
-    // Oldest first: lastSyncedAt only ever advances to what's actually been
-    // processed (updated after each message below), so if this run gets cut
-    // off partway, nothing already-handled gets reprocessed next time and
-    // nothing in between gets silently skipped — the backlog just drains a
-    // bit at a time across successive runs instead of all at once.
-    messages.sort((a, b) => a.internalDate.getTime() - b.internalDate.getTime());
-    const batch = messages.slice(0, MAX_MESSAGES_PER_RUN);
+    // Defensive re-sort: Gmail's list order is a documented default, not a
+    // hard guarantee. lastSyncedAt only ever advances to what's actually
+    // been processed (updated after each message below), so if this run
+    // gets cut off partway, nothing already-handled gets reprocessed next
+    // time and nothing in between gets silently skipped — the backlog just
+    // drains a bit at a time across successive runs instead of all at once.
+    batch.sort((a, b) => a.internalDate.getTime() - b.internalDate.getTime());
+
+    const startedAt = Date.now();
 
     for (const message of batch) {
+      if (Date.now() - startedAt > RUN_TIME_BUDGET_MS) break;
+
       const fromAddress = extractAddress(message.from);
       const result = await classifyEmail({
         subject: message.subject,
