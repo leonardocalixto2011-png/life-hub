@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { addMonths, format, isValid, parse as parseDate, subMonths } from "date-fns";
 
-import { budgetMonth, listVentures, type BudgetEntryWithRefs } from "@/lib/data";
+import { budgetMonth, listVentures } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { money } from "@/lib/format";
-import { VentureChip } from "@/components/VentureChip";
 import { EntryForm } from "./EntryForm";
-import { deleteEntry } from "./actions";
+import { EntryRow } from "./EntryRow";
 
 export const dynamic = "force-dynamic";
 
@@ -25,39 +24,6 @@ function href(month: Date, venture?: string): string {
   const p = new URLSearchParams({ m: format(month, "yyyy-MM") });
   if (venture) p.set("venture", venture);
   return `/money?${p.toString()}`;
-}
-
-function Row({ e }: { e: BudgetEntryWithRefs }) {
-  const income = e.type === "INCOME";
-  return (
-    <div className="flex items-start gap-3 px-3 py-2.5">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="font-medium">{e.category}</span>
-          {e.venture && <VentureChip name={e.venture.name} color={e.venture.color} />}
-        </div>
-        <div className="mt-0.5 text-xs text-[var(--color-text-dim)]">
-          {format(e.date, "MMM d")}
-          {e.description ? ` · ${e.description}` : ""}
-        </div>
-      </div>
-      <div className="text-right">
-        <div
-          className="font-semibold tabular-nums"
-          style={{ color: income ? "var(--color-ok)" : "var(--color-text)" }}
-        >
-          {income ? "+" : "−"}
-          {money(e.amountCents, e.currency)}
-        </div>
-        <form action={deleteEntry}>
-          <input type="hidden" name="id" value={e.id} />
-          <button className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline">
-            delete
-          </button>
-        </form>
-      </div>
-    </div>
-  );
 }
 
 export default async function MoneyPage({
@@ -183,7 +149,7 @@ export default async function MoneyPage({
         ) : (
           <div className="card divide-y divide-[var(--color-border)]">
             {data.entries.map((e) => (
-              <Row key={e.id} e={e} />
+              <EntryRow key={e.id} e={e} ventures={ventures.map((v) => ({ id: v.id, name: v.name }))} />
             ))}
           </div>
         )}

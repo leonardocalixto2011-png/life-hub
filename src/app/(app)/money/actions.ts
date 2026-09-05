@@ -51,6 +51,35 @@ export async function createEntry(fd: FormData) {
   revalidatePath("/money");
 }
 
+const updateSchema = createSchema.extend({ id: z.string().cuid() });
+
+export async function updateEntry(fd: FormData) {
+  const { user } = await requireHub();
+  const res = updateSchema.safeParse(Object.fromEntries(fd.entries()));
+  if (!res.success) throw new Error(res.error.issues[0]?.message ?? "Invalid input");
+  const d = res.data;
+
+  const amountCents = dollarsToCents(d.amount);
+  if (amountCents == null || amountCents <= 0) throw new Error("Amount must be a positive number");
+
+  await withHub(user.id, (tx) =>
+    tx.budgetEntry.update({
+      where: { id: d.id },
+      data: {
+        type: d.type,
+        amountCents,
+        currency: d.currency,
+        category: d.category,
+        ventureId: d.ventureId,
+        description: d.description,
+        date: fromDateInput(d.date) ?? new Date(),
+      },
+    }),
+  );
+
+  revalidatePath("/money");
+}
+
 export async function deleteEntry(fd: FormData) {
   const { user } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
