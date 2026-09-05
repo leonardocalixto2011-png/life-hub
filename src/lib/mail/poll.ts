@@ -42,13 +42,12 @@ async function fetchBatch(account: MailAccount): Promise<MailBatchItem[]> {
   throw new Error(`Unhandled mail provider: ${account.provider}`);
 }
 
-async function pollMailAccount(account: MailAccount): Promise<void> {
+async function pollMailAccount(account: MailAccount, runStartedAt: number): Promise<void> {
   try {
     const batch = await fetchBatch(account);
-    const startedAt = Date.now();
 
     for (const item of batch) {
-      if (Date.now() - startedAt > RUN_TIME_BUDGET_MS) break;
+      if (Date.now() - runStartedAt > RUN_TIME_BUDGET_MS) break;
 
       const { message } = item;
       const fromAddress = extractAddress(message.from);
@@ -145,16 +144,29 @@ async function pollMailAccount(account: MailAccount): Promise<void> {
  * Polls accounts strictly sequentially, not in parallel — Yahoo caps IMAP to
  * 5 concurrent connections per source IP (see yahoo.ts). Don't parallelize
  * this loop without accounting for that.
+ *
+ * RUN_TIME_BUDGET_MS is a budget for the WHOLE run, not per account —
+ * with 2+ mail accounts connected, giving each one its own full budget
+ * could add up past the external scheduler's own (shorter than Vercel's)
+ * request timeout. `runStartedAt` is shared across every account polled
+ * this run; an account whose turn comes up after the budget is already
+ * spent is skipped entirely (fetchBatch itself takes real time — a real
+ * IMAP/REST round trip — so budget is checked before starting it, not
+ * just between messages) and picked up on the next scheduled run.
  */
 export async function pollAllMailAccounts(): Promise<{ accounts: number; errors: number }> {
   const accounts = await prisma.mailAccount.findMany({ where: { status: { not: "REVOKED" } } });
+  const runStartedAt = Date.now();
   let errors = 0;
+  let processed = 0;
 
   for (const account of accounts) {
-    await pollMailAccount(account);
+    if (Date.now() - runStartedAt > RUN_TIME_BUDGET_MS) break;
+    await pollMailAccount(account, runStartedAt);
+    processed++;
     const fresh = await prisma.mailAccount.findUnique({ where: { id: account.id } });
     if (fresh?.status === "ERROR") errors++;
   }
 
-  return { accounts: accounts.length, errors };
+  return { accounts: processed, errors };
 }
