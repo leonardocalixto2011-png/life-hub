@@ -126,6 +126,15 @@ export async function deleteEvent(fd: FormData) {
   redirect("/calendar");
 }
 
+/** Deletes exactly the events whose ids are checked — no series logic. */
+export async function deleteEvents(ids: string[]) {
+  const { user } = await requireHub();
+  const parsed = z.array(z.string().cuid()).min(1).max(100).parse(ids);
+  await withHub(user.id, (tx) => tx.event.deleteMany({ where: { id: { in: parsed } } }));
+  revalidatePath("/calendar");
+  revalidatePath("/today");
+}
+
 /** Deletes this occurrence and every later one in the same series. */
 export async function deleteEventSeries(fd: FormData) {
   const { user } = await requireHub();
