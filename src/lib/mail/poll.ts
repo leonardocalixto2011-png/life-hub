@@ -11,6 +11,16 @@ const MIN_AUTO_FILE_CONFIDENCE = 0.6;
 const MIN_AUTO_FILE_CONFIDENCE_UNTRUSTED_EVENT = 0.85; // "high-confidence, low-stakes" per the prompt
 
 /**
+ * Vercel's Hobby-plan function ceiling is 60s (this route's `maxDuration`).
+ * Classifying each message is a sequential Claude call plus a Gmail fetch —
+ * fine for a handful of messages, but a real backlog (e.g. the very first
+ * poll of a busy inbox) can blow past 60s if processed all at once. Cap how
+ * many messages one run handles per account; the rest get picked up on the
+ * next scheduled run (every 15-30 min via the external scheduler).
+ */
+const MAX_MESSAGES_PER_RUN = 8;
+
+/**
  * Money categories only auto-file for an already-trusted sender — "anything
  * involving money with an unclear or first-seen amount... goes to review"
  * (prompt §3). Events can auto-file for a first-seen sender too, but only at
@@ -36,12 +46,19 @@ async function pollMailAccount(account: MailAccount): Promise<void> {
     const after = account.lastSyncedAt ?? new Date(Date.now() - DEFAULT_LOOKBACK_MS);
     const ids = await listRecentMessageIds(accessToken, after);
 
-    let newest = account.lastSyncedAt ?? after;
-
+    const messages = [];
     for (const id of ids) {
-      const message = await getMessage(accessToken, id);
-      if (message.internalDate > newest) newest = message.internalDate;
+      messages.push(await getMessage(accessToken, id));
+    }
+    // Oldest first: lastSyncedAt only ever advances to what's actually been
+    // processed (updated after each message below), so if this run gets cut
+    // off partway, nothing already-handled gets reprocessed next time and
+    // nothing in between gets silently skipped — the backlog just drains a
+    // bit at a time across successive runs instead of all at once.
+    messages.sort((a, b) => a.internalDate.getTime() - b.internalDate.getTime());
+    const batch = messages.slice(0, MAX_MESSAGES_PER_RUN);
 
+    for (const message of batch) {
       const fromAddress = extractAddress(message.from);
       const result = await classifyEmail({
         subject: message.subject,
@@ -77,38 +94,38 @@ async function pollMailAccount(account: MailAccount): Promise<void> {
             },
           },
         });
-        continue;
-      }
-
-      if (result.category === "INFORMATIONAL" || result.category === "PROMOTIONAL" || !result.draft) {
-        continue; // discarded by design — see plan
-      }
-
-      const trusted = await isTrusted(prisma, account.hubId, fromAddress, result.category);
-
-      if (shouldAutoFile(result.category, result.confidence, trusted)) {
-        await prisma.$transaction((tx) =>
-          commitDraftsCore(tx, account.hubId, account.userId, [result.draft!]),
-        );
+      } else if (result.category === "INFORMATIONAL" || result.category === "PROMOTIONAL" || !result.draft) {
+        // discarded by design — see plan
       } else {
-        await prisma.reviewItem.create({
-          data: {
-            source: "mail-connector",
-            sourceRef: message.id,
-            sourceSnippet: message.snippet.slice(0, 500),
-            fromAddress,
-            hubId: account.hubId,
-            category: result.category,
-            draft: result.draft,
-          },
-        });
-      }
-    }
+        const trusted = await isTrusted(prisma, account.hubId, fromAddress, result.category);
 
-    await prisma.mailAccount.update({
-      where: { id: account.id },
-      data: { lastSyncedAt: newest, status: "ACTIVE", lastError: null },
-    });
+        if (shouldAutoFile(result.category, result.confidence, trusted)) {
+          await prisma.$transaction((tx) =>
+            commitDraftsCore(tx, account.hubId, account.userId, [result.draft!]),
+          );
+        } else {
+          await prisma.reviewItem.create({
+            data: {
+              source: "mail-connector",
+              sourceRef: message.id,
+              sourceSnippet: message.snippet.slice(0, 500),
+              fromAddress,
+              hubId: account.hubId,
+              category: result.category,
+              draft: result.draft,
+            },
+          });
+        }
+      }
+
+      // Advance per-message, not once at the end — if this run gets cut off
+      // by the function timeout partway through the batch, whatever's
+      // already committed above stays safely non-duplicated next run.
+      await prisma.mailAccount.update({
+        where: { id: account.id },
+        data: { lastSyncedAt: message.internalDate, status: "ACTIVE", lastError: null },
+      });
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     await prisma.mailAccount.update({
