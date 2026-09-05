@@ -261,6 +261,79 @@ natural-language quick-add ("remind me to pay Adobe Friday" -> parsed Task),
 weekly summary generation, digest copy. Needs `ANTHROPIC_API_KEY` and the
 `@anthropic-ai/sdk`. Read the `claude-api` skill before building it.
 
+### Phase 7 — Mail connector (direct Gmail connection + auto-filing)
+
+From `C:\Users\leona\Downloads\life-hub-phase4-prompt.md` (user's own naming).
+Plan at the time of building:
+`C:\Users\leona\.claude\plans\shiny-dazzling-charm.md`.
+
+- ✅ **Data model** — `MailAccount` (encrypted OAuth tokens,
+  `src/lib/mail/crypto.ts` AES-256-GCM via `MAIL_TOKEN_ENCRYPTION_KEY`,
+  `npm run gen:mail-key`) and `TrustedSender`, both hub-scoped + RLS-protected
+  like every table since Phase 6. Deliberately **not** reusing Auth.js's own
+  `Account` table — that's the sign-in system; tangling mailbox-read grants
+  into it risked opening a second sign-in path. `ReviewItem` gained a
+  (nullable, for the old hub-less forward path) `hubId` + `category`.
+- ✅ **Gmail** (`src/lib/mail/google.ts`) — raw `fetch` OAuth + Gmail REST
+  calls, no SDK (matches `lib/email.ts`'s existing style), transparent
+  access-token refresh. `/mail` (connect/disconnect, sync status, trusted
+  senders) + `/api/mail/oauth/google/callback`.
+- ✅ **Classification** (`src/lib/mail/classify.ts`) — Claude sorts each
+  email into 6 categories via the same `messages.parse()`+`zodOutputFormat`
+  pattern `lib/parse.ts` already used; `INFORMATIONAL`/`PROMOTIONAL` are
+  discarded, never stored.
+- ✅ **Committer refactor** — `src/lib/commit-drafts.ts` pulled the actual
+  "Draft -> Task/Deadline/..." creation out of `quick-actions.ts`'s
+  `commitDrafts` so both that session-bound server action and the
+  session-less background poller can call it. `Draft` gained a
+  `"needs_reply"` kind that creates nothing on accept, just marks the
+  `ReviewItem` handled — its suggested reply is a draft to edit and send
+  yourself, `Draft.suggestedReply`, never sent automatically.
+- ✅ **Auto-filing** (`src/lib/mail/poll.ts`) — money categories
+  (bill/subscription) only auto-file for an already-**trusted** sender;
+  a first-seen sender's calendar invite can still auto-file, but only at a
+  high confidence bar, since nothing financial is at stake; replies never
+  auto-file. `src/lib/mail/trust.ts`: after 3 accepted items from the same
+  sender+category in a hub, `ReviewCard` offers a one-tap "always trust this
+  sender" toast (built on the existing `Toast` action-button support).
+- ✅ **Polling** — `GET /api/mail/poll` (`Authorization: Bearer
+  $MAIL_POLL_SECRET`) is meant to be hit by an **external** scheduler (e.g.
+  cron-job.org) every 15-30 min, not Vercel's own cron — Vercel Hobby only
+  runs cron once/day, far short of what continuous mailbox checking needs.
+- ✅ Verified: build/typecheck clean; the accept/auto-file/trust pipeline
+  exercised end-to-end locally with seeded `MailAccount`/`ReviewItem` rows
+  (a real Gmail message requires the OAuth client below, which the assistant
+  can't create).
+- **First mailbox to connect**: `leonardocalixto2011@gmail.com` (confirmed
+  with the user). The user's actual primary address
+  (`leonardocalixto1998@yahoo.com`, this app's `ADMIN_EMAIL`) is **Yahoo
+  Mail**, which has no clean OAuth+REST mail API like Gmail/Graph — it would
+  need OAuth2+IMAP, a different code path entirely. Deferred as its own
+  later add-on; do not assume Yahoo works the same way as Gmail if asked to
+  extend this.
+- **Deferred, not built this phase**: Outlook/Microsoft 365 connector (same
+  architecture, add once Gmail proves out — `MailProvider` enum already has
+  room), Yahoo/IMAP connector (above), Gmail push/Pub/Sub real-time upgrade
+  (external-scheduler polling was chosen instead), auto-sending replies
+  (deliberately never built — a human always sends).
+- **Setup still pending** (external accounts, guide the user through these,
+  don't do it yourself):
+  1. Google Cloud Console — new project, OAuth consent screen (External,
+     Testing mode is fine for personal use, add the connecting Gmail address
+     as a test user), OAuth Client ID (Web application), authorized redirect
+     URI = `<APP_URL>/api/mail/oauth/google/callback` for both local
+     (`http://localhost:3000/...`) and prod. Scopes needed:
+     `gmail.readonly`, `openid`, `email`.
+  2. Set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (`.env` locally, Vercel
+     for prod), and `MAIL_TOKEN_ENCRYPTION_KEY` / `MAIL_POLL_SECRET`
+     (`npm run gen:mail-key` — **generate separate prod values**, don't
+     reuse the local dev ones, same rule as every other secret here).
+  3. cron-job.org (or similar): a job hitting
+     `https://<prod-domain>/api/mail/poll` every 15-30 min with header
+     `Authorization: Bearer <MAIL_POLL_SECRET>`.
+  4. Connect the mailbox from `/mail` once 1-2 are done; confirm a
+     `MailAccount` row appears with `status: ACTIVE`.
+
 ## Local dev
 
 Node is at `C:\Program Files\nodejs` (winget; on PATH via `~/.bashrc`).
