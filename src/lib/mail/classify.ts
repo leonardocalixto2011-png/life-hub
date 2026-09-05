@@ -43,7 +43,6 @@ function toDraft(
   category: ActionableCategory,
   input: ClassifyInput,
 ): Draft {
-  const amountNote = parsed.amount != null ? `$${parsed.amount.toFixed(2)} — ` : "";
   const base: Draft = {
     kind: "task",
     title: parsed.title || input.subject || "(no subject)",
@@ -54,7 +53,7 @@ function toDraft(
     billingCycle: "MONTHLY",
     priority: "MED",
     ventureId: null,
-    note: `${amountNote}${input.snippet}`.slice(0, 500),
+    note: input.snippet.slice(0, 500),
     visibility: "SHARED",
     suggestedReply: null,
   };

@@ -31,7 +31,8 @@ export function DraftCard({
   onChange: (patch: Partial<Draft>) => void;
   onRemove: () => void;
 }) {
-  const showAmount = draft.kind === "budget" || draft.kind === "subscription";
+  const showAmount =
+    draft.kind === "budget" || draft.kind === "subscription" || draft.kind === "task";
   const isNeedsReply = draft.kind === "needs_reply";
 
   return (

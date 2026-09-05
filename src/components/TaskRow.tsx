@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { addDays, format } from "date-fns";
 
 import { setTaskDone, setTaskFields } from "@/app/(app)/tasks/actions";
-import { dueLabel, isOverdue, toDateInput } from "@/lib/format";
+import { dueLabel, isOverdue, money, toDateInput } from "@/lib/format";
 import { showToast } from "@/components/Toast";
 import { Avatar } from "@/components/Avatar";
 import { VentureChip } from "@/components/VentureChip";
@@ -20,6 +20,7 @@ export type TaskRowData = {
   status: "OPEN" | "DONE";
   priority: "LOW" | "MED" | "HIGH";
   dueDate: Date | string | null;
+  amountCents: number | null;
   ventureId: string | null;
   assignedToId: string | null;
   venture: { name: string; color: string | null } | null;
@@ -172,6 +173,11 @@ export function TaskRow({
                   + date
                 </span>
               ) : null}
+              {task.amountCents != null && (
+                <span className="chip tabular-nums font-semibold text-[var(--color-text-dim)]">
+                  {money(task.amountCents)}
+                </span>
+              )}
               {task.assignedTo && (
                 <Avatar name={task.assignedTo.name} email={task.assignedTo.email} size={18} />
               )}

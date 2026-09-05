@@ -11,6 +11,7 @@ export function toRowData(t: TaskWithRefs): TaskRowData {
     status: t.status,
     priority: t.priority,
     dueDate: t.dueDate,
+    amountCents: t.amountCents,
     ventureId: t.ventureId,
     assignedToId: t.assignedToId,
     venture: t.venture ? { name: t.venture.name, color: t.venture.color } : null,

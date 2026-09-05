@@ -39,12 +39,14 @@ export default async function MoneyPage({
     Promise.all([
       listVentures(tx, hub.id),
       budgetMonth(tx, hub.id, month, sp.venture),
-      isUpcomingMonth ? upcomingSummary(tx, hub.id) : null,
+      isUpcomingMonth ? upcomingSummary(tx, hub.id, user.id) : null,
     ]),
   );
   const currency = data.entries[0]?.currency ?? "CAD";
   const maxCat = data.categories[0]?.cents ?? 1;
-  const upcomingTotal = upcoming ? upcoming.subscriptionsCents + upcoming.debtsCents : 0;
+  const upcomingTotal = upcoming
+    ? upcoming.subscriptionsCents + upcoming.debtsCents + upcoming.billsCents
+    : 0;
 
   return (
     <div className="space-y-4 p-3">
@@ -103,8 +105,11 @@ export default async function MoneyPage({
               <div className="text-[var(--color-text-dim)]">
                 {money(upcoming.subscriptionsCents, currency)} subscriptions
                 {" + "}
-                {money(upcoming.debtsCents, currency)} debt payments — separate from what&apos;s
-                logged above
+                {money(upcoming.debtsCents, currency)} debt payments
+                {upcoming.billsCents > 0 && (
+                  <> {" + "}{money(upcoming.billsCents, currency)} bills</>
+                )}
+                {" "}— separate from what&apos;s logged above
               </div>
             </>
           )}

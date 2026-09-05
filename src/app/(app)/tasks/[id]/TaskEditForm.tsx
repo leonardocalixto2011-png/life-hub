@@ -17,6 +17,7 @@ export function TaskEditForm({
     ventureId: string | null;
     assignedToId: string | null;
     dueDate: string; // yyyy-mm-dd or ""
+    amount: string; // "12.50" or ""
     priority: "LOW" | "MED" | "HIGH";
     isRecurring: boolean;
     recurrence: "weekly" | "monthly" | null;
@@ -52,6 +53,19 @@ export function TaskEditForm({
               type="date"
               name="dueDate"
               defaultValue={task.dueDate}
+              className="field mt-1"
+            />
+          </label>
+          <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+            Amount (if a bill)
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              inputMode="decimal"
+              name="amount"
+              defaultValue={task.amount}
+              placeholder="0.00"
               className="field mt-1"
             />
           </label>

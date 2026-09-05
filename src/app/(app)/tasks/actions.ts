@@ -9,6 +9,7 @@ import type { HubTx } from "@/lib/hub-context";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
+import { dollarsToCents } from "@/lib/money";
 import { notifyAssignment } from "@/lib/notify";
 
 /**
@@ -54,6 +55,7 @@ const baseFields = {
   ventureId: z.preprocess(emptyToNull, z.string().cuid().nullable()),
   assignedToId: z.preprocess(emptyToNull, z.string().cuid().nullable()),
   dueDate: z.preprocess(emptyToNull, z.string().nullable()),
+  amount: z.preprocess(emptyToNull, z.string().nullable()),
   priority: z.enum(["LOW", "MED", "HIGH"]).default("MED"),
   isRecurring: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
   recurrence: z.preprocess(emptyToNull, z.enum(["weekly", "monthly"]).nullable()),
@@ -85,6 +87,7 @@ export async function createTask(formData: FormData) {
         ventureId: data.ventureId,
         assignedToId: data.assignedToId,
         dueDate: fromDateInput(data.dueDate),
+        amountCents: dollarsToCents(data.amount),
         priority: data.priority,
         isRecurring: data.isRecurring,
         recurrence: data.isRecurring ? data.recurrence : null,
@@ -116,6 +119,7 @@ export async function updateTask(formData: FormData) {
         ventureId: data.ventureId,
         assignedToId: data.assignedToId,
         dueDate: fromDateInput(data.dueDate),
+        amountCents: dollarsToCents(data.amount),
         priority: data.priority,
         isRecurring: data.isRecurring,
         recurrence: data.isRecurring ? data.recurrence : null,

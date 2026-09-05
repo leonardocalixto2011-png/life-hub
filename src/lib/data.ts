@@ -286,8 +286,8 @@ export type BudgetEntryWithRefs = Awaited<
  * Summing to a monthly figure instead is always correct regardless of
  * which exact day each one is due.
  */
-export async function upcomingSummary(tx: HubTx, hubId: string) {
-  const [subs, debts, pendingBills] = await Promise.all([
+export async function upcomingSummary(tx: HubTx, hubId: string, userId: string) {
+  const [subs, debts, bills, pendingBills] = await Promise.all([
     tx.subscription.findMany({
       where: { hubId, status: "ACTIVE" },
       select: { costCents: true, billingCycle: true },
@@ -295,6 +295,15 @@ export async function upcomingSummary(tx: HubTx, hubId: string) {
     tx.debt.findMany({
       where: { hubId, status: "CURRENT" },
       select: { minimumPaymentCents: true, actualPaymentCents: true },
+    }),
+    tx.task.findMany({
+      where: {
+        hubId,
+        status: "OPEN",
+        amountCents: { not: null },
+        ...visibilityFilter(userId),
+      },
+      select: { amountCents: true },
     }),
     tx.reviewItem.count({ where: { hubId, status: "PENDING", category: "BILL_PAYMENT" } }),
   ]);
@@ -307,8 +316,9 @@ export async function upcomingSummary(tx: HubTx, hubId: string) {
     (sum, d) => sum + (d.actualPaymentCents ?? d.minimumPaymentCents ?? 0),
     0,
   );
+  const billsCents = bills.reduce((sum, t) => sum + (t.amountCents ?? 0), 0);
 
-  return { subscriptionsCents, debtsCents, pendingBills };
+  return { subscriptionsCents, debtsCents, billsCents, pendingBills };
 }
 
 // --------------------------------------------------------------------------

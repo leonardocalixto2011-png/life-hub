@@ -5,6 +5,7 @@ import { getTask, listMembers, listVentures } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { toDateInput } from "@/lib/format";
+import { centsToInput } from "@/lib/money";
 import { TaskEditForm } from "./TaskEditForm";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +36,7 @@ export default async function TaskDetailPage({
           ventureId: task.ventureId,
           assignedToId: task.assignedToId,
           dueDate: toDateInput(task.dueDate),
+          amount: centsToInput(task.amountCents),
           priority: task.priority,
           isRecurring: task.isRecurring,
           recurrence: (task.recurrence as "weekly" | "monthly" | null) ?? null,
