@@ -79,6 +79,13 @@ export function HubSwitcher({
                 Connected mailboxes
               </Link>
               <Link
+                href="/debts"
+                onClick={() => setOpen(false)}
+                className="block rounded-lg px-2 py-2 text-sm text-[var(--color-text-dim)]"
+              >
+                Debts
+              </Link>
+              <Link
                 href="/hubs/new"
                 onClick={() => setOpen(false)}
                 className="block rounded-lg px-2 py-2 text-sm font-semibold text-[var(--color-primary)]"

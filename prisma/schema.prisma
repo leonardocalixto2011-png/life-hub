@@ -43,6 +43,7 @@ model User {
   assignedTasks      Task[]                  @relation("TaskAssignedTo")
   createdDeadlines   Deadline[]
   ownedSubscriptions Subscription[]
+  ownedDebts         Debt[]
   budgetEntries      BudgetEntry[]
   createdEvents      Event[]
   pushSubscriptions  PushSubscription[]
@@ -88,6 +89,7 @@ model Hub {
   tasks          Task[]
   deadlines      Deadline[]
   subscriptions  Subscription[]
+  debts          Debt[]
   budgetEntries  BudgetEntry[]
   events         Event[]
   mailAccounts   MailAccount[]
@@ -163,6 +165,7 @@ model Venture {
   tasks         Task[]
   deadlines     Deadline[]
   subscriptions Subscription[]
+  debts         Debt[]
   budgetEntries BudgetEntry[]
   events        Event[]
 
@@ -274,6 +277,40 @@ model Subscription {
   updatedAt    DateTime           @updatedAt
 
   @@index([hubId, status, renewalDate])
+}
+
+// ---------------------------------------------------------------------------
+// Debts — separate from Subscription: a debt has a shrinking balance, a
+// rate, and a payoff date, none of which a flat recurring cost can express.
+// ---------------------------------------------------------------------------
+
+enum DebtStatus {
+  CURRENT
+  DEFAULT
+  PAID_OFF
+}
+
+model Debt {
+  id                  String     @id @default(cuid())
+  hubId               String
+  hub                 Hub        @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  name                String
+  balanceCents        Int
+  aprBasisPoints      Int? // 2599 = 25.99% APR; null when unknown/undisclosed
+  minimumPaymentCents Int? // the contractual minimum
+  actualPaymentCents  Int? // what's actually being paid, if different (e.g. a
+                           // negotiated or hardship-program amount)
+  dueDate             DateTime?
+  status              DebtStatus @default(CURRENT)
+  notes               String?
+  ventureId           String?
+  venture             Venture?   @relation(fields: [ventureId], references: [id], onDelete: SetNull)
+  ownerId             String?
+  owner               User?      @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  @@index([hubId, status])
 }
 
 // ---------------------------------------------------------------------------

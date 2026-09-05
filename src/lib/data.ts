@@ -2,6 +2,7 @@ import { endOfDay, endOfMonth, startOfDay, startOfMonth } from "date-fns";
 import type { Prisma } from "@prisma/client";
 
 import type { HubTx } from "@/lib/hub-context";
+import { monthlyCents } from "@/lib/money";
 
 export function listVentures(tx: HubTx, hubId: string) {
   return tx.venture.findMany({
@@ -196,6 +197,30 @@ export function getSubscription(tx: HubTx, hubId: string, id: string) {
 export type SubscriptionWithRefs = Awaited<ReturnType<typeof listSubscriptions>>[number];
 
 // --------------------------------------------------------------------------
+// Debts — separate from Subscription: a shrinking balance + rate + payoff
+// date, none of which a flat recurring cost can express.
+// --------------------------------------------------------------------------
+
+const debtInclude = {
+  venture: { select: { id: true, name: true, slug: true, color: true } },
+  owner: { select: { id: true, name: true, email: true } },
+} as const;
+
+export function listDebts(tx: HubTx, hubId: string, opts: { includeOther?: boolean } = {}) {
+  return tx.debt.findMany({
+    where: { hubId, ...(opts.includeOther ? {} : { status: { not: "PAID_OFF" } }) },
+    include: debtInclude,
+    orderBy: [{ status: "asc" }, { dueDate: "asc" }],
+  });
+}
+
+export function getDebt(tx: HubTx, hubId: string, id: string) {
+  return tx.debt.findUnique({ where: { id, hubId }, include: debtInclude });
+}
+
+export type DebtWithRefs = Awaited<ReturnType<typeof listDebts>>[number];
+
+// --------------------------------------------------------------------------
 // Budget
 // --------------------------------------------------------------------------
 
@@ -238,6 +263,38 @@ export async function budgetMonth(tx: HubTx, hubId: string, month: Date, venture
 export type BudgetEntryWithRefs = Awaited<
   ReturnType<typeof budgetMonth>
 >["entries"][number];
+
+/**
+ * Flat expected-monthly totals, not per-day date matching — a
+ * Subscription's renewalDate isn't automatically advanced month to month,
+ * so pinning "does this land in September" would silently go stale.
+ * Summing to a monthly figure instead is always correct regardless of
+ * which exact day each one is due.
+ */
+export async function upcomingSummary(tx: HubTx, hubId: string) {
+  const [subs, debts, pendingBills] = await Promise.all([
+    tx.subscription.findMany({
+      where: { hubId, status: "ACTIVE" },
+      select: { costCents: true, billingCycle: true },
+    }),
+    tx.debt.findMany({
+      where: { hubId, status: "CURRENT" },
+      select: { minimumPaymentCents: true, actualPaymentCents: true },
+    }),
+    tx.reviewItem.count({ where: { hubId, status: "PENDING", category: "BILL_PAYMENT" } }),
+  ]);
+
+  const subscriptionsCents = subs.reduce(
+    (sum, s) => sum + monthlyCents(s.costCents, s.billingCycle),
+    0,
+  );
+  const debtsCents = debts.reduce(
+    (sum, d) => sum + (d.actualPaymentCents ?? d.minimumPaymentCents ?? 0),
+    0,
+  );
+
+  return { subscriptionsCents, debtsCents, pendingBills };
+}
 
 // --------------------------------------------------------------------------
 // Events / calendar

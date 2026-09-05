@@ -41,3 +41,17 @@ export function centsToInput(cents: number | null | undefined): string {
   if (cents == null) return "";
   return (cents / 100).toFixed(2);
 }
+
+/** "25.99" -> 2599 (basis points). Returns null on empty/unparseable input. */
+export function percentToBasisPoints(value: string | null | undefined): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(String(value).replace(/[^0-9.-]/g, ""));
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n * 100);
+}
+
+/** 2599 -> "25.99" for a number input's default value. */
+export function basisPointsToInput(bp: number | null | undefined): string {
+  if (bp == null) return "";
+  return (bp / 100).toFixed(2);
+}

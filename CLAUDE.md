@@ -499,6 +499,69 @@ dev-server console.
   username/password as its own superuser — see Phase 6's RLS notes above,
   this breaks naive local testing of `APP_DATABASE_URL`/RLS specifically.
 
+### Phase 9 — Recurring events, background photo, Debts tracker, Budget forecast
+
+Several small features shipped from real day-to-day use of the app rather
+than a single upfront prompt. Plan at the time of the last of these
+(`shiny-dazzling-charm.md`) covers the Debts/Budget-forecast piece in
+detail.
+
+- ✅ **Per-user background photo** (`src/app/(app)/appearance/`) —
+  `User.backgroundImageUrl`, uploaded via Vercel Blob's client-upload flow
+  (`@vercel/blob/client`'s `upload()` against `/api/appearance/upload`,
+  `handleUpload()`'s `onBeforeGenerateToken` as the auth gate) rather than a
+  plain Server Action `put()` — that path caps at 4.5MB, too small for real
+  phone photos. No `onUploadCompleted` webhook; the browser persists the
+  URL itself via `setBackgroundImage` right after upload, which also means
+  it works in local dev with no extra setup. Applied as an inline
+  `backgroundImage` style on `(app)/layout.tsx`'s root wrapper — existing
+  chrome (header/`BottomNav`/`.card`) was already opaque, so nothing else
+  needed to change for a photo to show through the gaps cleanly. **Setup
+  needed**: Vercel dashboard → Storage → Create Database → Blob (Access:
+  **Public** — the photo displays via a plain `<img>` with no auth token —
+  and check "Add a read-write token env var" or `BLOB_READ_WRITE_TOKEN`
+  won't be created) → connect to the project.
+- ✅ **Recurring calendar events** (`src/app/(app)/calendar/`) — `Event`
+  gained `recurrenceGroupId String?`. "Repeat on these weekdays until this
+  date" batch-generates one real row per matching date (no live recurrence
+  engine, no changes needed to any read path — Calendar/Today/Agenda
+  already just query `Event` rows in a range). Editing stays
+  single-occurrence only; deleting offers "just this one" or "this and
+  every later occurrence in the series." The Repeat section sits right
+  next to Starts/Ends with a one-line hint — it was originally placed
+  further down the form and a real user typed a repeat-until date into
+  "Ends" instead, creating one multi-month-long event by mistake.
+- ✅ **Debts tracker** (`src/app/(app)/debts/`, mirrors
+  `subscriptions/` file-for-file) — added after a real user put loan/
+  credit-card payments into `Subscription` for lack of anywhere better,
+  then correctly pushed back on it ("shouldn't subs be like Netflix?").
+  `Debt` has a balance, an optional APR (stored as basis points), a
+  contractual minimum payment, and an optional different actual payment
+  (this user's real data includes negotiated/hardship-program amounts
+  that differ from the contractual minimum) — none of which `Subscription`
+  can express. Hub-scoped exactly like `Subscription`/`BudgetEntry` (RLS:
+  `debt_hub_isolation`, identical policy body), not per-item-private like
+  `Task`/`Event`. Linked from the hub switcher dropdown (`HubSwitcher.tsx`,
+  next to "Connected mailboxes") rather than a header icon — the header row
+  was already close to full.
+- ✅ **Budget "Upcoming" forecast** (`src/app/(app)/money/page.tsx`) —
+  Budget was a pure one-off-transaction log with no awareness of what's
+  expected to recur. `upcomingSummary()` (`src/lib/data.ts`) sums active
+  `Subscription`s to a flat monthly figure (`monthlyCents`) and `CURRENT`
+  `Debt`s' `actualPaymentCents ?? minimumPaymentCents`, plus counts
+  mail-detected `ReviewItem`s (`category: BILL_PAYMENT, status: PENDING`)
+  still awaiting review. Deliberately **not** matching each item's exact
+  renewal/due date to a specific calendar month — `Subscription.renewalDate`
+  isn't automatically advanced month to month, so pinning "does this land
+  in September" would silently go stale; a flat monthly total is always
+  correct regardless of which exact day something is due. Only shown for
+  the current month or a future one.
+- **Deferred, not built this pass**: matching a mail-detected
+  `BILL_PAYMENT` to an existing `Debt` by name to auto-update its balance/
+  due date (real value, real complexity — fuzzy matching, deciding what a
+  mismatch means). Payoff-time/total-remaining-interest projections on the
+  Debts page. Editing an entire recurring-event series at once.
+
 ## Commands
 
 `npm run dev` · `build` · `typecheck` · `db:migrate` · `db:push` · `db:seed` ·

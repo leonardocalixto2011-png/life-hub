@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { addMonths, format, isValid, parse as parseDate, subMonths } from "date-fns";
+import { addMonths, endOfMonth, format, isValid, parse as parseDate, startOfMonth, subMonths } from "date-fns";
 
-import { budgetMonth, listVentures } from "@/lib/data";
+import { budgetMonth, listVentures, upcomingSummary } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { money } from "@/lib/format";
@@ -33,12 +33,18 @@ export default async function MoneyPage({
 }) {
   const sp = await searchParams;
   const month = monthFromParam(sp.m);
+  const isUpcomingMonth = endOfMonth(month) >= startOfMonth(new Date());
   const { user, hub } = await requireHub();
-  const [ventures, data] = await withHub(user.id, (tx) =>
-    Promise.all([listVentures(tx, hub.id), budgetMonth(tx, hub.id, month, sp.venture)]),
+  const [ventures, data, upcoming] = await withHub(user.id, (tx) =>
+    Promise.all([
+      listVentures(tx, hub.id),
+      budgetMonth(tx, hub.id, month, sp.venture),
+      isUpcomingMonth ? upcomingSummary(tx, hub.id) : null,
+    ]),
   );
   const currency = data.entries[0]?.currency ?? "CAD";
   const maxCat = data.categories[0]?.cents ?? 1;
+  const upcomingTotal = upcoming ? upcoming.subscriptionsCents + upcoming.debtsCents : 0;
 
   return (
     <div className="space-y-4 p-3">
@@ -81,6 +87,29 @@ export default async function MoneyPage({
           </div>
         </div>
       </div>
+
+      {upcoming && (upcomingTotal > 0 || upcoming.pendingBills > 0) && (
+        <div className="card space-y-1 p-3 text-xs">
+          {upcomingTotal > 0 && (
+            <>
+              <div className="font-semibold">
+                {money(upcomingTotal, currency)} expected this month — not yet logged above
+              </div>
+              <div className="text-[var(--color-text-dim)]">
+                {money(upcoming.subscriptionsCents, currency)}/mo subscriptions
+                {" + "}
+                {money(upcoming.debtsCents, currency)}/mo debt payments
+              </div>
+            </>
+          )}
+          {upcoming.pendingBills > 0 && (
+            <Link href="/inbox" className="block font-semibold text-[var(--color-primary)]">
+              {upcoming.pendingBills} bill{upcoming.pendingBills === 1 ? "" : "s"} detected from your
+              mail, not yet reviewed →
+            </Link>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-1.5">
         <Link
