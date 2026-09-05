@@ -10,7 +10,7 @@ import type { MailAccount } from "@prisma/client";
 export const MAX_MESSAGES_PER_RUN = 8;
 export const RUN_TIME_BUDGET_MS = 20_000;
 
-/** Provider-neutral shape both `google.ts` and `yahoo.ts` fetch into. */
+/** Provider-neutral shape `google.ts`/`yahoo.ts`/`microsoft.ts` fetch into. */
 export type ParsedMessage = {
   id: string;
   from: string;
@@ -22,7 +22,7 @@ export type ParsedMessage = {
 
 /** Fields to persist onto `MailAccount` once a message has been processed. */
 export type MailCheckpoint = Partial<
-  Pick<MailAccount, "lastSyncedAt" | "imapUidValidity" | "imapLastUid">
+  Pick<MailAccount, "lastSyncedAt" | "imapUidValidity" | "imapLastUid" | "graphDeltaLink">
 >;
 
 export type MailBatchItem = { message: ParsedMessage; checkpoint: MailCheckpoint };

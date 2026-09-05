@@ -9,6 +9,10 @@ import { z } from "zod";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { buildAuthUrl, googleOAuthConfigured } from "@/lib/mail/google";
+import {
+  buildAuthUrl as buildMicrosoftAuthUrl,
+  microsoftOAuthConfigured,
+} from "@/lib/mail/microsoft";
 import { OAUTH_STATE_COOKIE } from "@/lib/mail/constants";
 import { encrypt } from "@/lib/mail/crypto";
 import { testYahooLogin } from "@/lib/mail/yahoo";
@@ -35,6 +39,28 @@ export async function startGoogleConnect() {
   });
 
   redirect(buildAuthUrl(state));
+}
+
+/**
+ * Same CSRF state-cookie pattern as startGoogleConnect — reused rather than
+ * duplicated since only one connect flow is ever in flight per browser.
+ */
+export async function startMicrosoftConnect() {
+  await requireHub();
+  if (!microsoftOAuthConfigured()) {
+    throw new Error("Microsoft OAuth isn't configured yet (MICROSOFT_CLIENT_ID/MICROSOFT_CLIENT_SECRET).");
+  }
+
+  const state = randomBytes(24).toString("hex");
+  const store = await cookies();
+  store.set(OAUTH_STATE_COOKIE, state, {
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 600,
+    path: "/",
+  });
+
+  redirect(buildMicrosoftAuthUrl(state));
 }
 
 const YahooConnectSchema = z.object({

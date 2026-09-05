@@ -261,7 +261,7 @@ natural-language quick-add ("remind me to pay Adobe Friday" -> parsed Task),
 weekly summary generation, digest copy. Needs `ANTHROPIC_API_KEY` and the
 `@anthropic-ai/sdk`. Read the `claude-api` skill before building it.
 
-### Phase 7 — Mail connector (direct Gmail connection + auto-filing)
+### Phase 7 — Mail connector (Gmail, Yahoo, Microsoft 365 + auto-filing)
 
 From `C:\Users\leona\Downloads\life-hub-phase4-prompt.md` (user's own naming).
 Plan at the time of building:
@@ -304,10 +304,17 @@ Plan at the time of building:
   `src/lib/mail/types.ts`), oldest-first, with a 20s wall-clock budget
   (`RUN_TIME_BUDGET_MS`) — both exist because a real backlog (the first poll
   of a busy inbox) caused a production `FUNCTION_INVOCATION_TIMEOUT`/504 once
-  Gmail's OAuth connect actually went live. The per-account `lastSyncedAt`
-  (Gmail) / `imapLastUid` (Yahoo) checkpoint advances **per message**, not
-  once at the end, so a mid-run timeout never causes duplicate or skipped
-  processing — the backlog just drains a bit more each scheduled run.
+  Gmail's OAuth connect actually went live. The `lastSyncedAt` (Gmail) /
+  `imapLastUid` (Yahoo) / `graphDeltaLink` (Microsoft) checkpoint advances
+  **per message**, not once at the end, so a mid-run timeout never causes
+  duplicate or skipped processing — the backlog just drains a bit more each
+  scheduled run. `RUN_TIME_BUDGET_MS` is a budget for the **whole poll run**,
+  shared across every connected account (`pollAllMailAccounts`'s
+  `runStartedAt`), not given fresh to each one — fixed after a real
+  cron-job.org test run timed out once a 2nd account was connected, since
+  two independent full budgets could add up past the external scheduler's
+  own (shorter than Vercel's) ~30s request timeout. Confirmed working: a
+  real run polling both Gmail and Yahoo completed in 23.94s.
 - ✅ **Yahoo Mail** (`src/lib/mail/yahoo.ts`) — plain IMAP
   (`imap.mail.yahoo.com:993`) via `imapflow` + `mailparser` (the one
   exception to this project's fetch-only style — hand-rolling the IMAP
@@ -336,14 +343,41 @@ Plan at the time of building:
     lock) so messages are never marked `\Seen` — this was smoke-tested by
     connecting and confirming Yahoo webmail still showed the message
     unread.
-- **First mailboxes connected**: `leonardocalixto2011@gmail.com` (Gmail) and
+- ✅ **Microsoft 365 / Outlook** (`src/lib/mail/microsoft.ts`) — raw `fetch`
+  OAuth (Authorization Code flow, `common` tenant — supports both personal
+  Microsoft accounts and any work/school Azure AD tenant from one app
+  registration) + Microsoft Graph's **delta query**
+  (`/me/mailFolders('Inbox')/messages/delta`) for incremental sync — the
+  provider-correct primitive (closer to Gmail's `history.list` than a raw
+  date filter), stored as an opaque continuation URL in
+  `MailAccount.graphDeltaLink` (may be an in-progress `@odata.nextLink` or a
+  completed `@odata.deltaLink` — both called identically). `changeType=created`
+  is set only on the very first request (Graph bakes it into every later
+  continuation link automatically) so read/flag/move changes on existing
+  mail never resurface and cost a needless `classifyEmail()` call. Graph's
+  own `id` field is **not stable** across a folder move (same problem
+  `yahoo.ts` already solved) — uses `internetMessageId` instead. A failed
+  `graphDeltaLink` call (Microsoft's docs describe this as a
+  `syncStateNotFound`-style error, no fixed TTL) resets to a fresh bounded
+  delta call in the same run, mirroring Yahoo's `UIDVALIDITY`-reset path.
+  `/mail` (`+ Connect Outlook` button, `startMicrosoftConnect`) +
+  `/api/mail/oauth/microsoft/callback`.
+  - **Real, unresolved risk, flagged in the UI**: the OAuth app is
+    registered under a personal Microsoft identity, not the employer's own
+    Azure AD tenant — Microsoft's default cross-tenant risk-based step-up
+    consent policy (any app registered after Nov 8 2020 that isn't
+    publisher-verified) is designed to block exactly this shape of request
+    for a **work** account, regardless of the employer's own `Mail.Read`
+    admin-consent setting. A personal/household Outlook account should
+    connect friction-free; a work account might just be blocked outright —
+    there's no way to know without trying it.
+- **First mailboxes connected**: `leonardocalixto2011@gmail.com` (Gmail),
   `leonardocalixto1998@yahoo.com` (Yahoo, this app's `ADMIN_EMAIL` — the
-  user's actual primary address).
-- **Deferred, not built this phase**: Outlook/Microsoft 365 connector (same
-  architecture as Gmail, add once proven — `MailProvider` enum already has
-  room), Gmail push/Pub/Sub real-time upgrade (external-scheduler polling
-  was chosen instead), auto-sending replies (deliberately never built — a
-  human always sends).
+  user's actual primary address), and the user's work Outlook account
+  (Microsoft 365) — pending the cross-tenant consent risk above.
+- **Deferred, not built this phase**: Gmail push/Pub/Sub real-time upgrade
+  (external-scheduler polling was chosen instead), auto-sending replies
+  (deliberately never built — a human always sends).
 - **Setup still pending** (external accounts, guide the user through these,
   don't do it yourself):
   1. Google Cloud Console — new project, OAuth consent screen (External,
@@ -368,6 +402,17 @@ Plan at the time of building:
      recoverable after, only regeneratable), pasted into `/mail`'s Yahoo
      form. No env vars, no client id/secret — reuses
      `MAIL_TOKEN_ENCRYPTION_KEY`.
+  6. Microsoft — Azure Portal → App registrations → New registration (name
+     "Life Hub", supported account types = "Accounts in any organizational
+     directory and personal Microsoft accounts", matching the `common`
+     tenant endpoint), Certificates & secrets → new client secret, API
+     permissions → Microsoft Graph → Delegated → add `Mail.Read`,
+     `offline_access`, `openid`, `email`, redirect URI (Web) =
+     `<APP_URL>/api/mail/oauth/microsoft/callback` for both local and prod.
+     Set `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET`. **Connect a
+     personal/household Outlook account first** to prove the flow works
+     before trying a work account, which may be blocked by the employer's
+     own tenant policy regardless of anything built here (see above).
 
 ## Local dev
 

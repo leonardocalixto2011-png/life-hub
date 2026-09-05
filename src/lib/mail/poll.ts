@@ -5,6 +5,7 @@ import { commitDraftsCore } from "@/lib/commit-drafts";
 import { classifyEmail, type ActionableCategory } from "./classify";
 import { fetchGoogleBatch } from "./google";
 import { fetchYahooBatch } from "./yahoo";
+import { fetchMicrosoftBatch } from "./microsoft";
 import { isTrusted } from "./trust";
 import { RUN_TIME_BUDGET_MS, type MailBatchItem } from "./types";
 
@@ -33,12 +34,14 @@ function extractAddress(from: string): string {
 
 /**
  * Fetches the batch of messages to process this run — provider-specific
- * (Gmail REST vs Yahoo IMAP), but both return the same provider-neutral
- * shape so the loop below never needs to know which one it's dealing with.
+ * (Gmail REST, Yahoo IMAP, Microsoft Graph delta query), but all three
+ * return the same provider-neutral shape so the loop below never needs to
+ * know which one it's dealing with.
  */
 async function fetchBatch(account: MailAccount): Promise<MailBatchItem[]> {
   if (account.provider === "GOOGLE") return fetchGoogleBatch(account);
   if (account.provider === "YAHOO") return fetchYahooBatch(account);
+  if (account.provider === "MICROSOFT") return fetchMicrosoftBatch(account);
   throw new Error(`Unhandled mail provider: ${account.provider}`);
 }
 

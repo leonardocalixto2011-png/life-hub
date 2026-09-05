@@ -4,8 +4,10 @@ import { formatDistanceToNow } from "date-fns";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { googleOAuthConfigured } from "@/lib/mail/google";
+import { microsoftOAuthConfigured } from "@/lib/mail/microsoft";
 import {
   startGoogleConnect,
+  startMicrosoftConnect,
   connectYahooAccount,
   disconnectMailAccount,
   removeTrustedSender,
@@ -42,6 +44,7 @@ export default async function MailPage({
   );
 
   const configured = googleOAuthConfigured();
+  const microsoftConfigured = microsoftOAuthConfigured();
 
   return (
     <div className="space-y-4 p-3">
@@ -114,6 +117,23 @@ export default async function MailPage({
           + Connect Gmail
         </button>
       </form>
+
+      <div className="space-y-1.5">
+        <form action={startMicrosoftConnect}>
+          <button
+            type="submit"
+            disabled={!microsoftConfigured}
+            className="btn btn-primary w-full"
+          >
+            + Connect Outlook
+          </button>
+        </form>
+        <p className="text-[0.65rem] text-[var(--color-text-dim)]">
+          A personal/household Outlook account should connect without issue. A
+          work or school account may be blocked by your employer&apos;s own
+          security policy — there&apos;s no way to know until you try.
+        </p>
+      </div>
 
       <form action={connectYahooAccount} className="card space-y-2 p-3">
         <div className="text-xs font-semibold">Connect Yahoo Mail</div>
