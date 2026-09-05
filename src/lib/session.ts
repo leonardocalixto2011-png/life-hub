@@ -9,6 +9,7 @@ export type SessionUser = {
   email: string;
   name: string | null;
   role: "ADMIN" | "MEMBER";
+  backgroundImageUrl: string | null;
 };
 
 export type SessionHub = {
@@ -28,11 +29,17 @@ export async function requireUser(): Promise<SessionUser> {
 
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, email: true, name: true, role: true },
+    select: { id: true, email: true, name: true, role: true, backgroundImageUrl: true },
   });
   if (!user?.email) redirect("/login");
 
-  return { id: user.id, email: user.email, name: user.name, role: user.role };
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    backgroundImageUrl: user.backgroundImageUrl,
+  };
 }
 
 export async function getUser(): Promise<SessionUser | null> {
@@ -41,9 +48,17 @@ export async function getUser(): Promise<SessionUser | null> {
   if (!email) return null;
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, email: true, name: true, role: true },
+    select: { id: true, email: true, name: true, role: true, backgroundImageUrl: true },
   });
-  return user?.email ? { id: user.id, email: user.email, name: user.name, role: user.role } : null;
+  return user?.email
+    ? {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        backgroundImageUrl: user.backgroundImageUrl,
+      }
+    : null;
 }
 
 /**

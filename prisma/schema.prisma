@@ -26,13 +26,16 @@ enum UserRole {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  role          UserRole  @default(MEMBER)
-  createdAt     DateTime  @default(now())
+  id                 String    @id @default(cuid())
+  name               String?
+  email              String?   @unique
+  emailVerified      DateTime?
+  image              String?
+  backgroundImageUrl String? // Vercel Blob URL, set via /appearance — deliberately
+                             // separate from `image` above (an unused Auth.js
+                             // sign-in-provider avatar field, different concern)
+  role               UserRole  @default(MEMBER)
+  createdAt          DateTime  @default(now())
 
   accounts           Account[]
   sessions           Session[]

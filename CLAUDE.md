@@ -414,6 +414,55 @@ Plan at the time of building:
      before trying a work account, which may be blocked by the employer's
      own tenant policy regardless of anything built here (see above).
 
+### Phase 8 — Per-user background photo
+
+Plan at `C:\Users\leona\.claude\plans\shiny-dazzling-charm.md`.
+
+- ✅ **Data model** — `User.backgroundImageUrl String?` (a Vercel Blob URL),
+  now also on `SessionUser`/`requireUser()`/`getUser()`
+  (`src/lib/session.ts`) so `(app)/layout.tsx` gets it for free from the
+  session fetch it already does — no extra query. Deliberately **not**
+  reusing the existing unused Auth.js `User.image` field — different
+  concern (sign-in-provider avatar vs. app background), same reasoning as
+  keeping `MailAccount` separate from Auth.js's own `Account` table.
+- ✅ **Storage: Vercel Blob, client-upload flow** — the first real file
+  storage this app has needed (everything before this was text/JSON in
+  Postgres). A plain Server Action upload via `put()` is capped at 4.5MB, too
+  small for real phone photos, so uploads go browser → Vercel Blob directly
+  via `@vercel/blob/client`'s `upload()`, using a short-lived token from
+  `src/app/api/appearance/upload/route.ts` (`handleUpload()`,
+  `onBeforeGenerateToken` is the actual auth gate — restricts content types
+  to common image formats, caps size at 15MB). No `onUploadCompleted`
+  webhook used — the browser calls `setBackgroundImage(url)`
+  (`src/app/(app)/appearance/actions.ts`) directly once `upload()` resolves,
+  which also means this works in local dev with zero extra setup (that
+  callback needs Vercel's Blob service to reach a public URL, which it
+  can't for `localhost`). Both `setBackgroundImage`/`removeBackgroundImage`
+  call `del()` on whatever blob is being replaced first, so a user only
+  ever has one stored blob at a time.
+- ✅ **UI** — `/appearance` (preview thumbnail, upload form, remove button),
+  a new 🖼️ icon in the header next to the notification bell. Applied in
+  `(app)/layout.tsx` as an inline `backgroundImage`/`backgroundSize: cover`/
+  `backgroundPosition: center` style on the root wrapper div — deliberately
+  not `backgroundAttachment: fixed` (known mobile Safari quirks). Existing
+  chrome (header, `BottomNav`, `.card`) was already opaque
+  (`bg-[var(--color-surface)]/95 backdrop-blur`), so no other CSS changes
+  were needed for a photo to show through the gaps cleanly.
+- ✅ Verified: build/typecheck clean; `/appearance` renders correctly; the
+  upload route's auth-gate/error-handling path confirmed via a direct
+  unauthenticated request (fails cleanly with a JSON 400, not a crash) —
+  full upload flow needs the user's real `BLOB_READ_WRITE_TOKEN` (below) to
+  test end-to-end.
+- **Deferred, not built this phase**: image resizing/compression before
+  storage (`background-size: cover` handles display-time scaling fine at
+  this app's personal scale), per-hub backgrounds (the user asked for
+  "each user," not "each hub" — deliberately account-wide), separate light/
+  dark-mode photo variants.
+- **Setup still pending**: Vercel dashboard → Storage → Create Database →
+  Blob → connect to this project (auto-provisions `BLOB_READ_WRITE_TOKEN`
+  for all three deploy targets). Copy the token into `.env` locally too
+  (same manual-copy convention as every other secret here).
+
 ## Local dev
 
 Node is at `C:\Program Files\nodejs` (winget; on PATH via `~/.bashrc`).

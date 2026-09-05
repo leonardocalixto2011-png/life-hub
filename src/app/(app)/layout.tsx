@@ -25,7 +25,18 @@ export default async function AppLayout({
   ]);
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col">
+    <div
+      className="mx-auto flex min-h-dvh max-w-md flex-col"
+      style={
+        user.backgroundImageUrl
+          ? {
+              backgroundImage: `url(${user.backgroundImageUrl})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }
+          : undefined
+      }
+    >
       <ServiceWorkerRegister />
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-2.5 backdrop-blur">
         <HubSwitcher hubs={hubs} currentHubId={hub.id} />
@@ -49,6 +60,9 @@ export default async function AppLayout({
           </Link>
           <Link href="/notifications" aria-label="Notifications" className="text-lg leading-none">
             🔔
+          </Link>
+          <Link href="/appearance" aria-label="Appearance" className="text-lg leading-none">
+            🖼️
           </Link>
           <Avatar name={user.name} email={user.email} size={26} />
           <form action={signOutAction}>
