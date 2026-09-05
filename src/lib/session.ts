@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -21,8 +22,12 @@ export type SessionHub = {
 
 export const CURRENT_HUB_COOKIE = "current_hub";
 
-/** Server-side: current DB user, or redirect to /login. Use in guarded layouts + actions. */
-export async function requireUser(): Promise<SessionUser> {
+/**
+ * Server-side: current DB user, or redirect to /login. Use in guarded
+ * layouts + actions. `cache`d so a layout and its page (which render
+ * concurrently) share one lookup per request instead of two.
+ */
+export const requireUser = cache(async (): Promise<SessionUser> => {
   const session = await auth();
   const email = session?.user?.email?.toLowerCase();
   if (!email) redirect("/login");
@@ -40,9 +45,9 @@ export async function requireUser(): Promise<SessionUser> {
     role: user.role,
     backgroundImageUrl: user.backgroundImageUrl,
   };
-}
+});
 
-export async function getUser(): Promise<SessionUser | null> {
+export const getUser = cache(async (): Promise<SessionUser | null> => {
   const session = await auth();
   const email = session?.user?.email?.toLowerCase();
   if (!email) return null;
@@ -59,13 +64,14 @@ export async function getUser(): Promise<SessionUser | null> {
         backgroundImageUrl: user.backgroundImageUrl,
       }
     : null;
-}
+});
 
 /**
  * All of a user's hubs (ACTIVE memberships only), ordered by when they joined.
- * Used by the hub switcher and to resolve the current hub.
+ * Used by the hub switcher and to resolve the current hub. `cache`d so the
+ * layout's explicit call and `requireHub`'s internal call share one query.
  */
-export async function listMyHubs(userId: string): Promise<SessionHub[]> {
+export const listMyHubs = cache(async (userId: string): Promise<SessionHub[]> => {
   const memberships = await prisma.hubMembership.findMany({
     where: { userId, status: "ACTIVE" },
     include: { hub: { select: { id: true, name: true, color: true } } },
@@ -77,21 +83,21 @@ export async function listMyHubs(userId: string): Promise<SessionHub[]> {
     color: m.hub.color,
     role: m.role,
   }));
-}
+});
 
 /**
  * Resolves the "current" hub from the `current_hub` cookie, falling back to
  * the user's oldest ACTIVE membership. Returns null if the user belongs to no
  * hub yet (brand new invited user who hasn't accepted anything).
  */
-async function resolveCurrentHub(userId: string): Promise<SessionHub | null> {
+const resolveCurrentHub = cache(async (userId: string): Promise<SessionHub | null> => {
   const hubs = await listMyHubs(userId);
   if (hubs.length === 0) return null;
 
   const store = await cookies();
   const cookieHubId = store.get(CURRENT_HUB_COOKIE)?.value;
   return hubs.find((h) => h.id === cookieHubId) ?? hubs[0];
-}
+});
 
 /**
  * Server-side: current DB user + current hub, or redirect. Use at the top of

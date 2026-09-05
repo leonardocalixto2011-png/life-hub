@@ -135,7 +135,7 @@ function Fields({
         <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
           Owner
           <select name="ownerId" defaultValue={existing?.ownerId ?? ""} className="field mt-1">
-            <option value="">Shared</option>
+            <option value="">— (no owner)</option>
             {members.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name ?? m.email}

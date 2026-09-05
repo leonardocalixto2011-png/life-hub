@@ -3,6 +3,7 @@ import { endOfDay, startOfDay } from "date-fns";
 import type { HubTx } from "@/lib/hub-context";
 import { withHub } from "@/lib/hub-context";
 import { listMyHubs, type SessionHub } from "@/lib/session";
+import { advanceLapsedRenewals } from "@/lib/data";
 import { dueLabel, money } from "@/lib/format";
 
 type WithHub<T> = T & { hubName: string };
@@ -17,35 +18,39 @@ function vis(userId: string) {
   return { OR: [{ visibility: "SHARED" as const }, { createdById: userId }] };
 }
 
+const ventureName = { venture: { select: { name: true } } } as const;
+
 async function collectDigestInHub(tx: HubTx, hubId: string, userId: string, windowHours: number) {
   const now = new Date();
   const horizon = endOfDay(new Date(now.getTime() + windowHours * 3600_000));
   const todayStart = startOfDay(now);
 
+  await advanceLapsedRenewals(tx, hubId);
+
   const [overdueTasks, dueTasks, deadlines, renewals, cancelBys] = await Promise.all([
     tx.task.findMany({
       where: { hubId, status: "OPEN", dueDate: { lt: todayStart }, ...vis(userId) },
-      include: { venture: true, assignedTo: true },
+      include: ventureName,
       orderBy: { dueDate: "asc" },
     }),
     tx.task.findMany({
       where: { hubId, status: "OPEN", dueDate: { gte: todayStart, lte: horizon }, ...vis(userId) },
-      include: { venture: true, assignedTo: true },
+      include: ventureName,
       orderBy: { dueDate: "asc" },
     }),
     tx.deadline.findMany({
       where: { hubId, doneAt: null, dueDate: { lte: horizon }, ...vis(userId) },
-      include: { venture: true },
+      include: ventureName,
       orderBy: { dueDate: "asc" },
     }),
     tx.subscription.findMany({
-      where: { hubId, status: "ACTIVE", renewalDate: { lte: horizon } },
-      include: { venture: true },
+      where: { hubId, status: "ACTIVE", renewalDate: { gte: todayStart, lte: horizon } },
+      include: ventureName,
       orderBy: { renewalDate: "asc" },
     }),
     tx.subscription.findMany({
-      where: { hubId, status: "ACTIVE", cancelByDate: { not: null, lte: horizon } },
-      include: { venture: true },
+      where: { hubId, status: "ACTIVE", cancelByDate: { gte: todayStart, lte: horizon } },
+      include: ventureName,
       orderBy: { cancelByDate: "asc" },
     }),
   ]);

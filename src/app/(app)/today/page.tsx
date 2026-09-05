@@ -38,7 +38,8 @@ export default async function DashboardPage() {
       d.deadlines.length +
       d.renewals.length +
       d.cancelBys.length +
-      d.events.length ===
+      d.events.length +
+      d.debts.length ===
     0;
 
   return (
@@ -127,6 +128,29 @@ export default async function DashboardPage() {
                 <span className="truncate">{s.name}</span>
                 <span className="shrink-0 text-xs text-[var(--color-text-dim)]">
                   renews {countdownLabel(s.renewalDate)}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {d.debts.length > 0 && (
+        <section>
+          <SectionHead title="Payments due" href="/debts" cta="All debts" />
+          <div className="card divide-y divide-[var(--color-border)]">
+            {d.debts.map((x) => (
+              <Link
+                key={x.id}
+                href={`/debts/${x.id}`}
+                className="flex items-center justify-between px-3 py-2.5"
+              >
+                <span className="truncate">{x.name}</span>
+                <span className="shrink-0 text-xs font-semibold text-[var(--color-text-dim)]">
+                  {x.actualPaymentCents ?? x.minimumPaymentCents
+                    ? `${money(x.actualPaymentCents ?? x.minimumPaymentCents!)} · `
+                    : ""}
+                  {countdownLabel(x.dueDate!)}
                 </span>
               </Link>
             ))}

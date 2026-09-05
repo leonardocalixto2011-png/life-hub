@@ -7,6 +7,7 @@ import { countdownLabel, money } from "@/lib/format";
 import { VentureChip } from "@/components/VentureChip";
 import { Avatar } from "@/components/Avatar";
 import { DebtForm } from "./DebtForm";
+import { LogPaymentButton } from "./LogPaymentButton";
 
 export const dynamic = "force-dynamic";
 
@@ -46,12 +47,15 @@ function Row({ d }: { d: DebtWithRefs }) {
         </div>
       </div>
 
-      <div className="text-right">
+      <div className="flex flex-col items-end text-right">
         <div className="font-semibold tabular-nums">{money(d.balanceCents, "CAD")}</div>
         <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
           {payment != null ? `${money(payment, "CAD")}/mo` : "balance"}
           {d.aprBasisPoints != null ? ` · ${(d.aprBasisPoints / 100).toFixed(2)}%` : ""}
         </div>
+        {!paidOff && payment != null && payment > 0 && (
+          <LogPaymentButton id={d.id} amountCents={payment} />
+        )}
       </div>
     </div>
   );

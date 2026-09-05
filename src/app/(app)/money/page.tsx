@@ -48,7 +48,12 @@ export default async function MoneyPage({
 
   return (
     <div className="space-y-4 p-3">
-      <h1 className="text-lg font-bold">Budget</h1>
+      <div className="flex items-baseline justify-between">
+        <h1 className="text-lg font-bold">Budget</h1>
+        <Link href="/debts" className="text-[0.7rem] font-semibold text-[var(--color-primary)]">
+          Debts →
+        </Link>
+      </div>
 
       <div className="flex items-center justify-between">
         <Link href={href(subMonths(month, 1), sp.venture)} className="btn btn-ghost px-2">
@@ -93,12 +98,13 @@ export default async function MoneyPage({
           {upcomingTotal > 0 && (
             <>
               <div className="font-semibold">
-                {money(upcomingTotal, currency)} expected this month — not yet logged above
+                {money(upcomingTotal, currency)}/mo in recurring commitments
               </div>
               <div className="text-[var(--color-text-dim)]">
-                {money(upcoming.subscriptionsCents, currency)}/mo subscriptions
+                {money(upcoming.subscriptionsCents, currency)} subscriptions
                 {" + "}
-                {money(upcoming.debtsCents, currency)}/mo debt payments
+                {money(upcoming.debtsCents, currency)} debt payments — separate from what&apos;s
+                logged above
               </div>
             </>
           )}

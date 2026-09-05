@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { addMonths } from "date-fns";
 import { z } from "zod";
 
 import { withHub } from "@/lib/hub-context";
@@ -83,4 +84,61 @@ export async function deleteDebt(fd: FormData) {
   await withHub(user.id, (tx) => tx.debt.delete({ where: { id } }));
   revalidatePath("/debts");
   redirect("/debts");
+}
+
+/**
+ * Records a payment against a debt: logs a matching Budget expense, drops
+ * the balance, and rolls the due date forward a month. `amount` is dollars
+ * (the client sends the row's actual-or-minimum payment as the default);
+ * `date` defaults to today.
+ */
+export async function logDebtPayment(fd: FormData) {
+  const { user, hub } = await requireHub();
+  const schema = z.object({
+    id: z.string().cuid(),
+    amount: z.string().min(1, "Amount is required"),
+    date: z.preprocess(emptyToNull, z.string().nullable()),
+  });
+  const { id, amount, date } = schema.parse({
+    id: fd.get("id"),
+    amount: fd.get("amount"),
+    date: fd.get("date"),
+  });
+
+  const amountCents = dollarsToCents(amount);
+  if (amountCents == null || amountCents <= 0) {
+    throw new Error("Payment amount must be a positive number");
+  }
+
+  await withHub(user.id, async (tx) => {
+    const debt = await tx.debt.findUnique({ where: { id }, select: { name: true, ventureId: true, dueDate: true } });
+    if (!debt) throw new Error("Debt not found");
+
+    await tx.budgetEntry.create({
+      data: {
+        type: "EXPENSE",
+        amountCents,
+        hubId: hub.id,
+        currency: "CAD",
+        category: debt.name,
+        description: "Debt payment",
+        date: fromDateInput(date) ?? new Date(),
+        ventureId: debt.ventureId,
+        createdById: user.id,
+      },
+    });
+
+    await tx.debt.update({
+      where: { id },
+      data: {
+        balanceCents: { decrement: amountCents },
+        dueDate: debt.dueDate ? addMonths(debt.dueDate, 1) : null,
+      },
+    });
+  });
+
+  revalidatePath("/debts");
+  revalidatePath(`/debts/${id}`);
+  revalidatePath("/money");
+  revalidatePath("/");
 }

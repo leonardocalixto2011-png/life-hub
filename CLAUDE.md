@@ -562,6 +562,49 @@ detail.
   mismatch means). Payoff-time/total-remaining-interest projections on the
   Debts page. Editing an entire recurring-event series at once.
 
+### Phase 9b — Debt→Budget auto-link + a scoped optimisation pass
+
+Three audit agents surveyed the codebase for query waste, UX gaps, and the
+debt-link integration; this took the auto-link plus the highest-value
+findings. Full catalogue (incl. deferred items) in the plan file.
+
+- ✅ **Debt payment → Budget** — `logDebtPayment` (`debts/actions.ts`) in
+  one `withHub` transaction: creates a matching `BudgetEntry` EXPENSE
+  (category = debt name, `description: "Debt payment"`), `decrement`s
+  `Debt.balanceCents`, and rolls `dueDate` forward a month
+  (`addMonths`). Revalidates `/debts`, `/money`, `/`. One-tap
+  "log $X payment" on the debts list row (`LogPaymentButton.tsx`, uses the
+  actual-or-minimum payment); a custom amount+date form on the detail page.
+  `upcomingSummary` is unchanged and does **not** double-count — it reads
+  the debt's *payment amount*, never `BudgetEntry` rows.
+- ✅ **`React.cache` the per-request lookups** (`src/lib/session.ts`) —
+  `requireUser`/`getUser`/`resolveCurrentHub`/`listMyHubs` are `cache`d so
+  a layout and its page (which render concurrently) share one lookup each
+  instead of two-to-three. Removes ~4-6 redundant `user`/`hubMembership`
+  round-trips per authenticated navigation. `listVentures`/`listMembers`
+  were **not** wrapped — they take a per-render `withHub` `tx`, so `cache`
+  wouldn't dedupe across the layout/page boundary anyway.
+- ✅ **`advanceLapsedRenewals(tx, hubId)`** (`src/lib/data.ts`) — rolls any
+  ACTIVE non-`CUSTOM` subscription whose `renewalDate` has passed forward
+  by whole billing cycles until it's ≥ today. Called at the top of
+  `dashboard()` (every `/today` load) and in the digest cron's per-hub
+  loop, so "renews 6 days ago" and lapsed-renewal digest spam stop.
+  `dashboard()`'s cancel-by query also gained a lower date bound so a
+  *passed* cancel-by drops off `/today` instead of sitting red forever.
+- ✅ **Debts surfaced outside `/debts`** — `dashboard()` now returns
+  `CURRENT` debts due within ~2 weeks, rendered on `/today` as "Payments
+  due"; `/money` and `/subscriptions` headers link to `/debts`.
+- ✅ **Small cleanups** — digest `include`s narrowed to
+  `venture: { select: { name: true } }` and the unused `assignedTo` join
+  dropped; dead `todayView()` deleted from `data.ts` (superseded by
+  `dashboard()`); the misleading empty-owner "Shared" `<option>` in
+  `DebtForm`/`SubscriptionForm` relabelled "— (no owner)" (neither model
+  has a privacy column).
+- **Deferred (audited, catalogued in the plan)**: cron fan-out
+  concurrency limiting, a batch of low-value indexes,
+  `BILL_PAYMENT`-email→structured-amount, inline debt status toggle,
+  `/money`→`/budget` rename.
+
 ## Commands
 
 `npm run dev` · `build` · `typecheck` · `db:migrate` · `db:push` · `db:seed` ·

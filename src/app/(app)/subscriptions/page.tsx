@@ -105,7 +105,12 @@ export default async function SubscriptionsPage() {
 
   return (
     <div className="space-y-4 p-3">
-      <h1 className="text-lg font-bold">Subscriptions</h1>
+      <div className="flex items-baseline justify-between">
+        <h1 className="text-lg font-bold">Subscriptions</h1>
+        <Link href="/debts" className="text-[0.7rem] font-semibold text-[var(--color-primary)]">
+          Debts →
+        </Link>
+      </div>
 
       <div className="card grid grid-cols-2 divide-x divide-[var(--color-border)] p-0">
         <div className="p-3 text-center">

@@ -1,8 +1,53 @@
-import { endOfDay, endOfMonth, startOfDay, startOfMonth } from "date-fns";
-import type { Prisma } from "@prisma/client";
+import {
+  addMonths,
+  addWeeks,
+  addYears,
+  endOfDay,
+  endOfMonth,
+  startOfDay,
+  startOfMonth,
+} from "date-fns";
+import type { BillingCycle, Prisma } from "@prisma/client";
 
 import type { HubTx } from "@/lib/hub-context";
 import { monthlyCents } from "@/lib/money";
+
+/**
+ * Rolls any ACTIVE subscription whose `renewalDate` has already passed
+ * forward by whole billing cycles until it's in the future. Nothing else
+ * advances it, so without this `/subscriptions` and `/today` drift into
+ * showing "renews 6 days ago" and the digest re-sends lapsed renewals
+ * forever. Only writes rows that are actually stale; CUSTOM cycles (no
+ * defined interval) are left alone.
+ */
+export async function advanceLapsedRenewals(tx: HubTx, hubId: string): Promise<void> {
+  const todayStart = startOfDay(new Date());
+  const stale = await tx.subscription.findMany({
+    where: {
+      hubId,
+      status: "ACTIVE",
+      billingCycle: { not: "CUSTOM" },
+      renewalDate: { lt: todayStart },
+    },
+    select: { id: true, renewalDate: true, billingCycle: true },
+  });
+  if (stale.length === 0) return;
+
+  const step = (d: Date, cycle: BillingCycle): Date => {
+    if (cycle === "WEEKLY") return addWeeks(d, 1);
+    if (cycle === "QUARTERLY") return addMonths(d, 3);
+    if (cycle === "YEARLY") return addYears(d, 1);
+    return addMonths(d, 1); // MONTHLY
+  };
+
+  await Promise.all(
+    stale.map((s) => {
+      let next = s.renewalDate;
+      while (next < todayStart) next = step(next, s.billingCycle);
+      return tx.subscription.update({ where: { id: s.id }, data: { renewalDate: next } });
+    }),
+  );
+}
 
 export function listVentures(tx: HubTx, hubId: string) {
   return tx.venture.findMany({
@@ -74,36 +119,6 @@ export function getTask(tx: HubTx, hubId: string, userId: string, id: string) {
     where: { id, hubId, ...visibilityFilter(userId) },
     include: taskInclude,
   });
-}
-
-/** Buckets for the "Today" view. */
-export async function todayView(tx: HubTx, hubId: string, userId: string) {
-  const now = new Date();
-  const todayStart = startOfDay(now);
-  const todayEnd = endOfDay(now);
-  const weekEnd = endOfDay(new Date(now.getTime() + 6 * 864e5));
-  const vis = visibilityFilter(userId);
-
-  const [overdue, today, upcoming, undatedCount] = await Promise.all([
-    tx.task.findMany({
-      where: { hubId, status: "OPEN", dueDate: { lt: todayStart }, ...vis },
-      include: taskInclude,
-      orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
-    }),
-    tx.task.findMany({
-      where: { hubId, status: "OPEN", dueDate: { gte: todayStart, lte: todayEnd }, ...vis },
-      include: taskInclude,
-      orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
-    }),
-    tx.task.findMany({
-      where: { hubId, status: "OPEN", dueDate: { gt: todayEnd, lte: weekEnd }, ...vis },
-      include: taskInclude,
-      orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
-    }),
-    tx.task.count({ where: { hubId, status: "OPEN", dueDate: null, ...vis } }),
-  ]);
-
-  return { overdue, today, upcoming, undatedCount };
 }
 
 export type TaskWithRefs = Awaited<ReturnType<typeof listTasks>>[number];
@@ -506,7 +521,9 @@ export async function dashboard(tx: HubTx, hubId: string, userId: string) {
   const weekEnd = endOfDay(new Date(now.getTime() + 6 * 864e5));
   const soon = endOfDay(new Date(now.getTime() + 13 * 864e5)); // ~2 weeks
 
-  const [tasks, deadlines, renewals, cancelBys, events, month] = await Promise.all([
+  await advanceLapsedRenewals(tx, hubId);
+
+  const [tasks, deadlines, renewals, cancelBys, events, debts, month] = await Promise.all([
     tx.task.findMany({
       where: { hubId, status: "OPEN", dueDate: { lte: weekEnd }, ...visibilityFilter(userId) },
       include: taskInclude,
@@ -524,7 +541,7 @@ export async function dashboard(tx: HubTx, hubId: string, userId: string) {
       orderBy: { renewalDate: "asc" },
     }),
     tx.subscription.findMany({
-      where: { hubId, status: "ACTIVE", cancelByDate: { not: null, lte: soon } },
+      where: { hubId, status: "ACTIVE", cancelByDate: { gte: todayStart, lte: soon } },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { cancelByDate: "asc" },
     }),
@@ -532,6 +549,11 @@ export async function dashboard(tx: HubTx, hubId: string, userId: string) {
       where: { hubId, endAt: { gte: todayStart }, startAt: { lte: weekEnd }, ...eventVisibility(userId) },
       include: eventInclude,
       orderBy: { startAt: "asc" },
+    }),
+    tx.debt.findMany({
+      where: { hubId, status: "CURRENT", dueDate: { gte: todayStart, lte: soon } },
+      include: { venture: { select: { name: true, color: true } } },
+      orderBy: { dueDate: "asc" },
     }),
     budgetMonth(tx, hubId, now),
   ]);
@@ -547,6 +569,7 @@ export async function dashboard(tx: HubTx, hubId: string, userId: string) {
     renewals,
     cancelBys,
     events,
+    debts,
     budget: { income: month.income, expense: month.expense, net: month.net },
   };
 }
