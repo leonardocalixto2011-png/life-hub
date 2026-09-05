@@ -39,6 +39,7 @@ export default async function EventDetailPage({
           ventureId: event.ventureId,
           attendeeIds: event.attendeeIds,
           visibility: event.visibility,
+          recurrenceGroupId: event.recurrenceGroupId,
         }}
       />
     </div>

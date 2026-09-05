@@ -1,12 +1,14 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { addDays, differenceInCalendarDays, eachDayOfInterval, startOfDay } from "date-fns";
 import { z } from "zod";
 
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
-import { fromDateTimeInput } from "@/lib/format";
+import { fromDateInput, fromDateTimeInput } from "@/lib/format";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -47,15 +49,59 @@ function buildData(d: z.infer<typeof createSchema>, attendeeIds: string[]) {
   };
 }
 
+/**
+ * Real rows, not a live recurrence engine — every date matching the checked
+ * weekdays between the anchor date and `until` (inclusive) becomes its own
+ * Event, keeping the anchor's time-of-day and duration by shifting whole
+ * days. Offset 0 is the anchor's own day, so it's naturally included only
+ * when its weekday is itself checked.
+ */
+function occurrenceOffsets(anchorStart: Date, repeatDays: number[], until: Date): number[] {
+  const days = eachDayOfInterval({ start: startOfDay(anchorStart), end: startOfDay(until) });
+  return days
+    .filter((d) => repeatDays.includes(d.getDay()))
+    .map((d) => differenceInCalendarDays(d, anchorStart));
+}
+
 export async function createEvent(fd: FormData) {
   const { user, hub } = await requireHub();
   const d = parse(createSchema, fd);
   const attendeeIds = fd.getAll("attendeeIds").map(String).filter(Boolean);
-  await withHub(user.id, (tx) =>
-    tx.event.create({
-      data: { ...buildData(d, attendeeIds), hubId: hub.id, createdById: user.id },
-    }),
-  );
+  const base = buildData(d, attendeeIds);
+
+  const repeatDays = fd.getAll("repeatDays").map(Number).filter((n) => n >= 0 && n <= 6);
+  const repeatUntilRaw = fd.get("repeatUntil");
+  const repeatUntil = typeof repeatUntilRaw === "string" ? fromDateInput(repeatUntilRaw) : null;
+
+  if (repeatDays.length > 0 || repeatUntil) {
+    if (repeatDays.length === 0 || !repeatUntil) {
+      throw new Error("Pick at least one weekday and a \"repeat until\" date to enable repeating.");
+    }
+    const offsets = occurrenceOffsets(base.startAt, repeatDays, repeatUntil);
+    if (offsets.length === 0) {
+      throw new Error("No matching days between the start date and \"repeat until\".");
+    }
+    const recurrenceGroupId = randomBytes(12).toString("hex");
+    await withHub(user.id, (tx) =>
+      tx.event.createMany({
+        data: offsets.map((offset) => ({
+          ...base,
+          startAt: addDays(base.startAt, offset),
+          endAt: addDays(base.endAt, offset),
+          hubId: hub.id,
+          createdById: user.id,
+          recurrenceGroupId,
+        })),
+      }),
+    );
+  } else {
+    await withHub(user.id, (tx) =>
+      tx.event.create({
+        data: { ...base, hubId: hub.id, createdById: user.id },
+      }),
+    );
+  }
+
   revalidatePath("/calendar");
   revalidatePath("/today");
 }
@@ -76,6 +122,24 @@ export async function deleteEvent(fd: FormData) {
   const { user } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
   await withHub(user.id, (tx) => tx.event.delete({ where: { id } }));
+  revalidatePath("/calendar");
+  redirect("/calendar");
+}
+
+/** Deletes this occurrence and every later one in the same series. */
+export async function deleteEventSeries(fd: FormData) {
+  const { user } = await requireHub();
+  const schema = z.object({ recurrenceGroupId: z.string().min(1), fromDate: z.string().min(1) });
+  const { recurrenceGroupId, fromDate } = schema.parse({
+    recurrenceGroupId: fd.get("recurrenceGroupId"),
+    fromDate: fd.get("fromDate"),
+  });
+  const startAt = fromDateTimeInput(fromDate);
+  if (!startAt) throw new Error("Invalid date");
+
+  await withHub(user.id, (tx) =>
+    tx.event.deleteMany({ where: { recurrenceGroupId, startAt: { gte: startAt } } }),
+  );
   revalidatePath("/calendar");
   redirect("/calendar");
 }

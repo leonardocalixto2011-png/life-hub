@@ -327,8 +327,13 @@ model Event {
   createdBy   User       @relation(fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+  // Shared across every row generated from one "repeat on these weekdays
+  // until this date" setup (src/app/(app)/calendar/actions.ts) — real rows,
+  // not a live recurrence engine. Null for a normal one-off event.
+  recurrenceGroupId String?
 
   @@index([hubId, startAt])
+  @@index([hubId, recurrenceGroupId])
 }
 
 // ---------------------------------------------------------------------------

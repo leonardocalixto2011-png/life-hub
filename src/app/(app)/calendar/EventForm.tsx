@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import { createEvent, deleteEvent, updateEvent } from "./actions";
+import { createEvent, deleteEvent, deleteEventSeries, updateEvent } from "./actions";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
 
 type Member = { id: string; name: string | null; email: string | null };
@@ -19,7 +19,18 @@ type Existing = {
   ventureId: string | null;
   attendeeIds: string[];
   visibility?: "PRIVATE" | "SHARED";
+  recurrenceGroupId: string | null;
 };
+
+const WEEKDAYS = [
+  { value: 1, label: "Mon" },
+  { value: 2, label: "Tue" },
+  { value: 3, label: "Wed" },
+  { value: 4, label: "Thu" },
+  { value: 5, label: "Fri" },
+  { value: 6, label: "Sat" },
+  { value: 0, label: "Sun" },
+] as const;
 
 function Fields({
   ventures,
@@ -106,6 +117,24 @@ function Fields({
         <textarea name="notes" defaultValue={existing?.notes ?? ""} rows={2} className="field mt-1" />
       </label>
 
+      {!existing && (
+        <fieldset className="text-xs font-semibold text-[var(--color-text-dim)]">
+          Repeat (optional)
+          <div className="mt-1 flex flex-wrap gap-2">
+            {WEEKDAYS.map((w) => (
+              <label key={w.value} className="flex items-center gap-1 font-normal">
+                <input type="checkbox" name="repeatDays" value={w.value} />
+                {w.label}
+              </label>
+            ))}
+          </div>
+          <label className="mt-2 block font-normal">
+            Repeat until
+            <input type="date" name="repeatUntil" className="field mt-1" />
+          </label>
+        </fieldset>
+      )}
+
       <PrivacyToggle defaultValue={existing?.visibility} />
     </>
   );
@@ -139,9 +168,18 @@ export function EventForm({
         <form action={deleteEvent}>
           <input type="hidden" name="id" value={existing.id} />
           <button type="submit" className="btn w-full text-[var(--color-danger)]">
-            Delete event
+            {existing.recurrenceGroupId ? "Delete just this one" : "Delete event"}
           </button>
         </form>
+        {existing.recurrenceGroupId && (
+          <form action={deleteEventSeries}>
+            <input type="hidden" name="recurrenceGroupId" value={existing.recurrenceGroupId} />
+            <input type="hidden" name="fromDate" value={existing.startAt} />
+            <button type="submit" className="btn w-full text-[var(--color-danger)]">
+              Delete this and future
+            </button>
+          </form>
+        )}
       </div>
     );
   }
