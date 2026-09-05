@@ -45,7 +45,7 @@ const AiSchema = z.object({
 });
 
 export type ParseOutcome =
-  | { ok: true; drafts: Draft[] }
+  | { ok: true; drafts: Draft[]; truncated?: boolean }
   | { ok: false; error: string };
 
 /**
@@ -61,7 +61,7 @@ export type ParseOutcome =
 export async function parseText(
   text: string,
   hub?: { tx: HubTx; hubId: string },
-  maxItems = 10,
+  maxItems = 25,
 ): Promise<ParseOutcome> {
   const clean = text.trim();
   if (!clean) return { ok: false, error: "Nothing to parse." };
@@ -87,15 +87,21 @@ export async function parseText(
   ].join("\n");
 
   let parsed: z.infer<typeof AiSchema> | null = null;
+  let truncated = false;
   try {
     const res = await ai().messages.parse({
       model: AI_MODEL,
-      max_tokens: 1536,
+      // A long multi-item paste (e.g. a dozen budget lines) needs real
+      // headroom — each item's structured JSON runs ~150-250 tokens, so the
+      // old 1536 silently truncated anything past ~9-10 items. `stop_reason`
+      // below still catches the (now much rarer) case of an even longer paste.
+      max_tokens: 4096,
       output_config: { effort: "low", format: zodOutputFormat(AiSchema) },
       system,
       messages: [{ role: "user", content: clean.slice(0, 6000) }],
     });
     parsed = res.parsed_output;
+    truncated = res.stop_reason === "max_tokens";
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Assistant error." };
   }
@@ -104,6 +110,8 @@ export async function parseText(
   }
 
   const vByName = new Map(ventures.map((v) => [v.name.toLowerCase(), v.id]));
+
+  if (parsed.items.length > maxItems) truncated = true;
 
   const drafts: Draft[] = parsed.items.slice(0, maxItems).map((it) => ({
     kind: it.kind,
@@ -120,5 +128,5 @@ export async function parseText(
     suggestedReply: null,
   }));
 
-  return { ok: true, drafts };
+  return { ok: true, drafts, truncated: truncated || undefined };
 }

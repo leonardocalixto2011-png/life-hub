@@ -64,6 +64,11 @@ export function QuickAdd({
         const r = await parseQuickAdd(title);
         if (r.ok) {
           setDrafts(r.drafts);
+          if (r.truncated) {
+            setMsg(
+              `Only got through ${r.drafts.length} item${r.drafts.length === 1 ? "" : "s"} — the rest didn't fit. Review these, then paste the remainder separately.`,
+            );
+          }
         } else {
           setMsg(`${r.error} — added as a plain task.`);
           await createTask(fd);

@@ -38,7 +38,7 @@ export async function commitDrafts(
   raw: unknown,
 ): Promise<{ ok: boolean; created: string[]; error?: string }> {
   const { user, hub } = await requireHub();
-  const list = z.array(CommitSchema).max(10).safeParse(raw);
+  const list = z.array(CommitSchema).max(25).safeParse(raw);
   if (!list.success) return { ok: false, created: [], error: "Invalid draft data." };
 
   const result = await withHub(user.id, (tx) =>
