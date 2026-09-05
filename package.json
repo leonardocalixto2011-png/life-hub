@@ -15,6 +15,7 @@
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "gen:vapid": "node scripts/gen-vapid.mjs",
+    "gen:mail-key": "node scripts/gen-mail-key.mjs",
     "verify:isolation": "node scripts/verify-isolation.mjs",
     "postinstall": "prisma generate"
   },

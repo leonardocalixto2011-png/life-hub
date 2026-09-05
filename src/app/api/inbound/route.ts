@@ -143,6 +143,7 @@ export async function POST(req: Request) {
           ventureId: null,
           note: body.slice(0, 500) || null,
           visibility: "SHARED",
+          suggestedReply: null,
         } satisfies Draft,
       },
     });

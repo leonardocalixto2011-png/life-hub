@@ -8,6 +8,7 @@ const KIND_LABEL: Record<DraftKind, string> = {
   deadline: "Deadline",
   subscription: "Subscription",
   budget: "Budget",
+  needs_reply: "Needs a reply",
 };
 
 const DATE_LABEL: Record<DraftKind, string> = {
@@ -16,6 +17,7 @@ const DATE_LABEL: Record<DraftKind, string> = {
   deadline: "Due",
   subscription: "Renews",
   budget: "Date",
+  needs_reply: "Received",
 };
 
 export function DraftCard({
@@ -30,6 +32,7 @@ export function DraftCard({
   onRemove: () => void;
 }) {
   const showAmount = draft.kind === "budget" || draft.kind === "subscription";
+  const isNeedsReply = draft.kind === "needs_reply";
 
   return (
     <div className="card space-y-2 p-3">
@@ -39,6 +42,7 @@ export function DraftCard({
           onChange={(e) => onChange({ kind: e.target.value as DraftKind })}
           className="chip"
           style={{ background: "var(--color-primary)", borderColor: "var(--color-primary)", color: "#fff" }}
+          disabled={isNeedsReply}
         >
           {(Object.keys(KIND_LABEL) as DraftKind[]).map((k) => (
             <option key={k} value={k}>
@@ -51,6 +55,7 @@ export function DraftCard({
           onChange={(e) => onChange({ title: e.target.value })}
           className="field flex-1"
           aria-label="Title"
+          disabled={isNeedsReply}
         />
         <button
           type="button"
@@ -62,6 +67,25 @@ export function DraftCard({
         </button>
       </div>
 
+      {isNeedsReply ? (
+        <>
+          {draft.note && (
+            <p className="rounded-lg bg-[var(--color-surface)] p-2 text-xs text-[var(--color-text-dim)]">
+              {draft.note}
+            </p>
+          )}
+          <label className="block text-[0.7rem] font-semibold text-[var(--color-text-dim)]">
+            Suggested reply — edit before sending it yourself, Life Hub never sends on your behalf
+            <textarea
+              value={draft.suggestedReply ?? ""}
+              onChange={(e) => onChange({ suggestedReply: e.target.value })}
+              rows={4}
+              className="field mt-1"
+              placeholder="No suggested reply — write your own."
+            />
+          </label>
+        </>
+      ) : (
       <div className="grid grid-cols-2 gap-2">
         {draft.kind === "event" ? (
           <label className="text-[0.7rem] font-semibold text-[var(--color-text-dim)]">
@@ -162,6 +186,7 @@ export function DraftCard({
           </select>
         </label>
       </div>
+      )}
 
       {(draft.kind === "task" || draft.kind === "deadline" || draft.kind === "event") && (
         <label className="flex items-center gap-2 text-[0.7rem] font-semibold text-[var(--color-text-dim)]">

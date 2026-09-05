@@ -7,7 +7,7 @@ import { formatDistanceToNow } from "date-fns";
 import type { Draft } from "@/lib/parse";
 import { DraftCard } from "@/components/DraftCard";
 import { showToast } from "@/components/Toast";
-import { acceptReview, discardReview } from "./actions";
+import { acceptReview, discardReview, trustThisSender } from "./actions";
 
 export type ReviewCardData = {
   id: string;
@@ -40,7 +40,19 @@ export function ReviewCard({
       const r = await acceptReview(item.id, draft);
       if (r.ok) {
         setGone(true);
-        showToast({ message: "Added" });
+        if (r.offerTrust) {
+          const { hubId, fromAddress, category } = r.offerTrust;
+          showToast({
+            message: `Always trust ${fromAddress}?`,
+            actionLabel: "Trust sender",
+            onAction: () => {
+              void trustThisSender(hubId, fromAddress, category);
+              showToast({ message: "Future emails from them will auto-file." });
+            },
+          });
+        } else {
+          showToast({ message: "Added" });
+        }
         router.refresh();
       } else {
         setErr(r.error ?? "Could not save");

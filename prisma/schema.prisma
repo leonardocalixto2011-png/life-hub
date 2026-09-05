@@ -46,6 +46,7 @@ model User {
   notificationPref   NotificationPreference?
   createdHubs        Hub[]                   @relation("HubCreatedBy")
   hubMemberships     HubMembership[]
+  mailAccounts       MailAccount[]
 }
 
 // ---------------------------------------------------------------------------
@@ -79,13 +80,16 @@ model Hub {
   createdBy   User     @relation("HubCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now())
 
-  memberships   HubMembership[]
-  ventures      Venture[]
-  tasks         Task[]
-  deadlines     Deadline[]
-  subscriptions Subscription[]
-  budgetEntries BudgetEntry[]
-  events        Event[]
+  memberships    HubMembership[]
+  ventures       Venture[]
+  tasks          Task[]
+  deadlines      Deadline[]
+  subscriptions  Subscription[]
+  budgetEntries  BudgetEntry[]
+  events         Event[]
+  mailAccounts   MailAccount[]
+  trustedSenders TrustedSender[]
+  reviewItems    ReviewItem[]
 }
 
 model HubMembership {
@@ -365,17 +369,89 @@ enum ReviewStatus {
   DISCARDED
 }
 
+// BILL_PAYMENT / SUBSCRIPTION_RENEWAL / APPOINTMENT_EVENT / NEEDS_REPLY are the
+// four "actionable" categories that ever reach the Review Inbox — the mail
+// classifier (lib/mail/classify.ts) discards INFORMATIONAL/PROMOTIONAL
+// classifications instead of storing them.
+enum ReviewCategory {
+  BILL_PAYMENT
+  SUBSCRIPTION_RENEWAL
+  APPOINTMENT_EVENT
+  NEEDS_REPLY
+}
+
 model ReviewItem {
-  id            String       @id @default(cuid())
-  status        ReviewStatus @default(PENDING)
-  source        String // "email" | "sms" | "share"
+  id            String          @id @default(cuid())
+  status        ReviewStatus    @default(PENDING)
+  source        String // "email" | "sms" | "share" | "mail-connector"
   sourceRef     String? // provider message id
   sourceSnippet String? // first chars of the original message, for traceback
   fromAddress   String?
-  draft         Json // shape matches the Draft type in quick-actions.ts
+  category      ReviewCategory?
+  // Nullable: the Phase 2 manual-forward path has no session to resolve a hub
+  // from, so those rows still land wherever the accepting user's current hub
+  // is (see acceptReview in inbox/actions.ts). Every row the mail connector
+  // creates always sets this, since it originates from a specific MailAccount
+  // tied to a specific hub.
+  hubId         String?
+  hub           Hub?            @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  draft         Json // shape matches the Draft type in lib/parse.ts
   note          String? // e.g. "updates an existing subscription"
-  createdAt     DateTime     @default(now())
+  createdAt     DateTime        @default(now())
   reviewedAt    DateTime?
 
   @@index([status, createdAt])
+  @@index([hubId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Mailbox connections — direct, continuous read-only access to a person's
+// inbox (Phase 7 "mailbox connection & personal assistant" prompt), feeding
+// the same Review Inbox above instead of relying only on manual forwarding.
+// ---------------------------------------------------------------------------
+
+enum MailProvider {
+  GOOGLE
+}
+
+enum MailAccountStatus {
+  ACTIVE
+  ERROR
+  REVOKED
+}
+
+model MailAccount {
+  id              String            @id @default(cuid())
+  userId          String
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hubId           String // which hub new items from this mailbox default into
+  hub             Hub               @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  provider        MailProvider
+  emailAddress    String
+  accessTokenEnc  String // AES-256-GCM ciphertext, see lib/mail/crypto.ts — never store plaintext tokens
+  refreshTokenEnc String
+  tokenExpiresAt  DateTime
+  scope           String
+  status          MailAccountStatus @default(ACTIVE)
+  lastSyncedAt    DateTime?
+  lastError       String?
+  createdAt       DateTime          @default(now())
+
+  @@unique([provider, emailAddress])
+  @@index([status])
+}
+
+// Sender-based learning (prompt §3): after a few accepted ReviewItems from the
+// same sender/category in a hub, offer to auto-file future ones from them.
+// `category: null` means "trusted for every category", not just the one that
+// triggered the offer.
+model TrustedSender {
+  id          String          @id @default(cuid())
+  hubId       String
+  hub         Hub             @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  fromAddress String
+  category    ReviewCategory?
+  createdAt   DateTime        @default(now())
+
+  @@unique([hubId, fromAddress, category])
 }

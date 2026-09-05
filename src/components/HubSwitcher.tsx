@@ -72,6 +72,13 @@ export function HubSwitcher({
                 Mine, across hubs
               </Link>
               <Link
+                href="/mail"
+                onClick={() => setOpen(false)}
+                className="block rounded-lg px-2 py-2 text-sm text-[var(--color-text-dim)]"
+              >
+                Connected mailboxes
+              </Link>
+              <Link
                 href="/hubs/new"
                 onClick={() => setOpen(false)}
                 className="block rounded-lg px-2 py-2 text-sm font-semibold text-[var(--color-primary)]"

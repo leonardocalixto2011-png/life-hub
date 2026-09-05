@@ -6,11 +6,15 @@ import { ai, aiEnabled, AI_MODEL } from "@/lib/ai";
 import { listVentures } from "@/lib/data";
 import type { HubTx } from "@/lib/hub-context";
 
-export type DraftKind = "task" | "event" | "deadline" | "subscription" | "budget";
+// "needs_reply" only ever comes from the mail connector's classifier
+// (lib/mail/classify.ts), never from this file's own parseText() — accepting
+// one doesn't create any Task/Deadline/etc row, it just marks the ReviewItem
+// handled (see commitDraftsCore in lib/commit-drafts.ts).
+export type DraftKind = "task" | "event" | "deadline" | "subscription" | "budget" | "needs_reply";
 
 export type Draft = {
   kind: DraftKind;
-  title: string;
+  title: string; // the email subject, for needs_reply
   date: string | null; // YYYY-MM-DD
   time: string | null; // YYYY-MM-DDTHH:MM
   amount: string | null; // dollars as a string
@@ -18,8 +22,9 @@ export type Draft = {
   billingCycle: "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY" | "CUSTOM";
   priority: "LOW" | "MED" | "HIGH";
   ventureId: string | null;
-  note: string | null;
+  note: string | null; // also doubles as the email snippet, for needs_reply
   visibility: "PRIVATE" | "SHARED";
+  suggestedReply: string | null; // needs_reply only — never auto-sent, just a starting point
 };
 
 const AiSchema = z.object({
@@ -112,6 +117,7 @@ export async function parseText(
     ventureId: it.ventureName ? (vByName.get(it.ventureName.toLowerCase()) ?? null) : null,
     note: it.note,
     visibility: "SHARED",
+    suggestedReply: null,
   }));
 
   return { ok: true, drafts };
