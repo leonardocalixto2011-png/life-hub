@@ -4,7 +4,12 @@ import { formatDistanceToNow } from "date-fns";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { googleOAuthConfigured } from "@/lib/mail/google";
-import { startGoogleConnect, disconnectMailAccount, removeTrustedSender } from "./actions";
+import {
+  startGoogleConnect,
+  connectYahooAccount,
+  disconnectMailAccount,
+  removeTrustedSender,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -107,6 +112,33 @@ export default async function MailPage({
       <form action={startGoogleConnect}>
         <button type="submit" disabled={!configured} className="btn btn-primary w-full">
           + Connect Gmail
+        </button>
+      </form>
+
+      <form action={connectYahooAccount} className="card space-y-2 p-3">
+        <div className="text-xs font-semibold">Connect Yahoo Mail</div>
+        <p className="text-[0.68rem] text-[var(--color-text-dim)]">
+          Yahoo doesn&apos;t support one-tap sign-in for this — generate an app
+          password (Yahoo Account Security → External connections → Create app
+          password; requires two-step verification turned on first) and paste it
+          below.
+        </p>
+        <input
+          type="email"
+          name="email"
+          placeholder="you@yahoo.com"
+          required
+          className="field w-full"
+        />
+        <input
+          type="password"
+          name="appPassword"
+          placeholder="App password"
+          required
+          className="field w-full"
+        />
+        <button type="submit" className="btn btn-primary w-full">
+          + Connect Yahoo
         </button>
       </form>
 

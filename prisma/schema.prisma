@@ -412,6 +412,7 @@ model ReviewItem {
 
 enum MailProvider {
   GOOGLE
+  YAHOO
 }
 
 enum MailAccountStatus {
@@ -428,10 +429,13 @@ model MailAccount {
   hub             Hub               @relation(fields: [hubId], references: [id], onDelete: Cascade)
   provider        MailProvider
   emailAddress    String
-  accessTokenEnc  String // AES-256-GCM ciphertext, see lib/mail/crypto.ts — never store plaintext tokens
-  refreshTokenEnc String
-  tokenExpiresAt  DateTime
-  scope           String
+  accessTokenEnc  String? // GOOGLE only — AES-256-GCM ciphertext, see lib/mail/crypto.ts
+  refreshTokenEnc String? // GOOGLE only
+  tokenExpiresAt  DateTime? // GOOGLE only
+  scope           String? // GOOGLE only
+  appPasswordEnc  String? // YAHOO only — AES-256-GCM ciphertext, same treatment as the OAuth tokens above
+  imapUidValidity Int? // YAHOO only — IMAP UIDVALIDITY of the polled INBOX
+  imapLastUid     Int? // YAHOO only — last UID successfully processed
   status          MailAccountStatus @default(ACTIVE)
   lastSyncedAt    DateTime?
   lastError       String?

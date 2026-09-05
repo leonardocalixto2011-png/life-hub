@@ -2,6 +2,7 @@ import type { MailAccount } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { decrypt, encrypt } from "./crypto";
+import { MAX_MESSAGES_PER_RUN, stripHtml, type MailBatchItem, type ParsedMessage } from "./types";
 
 /**
  * Gmail (Google Cloud OAuth client) — raw `fetch` against Google's endpoints,
@@ -108,12 +109,15 @@ export async function getUserEmail(accessToken: string): Promise<string> {
  * already uses for its own cross-user aggregate work.
  */
 export async function getValidAccessToken(account: MailAccount): Promise<string> {
+  // Only ever called with a GOOGLE-provider account (fetchGoogleBatch) — these
+  // columns are nullable at the schema level only because YAHOO rows leave
+  // them unset, not because a GOOGLE row can lack them.
   const bufferMs = 60_000;
-  if (account.tokenExpiresAt.getTime() - Date.now() > bufferMs) {
-    return decrypt(account.accessTokenEnc);
+  if (account.tokenExpiresAt!.getTime() - Date.now() > bufferMs) {
+    return decrypt(account.accessTokenEnc!);
   }
 
-  const refreshToken = decrypt(account.refreshTokenEnc);
+  const refreshToken = decrypt(account.refreshTokenEnc!);
   const refreshed = await refreshAccessToken(refreshToken);
   await prisma.mailAccount.update({
     where: { id: account.id },
@@ -138,15 +142,6 @@ export async function listRecentMessageIds(accessToken: string, after: Date): Pr
   return (data.messages ?? []).map((m) => m.id);
 }
 
-export type ParsedMessage = {
-  id: string;
-  from: string;
-  subject: string;
-  snippet: string;
-  bodyText: string;
-  internalDate: Date;
-};
-
 function decodeBase64Url(s: string): string {
   return Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
 }
@@ -169,10 +164,7 @@ function extractPlainText(payload: GmailPart | undefined): string {
     }
   }
   if (payload.mimeType === "text/html" && payload.body?.data) {
-    return decodeBase64Url(payload.body.data)
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
+    return stripHtml(decodeBase64Url(payload.body.data));
   }
   return "";
 }
@@ -199,4 +191,28 @@ export async function getMessage(accessToken: string, id: string): Promise<Parse
     bodyText: extractPlainText(data.payload).slice(0, 4000),
     internalDate: new Date(Number(data.internalDate ?? Date.now())),
   };
+}
+
+/**
+ * `listRecentMessageIds` returns ids newest-first. Only the oldest
+ * MAX_MESSAGES_PER_RUN of them get fetched (not the full list) — see
+ * lib/mail/poll.ts for why fetching more than what's actually processed
+ * this run caused a real production timeout.
+ */
+export async function fetchGoogleBatch(account: MailAccount): Promise<MailBatchItem[]> {
+  const accessToken = await getValidAccessToken(account);
+  const after = account.lastSyncedAt ?? new Date(Date.now() - 24 * 3600 * 1000);
+  const ids = await listRecentMessageIds(accessToken, after);
+
+  const idsToFetch = ids.slice(-MAX_MESSAGES_PER_RUN).reverse();
+  const messages: ParsedMessage[] = [];
+  for (const id of idsToFetch) {
+    messages.push(await getMessage(accessToken, id));
+  }
+  messages.sort((a, b) => a.internalDate.getTime() - b.internalDate.getTime());
+
+  return messages.map((message) => ({
+    message,
+    checkpoint: { lastSyncedAt: message.internalDate },
+  }));
 }

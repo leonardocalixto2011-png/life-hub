@@ -3,32 +3,13 @@ import type { MailAccount } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { commitDraftsCore } from "@/lib/commit-drafts";
 import { classifyEmail, type ActionableCategory } from "./classify";
-import { getValidAccessToken, getMessage, listRecentMessageIds } from "./google";
+import { fetchGoogleBatch } from "./google";
+import { fetchYahooBatch } from "./yahoo";
 import { isTrusted } from "./trust";
+import { RUN_TIME_BUDGET_MS, type MailBatchItem } from "./types";
 
-const DEFAULT_LOOKBACK_MS = 24 * 3600 * 1000; // first-ever poll of a mailbox
 const MIN_AUTO_FILE_CONFIDENCE = 0.6;
 const MIN_AUTO_FILE_CONFIDENCE_UNTRUSTED_EVENT = 0.85; // "high-confidence, low-stakes" per the prompt
-
-/**
- * Vercel's Hobby-plan function ceiling is 60s (this route's `maxDuration`).
- * Classifying each message is a sequential Claude call plus a Gmail fetch —
- * fine for a handful of messages, but a real backlog (e.g. the very first
- * poll of a busy inbox) can blow past 60s if processed all at once. Cap how
- * many messages one run handles per account; the rest get picked up on the
- * next scheduled run (every 15-30 min via the external scheduler).
- */
-const MAX_MESSAGES_PER_RUN = 8;
-
-/**
- * Belt-and-suspenders against MAX_MESSAGES_PER_RUN alone: Claude call
- * latency varies, and the external scheduler (cron-job.org) enforces its
- * own ~30s request timeout, well under Vercel's 60s ceiling. Stop starting
- * new messages once this budget is spent so the route always returns a
- * clean response instead of risking the scheduler killing the connection
- * mid-batch — remaining messages just pick up on the next scheduled run.
- */
-const RUN_TIME_BUDGET_MS = 20_000;
 
 /**
  * Money categories only auto-file for an already-trusted sender — "anything
@@ -50,81 +31,50 @@ function extractAddress(from: string): string {
   return (match ? match[1] : from).trim().toLowerCase();
 }
 
+/**
+ * Fetches the batch of messages to process this run — provider-specific
+ * (Gmail REST vs Yahoo IMAP), but both return the same provider-neutral
+ * shape so the loop below never needs to know which one it's dealing with.
+ */
+async function fetchBatch(account: MailAccount): Promise<MailBatchItem[]> {
+  if (account.provider === "GOOGLE") return fetchGoogleBatch(account);
+  if (account.provider === "YAHOO") return fetchYahooBatch(account);
+  throw new Error(`Unhandled mail provider: ${account.provider}`);
+}
+
 async function pollMailAccount(account: MailAccount): Promise<void> {
   try {
-    const accessToken = await getValidAccessToken(account);
-    const after = account.lastSyncedAt ?? new Date(Date.now() - DEFAULT_LOOKBACK_MS);
-    const ids = await listRecentMessageIds(accessToken, after);
-
-    // Gmail's messages.list returns ids newest-first. Fetching full content
-    // for all of them (up to 25) before trimming to MAX_MESSAGES_PER_RUN was
-    // itself enough sequential Gmail API calls to blow past the external
-    // scheduler's own (shorter than Vercel's) request timeout on a real
-    // backlog — so take only the oldest slice of ids up front, and fetch
-    // full messages for just those.
-    const idsToFetch = ids.slice(-MAX_MESSAGES_PER_RUN).reverse();
-    const batch = [];
-    for (const id of idsToFetch) {
-      batch.push(await getMessage(accessToken, id));
-    }
-    // Defensive re-sort: Gmail's list order is a documented default, not a
-    // hard guarantee. lastSyncedAt only ever advances to what's actually
-    // been processed (updated after each message below), so if this run
-    // gets cut off partway, nothing already-handled gets reprocessed next
-    // time and nothing in between gets silently skipped — the backlog just
-    // drains a bit at a time across successive runs instead of all at once.
-    batch.sort((a, b) => a.internalDate.getTime() - b.internalDate.getTime());
-
+    const batch = await fetchBatch(account);
     const startedAt = Date.now();
 
-    for (const message of batch) {
+    for (const item of batch) {
       if (Date.now() - startedAt > RUN_TIME_BUDGET_MS) break;
 
+      const { message } = item;
       const fromAddress = extractAddress(message.from);
-      const result = await classifyEmail({
-        subject: message.subject,
-        from: message.from,
-        snippet: message.snippet,
-        body: message.bodyText,
+
+      // Guards against a rare edge case (a Yahoo UIDVALIDITY reset re-walks
+      // its lookback window) reprocessing a message that already landed in
+      // the Review Inbox — see yahoo.ts's checkpoint comment. Doesn't catch
+      // an already-auto-filed duplicate on that same rare path; accepted.
+      const alreadyReviewed = await prisma.reviewItem.findFirst({
+        where: { hubId: account.hubId, sourceRef: message.id },
+        select: { id: true },
       });
 
-      // Assistant unavailable or the call failed — still record a bare review
-      // item so nothing silently vanishes, rather than skip the message.
-      if (!result) {
-        await prisma.reviewItem.create({
-          data: {
-            source: "mail-connector",
-            sourceRef: message.id,
-            sourceSnippet: message.snippet.slice(0, 500),
-            fromAddress,
-            hubId: account.hubId,
-            note: `From ${account.emailAddress} — couldn't classify (assistant unavailable).`,
-            draft: {
-              kind: "task",
-              title: message.subject || "(no subject)",
-              date: null,
-              time: null,
-              amount: null,
-              entryType: "EXPENSE",
-              billingCycle: "MONTHLY",
-              priority: "MED",
-              ventureId: null,
-              note: message.snippet.slice(0, 500),
-              visibility: "SHARED",
-              suggestedReply: null,
-            },
-          },
-        });
-      } else if (result.category === "INFORMATIONAL" || result.category === "PROMOTIONAL" || !result.draft) {
-        // discarded by design — see plan
+      if (alreadyReviewed) {
+        // skip re-processing, but still advance the checkpoint below
       } else {
-        const trusted = await isTrusted(prisma, account.hubId, fromAddress, result.category);
+        const result = await classifyEmail({
+          subject: message.subject,
+          from: message.from,
+          snippet: message.snippet,
+          body: message.bodyText,
+        });
 
-        if (shouldAutoFile(result.category, result.confidence, trusted)) {
-          await prisma.$transaction((tx) =>
-            commitDraftsCore(tx, account.hubId, account.userId, [result.draft!]),
-          );
-        } else {
+        // Assistant unavailable or the call failed — still record a bare
+        // review item so nothing silently vanishes, rather than skip it.
+        if (!result) {
           await prisma.reviewItem.create({
             data: {
               source: "mail-connector",
@@ -132,10 +82,45 @@ async function pollMailAccount(account: MailAccount): Promise<void> {
               sourceSnippet: message.snippet.slice(0, 500),
               fromAddress,
               hubId: account.hubId,
-              category: result.category,
-              draft: result.draft,
+              note: `From ${account.emailAddress} — couldn't classify (assistant unavailable).`,
+              draft: {
+                kind: "task",
+                title: message.subject || "(no subject)",
+                date: null,
+                time: null,
+                amount: null,
+                entryType: "EXPENSE",
+                billingCycle: "MONTHLY",
+                priority: "MED",
+                ventureId: null,
+                note: message.snippet.slice(0, 500),
+                visibility: "SHARED",
+                suggestedReply: null,
+              },
             },
           });
+        } else if (result.category === "INFORMATIONAL" || result.category === "PROMOTIONAL" || !result.draft) {
+          // discarded by design — see plan
+        } else {
+          const trusted = await isTrusted(prisma, account.hubId, fromAddress, result.category);
+
+          if (shouldAutoFile(result.category, result.confidence, trusted)) {
+            await prisma.$transaction((tx) =>
+              commitDraftsCore(tx, account.hubId, account.userId, [result.draft!]),
+            );
+          } else {
+            await prisma.reviewItem.create({
+              data: {
+                source: "mail-connector",
+                sourceRef: message.id,
+                sourceSnippet: message.snippet.slice(0, 500),
+                fromAddress,
+                hubId: account.hubId,
+                category: result.category,
+                draft: result.draft,
+              },
+            });
+          }
         }
       }
 
@@ -144,7 +129,7 @@ async function pollMailAccount(account: MailAccount): Promise<void> {
       // already committed above stays safely non-duplicated next run.
       await prisma.mailAccount.update({
         where: { id: account.id },
-        data: { lastSyncedAt: message.internalDate, status: "ACTIVE", lastError: null },
+        data: { ...item.checkpoint, status: "ACTIVE", lastError: null },
       });
     }
   } catch (err) {
@@ -156,6 +141,11 @@ async function pollMailAccount(account: MailAccount): Promise<void> {
   }
 }
 
+/**
+ * Polls accounts strictly sequentially, not in parallel — Yahoo caps IMAP to
+ * 5 concurrent connections per source IP (see yahoo.ts). Don't parallelize
+ * this loop without accounting for that.
+ */
 export async function pollAllMailAccounts(): Promise<{ accounts: number; errors: number }> {
   const accounts = await prisma.mailAccount.findMany({ where: { status: { not: "REVOKED" } } });
   let errors = 0;

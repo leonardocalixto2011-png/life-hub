@@ -300,22 +300,50 @@ Plan at the time of building:
   $MAIL_POLL_SECRET`) is meant to be hit by an **external** scheduler (e.g.
   cron-job.org) every 15-30 min, not Vercel's own cron — Vercel Hobby only
   runs cron once/day, far short of what continuous mailbox checking needs.
-- ✅ Verified: build/typecheck clean; the accept/auto-file/trust pipeline
-  exercised end-to-end locally with seeded `MailAccount`/`ReviewItem` rows
-  (a real Gmail message requires the OAuth client below, which the assistant
-  can't create).
-- **First mailbox to connect**: `leonardocalixto2011@gmail.com` (confirmed
-  with the user). The user's actual primary address
-  (`leonardocalixto1998@yahoo.com`, this app's `ADMIN_EMAIL`) is **Yahoo
-  Mail**, which has no clean OAuth+REST mail API like Gmail/Graph — it would
-  need OAuth2+IMAP, a different code path entirely. Deferred as its own
-  later add-on; do not assume Yahoo works the same way as Gmail if asked to
-  extend this.
+  Each run processes at most 8 messages per account (`MAX_MESSAGES_PER_RUN`,
+  `src/lib/mail/types.ts`), oldest-first, with a 20s wall-clock budget
+  (`RUN_TIME_BUDGET_MS`) — both exist because a real backlog (the first poll
+  of a busy inbox) caused a production `FUNCTION_INVOCATION_TIMEOUT`/504 once
+  Gmail's OAuth connect actually went live. The per-account `lastSyncedAt`
+  (Gmail) / `imapLastUid` (Yahoo) checkpoint advances **per message**, not
+  once at the end, so a mid-run timeout never causes duplicate or skipped
+  processing — the backlog just drains a bit more each scheduled run.
+- ✅ **Yahoo Mail** (`src/lib/mail/yahoo.ts`) — plain IMAP
+  (`imap.mail.yahoo.com:993`) via `imapflow` + `mailparser` (the one
+  exception to this project's fetch-only style — hand-rolling the IMAP
+  protocol, unlike a REST API, is impractical), authenticated with a
+  **Yahoo app-specific password**, not OAuth: Yahoo has no self-serve
+  OAuth2+IMAP access for third parties, only a formal "Commercial Access
+  Agreement" application process, unsuitable here. The user generates an app
+  password themselves (Yahoo Account Security → External connections →
+  Create app password; requires two-step verification turned on first) and
+  pastes email + password into `/mail`'s "Connect Yahoo Mail" form
+  (`connectYahooAccount`, `src/app/(app)/mail/actions.ts`) — verified via a
+  real IMAP login attempt before saving, encrypted at rest with the same
+  `crypto.ts` helper as Gmail's OAuth tokens. Incremental sync uses IMAP's
+  `UIDVALIDITY`+`UID` (the correct, exact analogue to Gmail's
+  `lastSyncedAt`) rather than a date-based `SINCE` search (which only has
+  day granularity) — see `MailAccount.imapUidValidity`/`imapLastUid`.
+  `google.ts`/`yahoo.ts` each export a `fetch*Batch(account)` returning the
+  same provider-neutral `MailBatchItem[]` shape (`src/lib/mail/types.ts`),
+  so `poll.ts`'s classify/trust/auto-file/`ReviewItem` loop never needs to
+  know which provider it's dealing with. Plan at
+  `C:\Users\leona\.claude\plans\shiny-dazzling-charm.md`.
+  - Yahoo caps IMAP to 5 concurrent connections per source IP — a non-issue
+    since `pollAllMailAccounts` polls accounts strictly sequentially; don't
+    parallelize that loop without accounting for this.
+  - Every fetch uses IMAP peek semantics (`source: true`, read-only mailbox
+    lock) so messages are never marked `\Seen` — this was smoke-tested by
+    connecting and confirming Yahoo webmail still showed the message
+    unread.
+- **First mailboxes connected**: `leonardocalixto2011@gmail.com` (Gmail) and
+  `leonardocalixto1998@yahoo.com` (Yahoo, this app's `ADMIN_EMAIL` — the
+  user's actual primary address).
 - **Deferred, not built this phase**: Outlook/Microsoft 365 connector (same
-  architecture, add once Gmail proves out — `MailProvider` enum already has
-  room), Yahoo/IMAP connector (above), Gmail push/Pub/Sub real-time upgrade
-  (external-scheduler polling was chosen instead), auto-sending replies
-  (deliberately never built — a human always sends).
+  architecture as Gmail, add once proven — `MailProvider` enum already has
+  room), Gmail push/Pub/Sub real-time upgrade (external-scheduler polling
+  was chosen instead), auto-sending replies (deliberately never built — a
+  human always sends).
 - **Setup still pending** (external accounts, guide the user through these,
   don't do it yourself):
   1. Google Cloud Console — new project, OAuth consent screen (External,
@@ -333,6 +361,13 @@ Plan at the time of building:
      `Authorization: Bearer <MAIL_POLL_SECRET>`.
   4. Connect the mailbox from `/mail` once 1-2 are done; confirm a
      `MailAccount` row appears with `status: ACTIVE`.
+  5. **Yahoo needs no developer/OAuth setup at all** — just the app password
+     the user generates in their own Yahoo account (Account Security →
+     External connections → Create app password, name it "Life Hub"; Yahoo
+     shows the generated password once — copy it immediately, it's not
+     recoverable after, only regeneratable), pasted into `/mail`'s Yahoo
+     form. No env vars, no client id/secret — reuses
+     `MAIL_TOKEN_ENCRYPTION_KEY`.
 
 ## Local dev
 
