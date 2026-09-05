@@ -67,7 +67,7 @@ function Fields({
           />
         </label>
         <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Ends
+          Ends (same day)
           <input
             type="datetime-local"
             name="endAt"
@@ -76,6 +76,30 @@ function Fields({
           />
         </label>
       </div>
+      {!existing && (
+        <p className="-mt-2 text-[0.65rem] text-[var(--color-text-dim)]">
+          For a schedule that repeats on multiple days, leave "Ends" as the
+          same day's end time and use Repeat below instead.
+        </p>
+      )}
+
+      {!existing && (
+        <fieldset className="rounded-lg border border-[var(--color-border)] p-2.5 text-xs font-semibold text-[var(--color-text-dim)]">
+          Repeat (optional)
+          <div className="mt-1 flex flex-wrap gap-2">
+            {WEEKDAYS.map((w) => (
+              <label key={w.value} className="flex items-center gap-1 font-normal">
+                <input type="checkbox" name="repeatDays" value={w.value} />
+                {w.label}
+              </label>
+            ))}
+          </div>
+          <label className="mt-2 block font-normal">
+            Repeat until
+            <input type="date" name="repeatUntil" className="field mt-1" />
+          </label>
+        </fieldset>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
@@ -116,24 +140,6 @@ function Fields({
         Notes
         <textarea name="notes" defaultValue={existing?.notes ?? ""} rows={2} className="field mt-1" />
       </label>
-
-      {!existing && (
-        <fieldset className="text-xs font-semibold text-[var(--color-text-dim)]">
-          Repeat (optional)
-          <div className="mt-1 flex flex-wrap gap-2">
-            {WEEKDAYS.map((w) => (
-              <label key={w.value} className="flex items-center gap-1 font-normal">
-                <input type="checkbox" name="repeatDays" value={w.value} />
-                {w.label}
-              </label>
-            ))}
-          </div>
-          <label className="mt-2 block font-normal">
-            Repeat until
-            <input type="date" name="repeatUntil" className="field mt-1" />
-          </label>
-        </fieldset>
-      )}
 
       <PrivacyToggle defaultValue={existing?.visibility} />
     </>
