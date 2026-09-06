@@ -904,13 +904,36 @@ parsing (60/hr per user), inbound (120/hr). Swept by the daily cron.
 now read from `SEED_MEMBERS`. **The git history still contains them** —
 removing that needs a history rewrite.
 
-**Still open before any public launch**: legal (privacy policy, ToS,
-GDPR/consent, data export + deletion — none exist); recipient-address → hub
-routing for inbound; self-serve signup **deliberately not built**, since
-invite-only is currently load-bearing as a security and cost control;
-error tracking and uptime monitoring; i18n (`"CAD"` hardcoded at ~10 render
-sites, `en-CA` in `money()`, `America/Toronto` default timezone, all UI
-strings inline English).
+### Ordered queue (as of 2026-09-06)
+
+Done since the Phase 11 report: **data export + account deletion** (Art. 15/20/17,
+`src/lib/account.ts`, `/account`) and **error reporting + structured logging**
+(`src/lib/observability.ts`). `DATA-INVENTORY.md` records what is processed and
+eight named gaps.
+
+Remaining, in order:
+
+1. **Legal — the writing.** Privacy policy, terms, cookie/consent, retention
+   schedule, DPAs with the six sub-processors listed in `DATA-INVENTORY.md`.
+   Not code and not something to draft in-repo; hand the inventory to a
+   lawyer. Blocks public launch *and* billing.
+2. **Inbound routing.** `INBOUND_HUB_ID` is a stopgap; real recipient-address
+   → hub mapping is the fix.
+3. **Self-serve signup.** Still deliberately not built — invite-only is
+   load-bearing as both a security and a cost control. When built, ship it
+   behind a flag defaulting to **off**, so it can't open before (1) lands.
+4. **Monitoring wiring.** Code exists; still needs `ALERT_WEBHOOK_URL` set and
+   an uptime monitor on `/api/health` alerting if `rls` stops reading
+   `"enforced"`.
+5. **i18n.** `"CAD"` hardcoded at ~10 render sites, `en-CA` in `money()`,
+   `America/Toronto` default timezone, all UI strings inline English.
+6. **Monetization.** Analysis in `MONETIZATION.md` — recommended $4.99/mo or
+   $39/yr **per hub**, gating the AI features and mailbox connectors (the
+   things with a real marginal cost) rather than removing ads. **The brief's
+   ad-supported free tier is argued against there**: this app records debt
+   default status, personal-finance ad inventory is dominated by lending and
+   credit repair, and the revenue likely doesn't cover the Anthropic cost per
+   user. Depends on (1) — taking money makes ToS non-optional.
 
 ## Commands
 
