@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { parseText, type Draft } from "@/lib/parse";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -93,7 +94,14 @@ async function extract(req: Request, raw: string): Promise<Extracted | NextRespo
   }
 
   const resendSecret = process.env.RESEND_WEBHOOK_SECRET;
-  if (resendSecret && !verifySvix(resendSecret, req.headers, raw)) {
+  // Fail CLOSED. This used to be `if (resendSecret && !verifySvix(...))`, so an
+  // unset secret skipped verification altogether and the endpoint accepted any
+  // anonymous POST on the internet — which both injects rows into the review
+  // inbox and spends a paid Anthropic call per request. No secret, no inbound.
+  if (!resendSecret) {
+    return NextResponse.json({ error: "inbound not configured" }, { status: 503 });
+  }
+  if (!verifySvix(resendSecret, req.headers, raw)) {
     return NextResponse.json({ error: "bad signature" }, { status: 401 });
   }
   let payload: ResendPayload;
@@ -116,8 +124,26 @@ export async function POST(req: Request) {
   const extracted = await extract(req, raw);
   if (extracted instanceof NextResponse) return extracted;
 
+  // A ReviewItem with a null hubId is visible to EVERY user (see
+  // review_item_hub_isolation and reviewVisibility in lib/data.ts). That was
+  // survivable when the whole userbase was three people who trusted each
+  // other; it is a cross-tenant leak otherwise. Inbound mail therefore has to
+  // land in a specific hub, and until there's a real recipient-address → hub
+  // routing design, that hub is named explicitly in config.
+  const hubId = process.env.INBOUND_HUB_ID;
+  if (!hubId) {
+    return NextResponse.json({ error: "INBOUND_HUB_ID is not set" }, { status: 503 });
+  }
+
   const { from, subject, body, sourceRef } = extracted;
   if (!body && !subject) return NextResponse.json({ ok: true, skipped: "empty" });
+
+  // Each accepted message costs a paid AI parse. The signature check already
+  // stops anonymous callers; this bounds the damage if a webhook secret ever
+  // leaks, or a misconfigured sender starts looping.
+  if (!(await rateLimit("inbound", 120, 3600)).ok) {
+    return NextResponse.json({ error: "rate limited" }, { status: 429 });
+  }
 
   const text = `${subject}\n\n${body}`.slice(0, 6000);
   const result = await parseText(text);
@@ -127,6 +153,7 @@ export async function POST(req: Request) {
     await prisma.reviewItem.create({
       data: {
         source: "email",
+        hubId,
         sourceRef,
         fromAddress: from,
         sourceSnippet: text.slice(0, 500),
@@ -153,8 +180,11 @@ export async function POST(req: Request) {
   let created = 0;
   for (const draft of result.drafts) {
     // De-dupe: skip an identical pending item from the last 3 days.
+    // Scoped to this hub: unscoped, one tenant's "Hydro bill" would suppress
+    // another tenant's, silently dropping a legitimate item.
     const dup = await prisma.reviewItem.findFirst({
       where: {
+        hubId,
         status: "PENDING",
         createdAt: { gte: new Date(Date.now() - 3 * 864e5) },
         draft: { path: ["title"], equals: draft.title },
@@ -164,8 +194,10 @@ export async function POST(req: Request) {
 
     let note: string | null = null;
     if (draft.kind === "subscription") {
+      // Also hub-scoped — this runs on the owner client, so without hubId it
+      // reads across every tenant to decide the note.
       const existing = await prisma.subscription.findFirst({
-        where: { status: "ACTIVE", name: { equals: draft.title, mode: "insensitive" } },
+        where: { hubId, status: "ACTIVE", name: { equals: draft.title, mode: "insensitive" } },
         select: { id: true },
       });
       if (existing) note = "Updates an existing subscription";
@@ -174,6 +206,7 @@ export async function POST(req: Request) {
     await prisma.reviewItem.create({
       data: {
         source: "email",
+        hubId,
         sourceRef,
         fromAddress: from,
         sourceSnippet: text.slice(0, 500),
