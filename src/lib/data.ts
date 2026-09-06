@@ -9,7 +9,10 @@ import {
 } from "date-fns";
 import type { BillingCycle, Prisma } from "@prisma/client";
 
+import { cache } from "react";
+
 import type { HubTx } from "@/lib/hub-context";
+import { withHub } from "@/lib/hub-context";
 import { monthlyCents } from "@/lib/money";
 
 /**
@@ -68,6 +71,28 @@ export function listMembers(tx: HubTx, hubId: string) {
       rows.map((m) => ({ ...m.user, hubRole: m.role, joinedAt: m.joinedAt })),
     );
 }
+
+/**
+ * Ventures + members + the review-inbox badge — the three things the app
+ * shell needs and that almost every page also needs for its own venture and
+ * assignee pickers.
+ *
+ * `cache`d on (userId, hubId) rather than taking a `tx`, because the layout
+ * and its page render concurrently in separate transactions: keyed on a `tx`
+ * object nothing would ever dedupe, and every route was paying for the same
+ * two queries twice per navigation. Primitive keys make the layout's call and
+ * the page's call the same call.
+ */
+export const hubChrome = cache(async (userId: string, hubId: string) => {
+  return withHub(userId, async (tx) => {
+    const [ventures, members, reviewCount] = await Promise.all([
+      listVentures(tx, hubId),
+      listMembers(tx, hubId),
+      pendingReviewCount(tx),
+    ]);
+    return { ventures, members, reviewCount };
+  });
+});
 
 /**
  * App-level mirror of the RLS privacy clause (`visibility = 'SHARED' OR

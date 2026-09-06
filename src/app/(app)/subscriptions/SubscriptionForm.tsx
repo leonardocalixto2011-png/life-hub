@@ -15,7 +15,6 @@ type Existing = {
   id: string;
   name: string;
   cost: string; // "12.50"
-  currency: string;
   billingCycle: "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY" | "CUSTOM";
   renewalDate: string;
   cancelByDate: string;
@@ -46,8 +45,10 @@ function Fields({
         />
       </label>
 
-      <div className="grid grid-cols-3 gap-2">
-        <label className="col-span-1 block text-xs font-semibold text-[var(--color-text-dim)]">
+      {/* Name + cost + cycle + renewal are all it takes to add a sub. The other
+          five fields are rarely set on the first pass, so they start folded. */}
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
           Cost
           <input
             name="cost"
@@ -60,16 +61,7 @@ function Fields({
             className="field mt-1"
           />
         </label>
-        <label className="col-span-1 block text-xs font-semibold text-[var(--color-text-dim)]">
-          Currency
-          <input
-            name="currency"
-            defaultValue={existing?.currency ?? "CAD"}
-            maxLength={3}
-            className="field mt-1 uppercase"
-          />
-        </label>
-        <label className="col-span-1 block text-xs font-semibold text-[var(--color-text-dim)]">
+        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
           Cycle
           <select
             name="billingCycle"
@@ -85,57 +77,65 @@ function Fields({
         </label>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Next renewal
-          <input
-            type="date"
-            name="renewalDate"
-            defaultValue={existing?.renewalDate}
-            required
-            className="field mt-1"
-          />
-        </label>
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Cancel by (optional)
-          <input
-            type="date"
-            name="cancelByDate"
-            defaultValue={existing?.cancelByDate}
-            className="field mt-1"
-          />
-        </label>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Venture
-          <select name="ventureId" defaultValue={existing?.ventureId ?? ""} className="field mt-1">
-            <option value="">—</option>
-            {ventures.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Owner
-          <select name="ownerId" defaultValue={existing?.ownerId ?? ""} className="field mt-1">
-            <option value="">— (no owner)</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name ?? m.email}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
       <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-        Notes
-        <textarea name="notes" defaultValue={existing?.notes ?? ""} rows={2} className="field mt-1" />
+        Next renewal
+        <input
+          type="date"
+          name="renewalDate"
+          defaultValue={existing?.renewalDate}
+          required
+          className="field mt-1"
+        />
       </label>
+
+      <details open={Boolean(existing)} className="group">
+        <summary className="cursor-pointer list-none text-xs font-semibold text-[var(--color-primary)]">
+          <span className="group-open:hidden">More options</span>
+          <span className="hidden group-open:inline">Fewer options</span>
+        </summary>
+
+        <div className="mt-3 space-y-3">
+          <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+            Cancel by
+            <input
+              type="date"
+              name="cancelByDate"
+              defaultValue={existing?.cancelByDate}
+              className="field mt-1"
+            />
+          </label>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+              Venture
+              <select name="ventureId" defaultValue={existing?.ventureId ?? ""} className="field mt-1">
+                <option value="">—</option>
+                {ventures.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+              Owner
+              <select name="ownerId" defaultValue={existing?.ownerId ?? ""} className="field mt-1">
+                <option value="">— (no owner)</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name ?? m.email}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+            Notes
+            <textarea name="notes" defaultValue={existing?.notes ?? ""} rows={2} className="field mt-1" />
+          </label>
+        </div>
+      </details>
     </>
   );
 }

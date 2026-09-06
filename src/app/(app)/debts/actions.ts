@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { addMonths } from "date-fns";
 import { z } from "zod";
@@ -9,6 +8,7 @@ import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents, percentToBasisPoints } from "@/lib/money";
+import { revalidateContent } from "@/lib/revalidate";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -55,15 +55,14 @@ export async function createDebt(fd: FormData) {
   const { user, hub } = await requireHub();
   const d = data(parse(createSchema, fd));
   await withHub(user.id, (tx) => tx.debt.create({ data: { ...d, hubId: hub.id } }));
-  revalidatePath("/debts");
+  revalidateContent();
 }
 
 export async function updateDebt(fd: FormData) {
   const { user } = await requireHub();
   const d = parse(updateSchema, fd);
   await withHub(user.id, (tx) => tx.debt.update({ where: { id: d.id }, data: data(d) }));
-  revalidatePath("/debts");
-  revalidatePath(`/debts/${d.id}`);
+  revalidateContent(`/debts/${d.id}`);
   redirect("/debts");
 }
 
@@ -75,19 +74,14 @@ export async function setDebtStatus(fd: FormData) {
   });
   const { id, status } = schema.parse({ id: fd.get("id"), status: fd.get("status") });
   await withHub(user.id, (tx) => tx.debt.update({ where: { id }, data: { status } }));
-  revalidatePath("/debts");
-  revalidatePath(`/debts/${id}`);
-  // Only CURRENT debts count toward the Budget forecast and the /today
-  // "Payments due" list, so a status change has to invalidate both.
-  revalidatePath("/money");
-  revalidatePath("/today");
+  revalidateContent(`/debts/${id}`);
 }
 
 export async function deleteDebt(fd: FormData) {
   const { user } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
   await withHub(user.id, (tx) => tx.debt.delete({ where: { id } }));
-  revalidatePath("/debts");
+  revalidateContent();
   redirect("/debts");
 }
 
@@ -142,8 +136,5 @@ export async function logDebtPayment(fd: FormData) {
     });
   });
 
-  revalidatePath("/debts");
-  revalidatePath(`/debts/${id}`);
-  revalidatePath("/money");
-  revalidatePath("/");
+  revalidateContent(`/debts/${id}`);
 }

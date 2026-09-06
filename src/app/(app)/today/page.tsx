@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { format } from "date-fns";
 
-import { dashboard, listMembers, listVentures } from "@/lib/data";
+import { dashboard, hubChrome } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { countdownLabel, eventTimeRange, money } from "@/lib/format";
@@ -26,9 +26,10 @@ function SectionHead({ title, href, cta }: { title: string; href: string; cta: s
 
 export default async function DashboardPage() {
   const { user, hub } = await requireHub();
-  const [d, ventures, membersRaw] = await withHub(user.id, (tx) =>
-    Promise.all([dashboard(tx, hub.id, user.id), listVentures(tx, hub.id), listMembers(tx, hub.id)]),
-  );
+  const [d, { ventures, members: membersRaw }] = await Promise.all([
+    withHub(user.id, (tx) => dashboard(tx, hub.id, user.id)),
+    hubChrome(user.id, hub.id),
+  ]);
   const first = user.name?.split(" ")[0];
   const vOpts = ventures.map((v) => ({ id: v.id, name: v.name }));
 

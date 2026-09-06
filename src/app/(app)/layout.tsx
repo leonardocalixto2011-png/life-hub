@@ -1,8 +1,7 @@
 import Link from "next/link";
 
 import { requireHub, listMyHubs } from "@/lib/session";
-import { withHub } from "@/lib/hub-context";
-import { listMembers, listVentures, pendingReviewCount } from "@/lib/data";
+import { hubChrome } from "@/lib/data";
 import { QuickAdd } from "@/components/QuickAdd";
 import { BottomNav } from "@/components/BottomNav";
 import { AccountMenu } from "@/components/AccountMenu";
@@ -16,10 +15,8 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const { user, hub } = await requireHub();
-  const [[ventures, members, reviewCount], hubs] = await Promise.all([
-    withHub(user.id, (tx) =>
-      Promise.all([listVentures(tx, hub.id), listMembers(tx, hub.id), pendingReviewCount(tx)]),
-    ),
+  const [{ ventures, members, reviewCount }, hubs] = await Promise.all([
+    hubChrome(user.id, hub.id),
     listMyHubs(user.id),
   ]);
 

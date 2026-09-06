@@ -1,11 +1,6 @@
 import Link from "next/link";
 
-import {
-  listMembers,
-  listTasks,
-  listVentures,
-  recurringSuggestions,
-} from "@/lib/data";
+import { hubChrome, listTasks, recurringSuggestions } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { TaskListCard } from "@/components/TaskListCard";
@@ -62,18 +57,19 @@ export default async function TasksPage({
   const includeDone = sp.show === "all";
   const mine = sp.mine === "1";
 
-  const [ventures, members, suggestions, tasks] = await withHub(user.id, (tx) =>
-    Promise.all([
-      listVentures(tx, hub.id),
-      listMembers(tx, hub.id),
-      recurringSuggestions(tx, hub.id, user.id),
-      listTasks(tx, hub.id, user.id, {
-        ventureSlug: sp.venture,
-        mineUserId: mine ? user.id : undefined,
-        includeDone,
-      }),
-    ]),
-  );
+  const [{ ventures, members }, [suggestions, tasks]] = await Promise.all([
+    hubChrome(user.id, hub.id),
+    withHub(user.id, (tx) =>
+      Promise.all([
+        recurringSuggestions(tx, hub.id, user.id),
+        listTasks(tx, hub.id, user.id, {
+          ventureSlug: sp.venture,
+          mineUserId: mine ? user.id : undefined,
+          includeDone,
+        }),
+      ]),
+    ),
+  ]);
 
   return (
     <div className="space-y-3 p-3">

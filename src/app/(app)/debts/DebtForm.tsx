@@ -74,7 +74,7 @@ function Fields({
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Minimum payment
+          Monthly payment
           <input
             name="minimumPayment"
             type="number"
@@ -86,22 +86,6 @@ function Fields({
           />
         </label>
         <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Actual payment (if different)
-          <input
-            name="actualPayment"
-            type="number"
-            step="0.01"
-            min="0"
-            inputMode="decimal"
-            defaultValue={existing?.actualPayment}
-            className="field mt-1"
-            placeholder="leave blank if same"
-          />
-        </label>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
           Next due date
           <input
             type="date"
@@ -110,51 +94,78 @@ function Fields({
             className="field mt-1"
           />
         </label>
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Status
-          <select name="status" defaultValue={existing?.status ?? "CURRENT"} className="field mt-1">
-            <option value="CURRENT">Current</option>
-            <option value="DEFAULT">In default</option>
-            <option value="PAID_OFF">Paid off</option>
-          </select>
-        </label>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Venture
-          <select name="ventureId" defaultValue={existing?.ventureId ?? ""} className="field mt-1">
-            <option value="">—</option>
-            {ventures.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Owner
-          <select name="ownerId" defaultValue={existing?.ownerId ?? ""} className="field mt-1">
-            <option value="">— (no owner)</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name ?? m.email}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      {/* Name + balance + APR + payment + due date covers a normal card or loan.
+          The rest is for the negotiated / hardship cases. */}
+      <details open={Boolean(existing)} className="group">
+        <summary className="cursor-pointer list-none text-xs font-semibold text-[var(--color-primary)]">
+          <span className="group-open:hidden">More options</span>
+          <span className="hidden group-open:inline">Fewer options</span>
+        </summary>
 
-      <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-        Notes
-        <textarea
-          name="notes"
-          defaultValue={existing?.notes ?? ""}
-          rows={2}
-          className="field mt-1"
-          placeholder="in default, $998.79 past due; reverts to $1,235.79/mo Dec 2026…"
-        />
-      </label>
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+              Actual payment
+              <input
+                name="actualPayment"
+                type="number"
+                step="0.01"
+                min="0"
+                inputMode="decimal"
+                defaultValue={existing?.actualPayment}
+                className="field mt-1"
+                placeholder="if negotiated"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+              Status
+              <select name="status" defaultValue={existing?.status ?? "CURRENT"} className="field mt-1">
+                <option value="CURRENT">Current</option>
+                <option value="DEFAULT">In default</option>
+                <option value="PAID_OFF">Paid off</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+              Venture
+              <select name="ventureId" defaultValue={existing?.ventureId ?? ""} className="field mt-1">
+                <option value="">—</option>
+                {ventures.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+              Owner
+              <select name="ownerId" defaultValue={existing?.ownerId ?? ""} className="field mt-1">
+                <option value="">— (no owner)</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name ?? m.email}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+            Notes
+            <textarea
+              name="notes"
+              defaultValue={existing?.notes ?? ""}
+              rows={2}
+              className="field mt-1"
+              placeholder="$998.79 past due; reverts to $1,235.79/mo Dec 2026…"
+            />
+          </label>
+        </div>
+      </details>
     </>
   );
 }

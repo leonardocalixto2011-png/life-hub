@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { addMonths, endOfMonth, format, isValid, parse as parseDate, startOfMonth, subMonths } from "date-fns";
 
-import { budgetMonth, listVentures, upcomingSummary } from "@/lib/data";
+import { budgetMonth, hubChrome, upcomingSummary } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { money } from "@/lib/format";
@@ -35,13 +35,15 @@ export default async function MoneyPage({
   const month = monthFromParam(sp.m);
   const isUpcomingMonth = endOfMonth(month) >= startOfMonth(new Date());
   const { user, hub } = await requireHub();
-  const [ventures, data, upcoming] = await withHub(user.id, (tx) =>
-    Promise.all([
-      listVentures(tx, hub.id),
-      budgetMonth(tx, hub.id, month, sp.venture),
-      isUpcomingMonth ? upcomingSummary(tx, hub.id, user.id) : null,
-    ]),
-  );
+  const [{ ventures }, [data, upcoming]] = await Promise.all([
+    hubChrome(user.id, hub.id),
+    withHub(user.id, (tx) =>
+      Promise.all([
+        budgetMonth(tx, hub.id, month, sp.venture),
+        isUpcomingMonth ? upcomingSummary(tx, hub.id, user.id) : null,
+      ]),
+    ),
+  ]);
   const currency = data.entries[0]?.currency ?? "CAD";
   const maxCat = data.categories[0]?.cents ?? 1;
   const upcomingTotal = upcoming

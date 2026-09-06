@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { listDebts, listMembers, listVentures, type DebtWithRefs } from "@/lib/data";
+import { hubChrome, listDebts, type DebtWithRefs } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { countdownLabel, money } from "@/lib/format";
@@ -57,13 +57,10 @@ function Row({ d }: { d: DebtWithRefs }) {
 
 export default async function DebtsPage() {
   const { user, hub } = await requireHub();
-  const [debts, ventures, members] = await withHub(user.id, (tx) =>
-    Promise.all([
-      listDebts(tx, hub.id, { includeOther: true }),
-      listVentures(tx, hub.id),
-      listMembers(tx, hub.id),
-    ]),
-  );
+  const [debts, { ventures, members }] = await Promise.all([
+    withHub(user.id, (tx) => listDebts(tx, hub.id, { includeOther: true })),
+    hubChrome(user.id, hub.id),
+  ]);
 
   const current = debts.filter((d) => d.status !== "PAID_OFF");
   const paidOff = debts.filter((d) => d.status === "PAID_OFF");

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getTask, listMembers, listVentures } from "@/lib/data";
+import { getTask, hubChrome } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { toDateInput } from "@/lib/format";
@@ -17,9 +17,10 @@ export default async function TaskDetailPage({
 }) {
   const { user, hub } = await requireHub();
   const { id } = await params;
-  const [task, ventures, members] = await withHub(user.id, (tx) =>
-    Promise.all([getTask(tx, hub.id, user.id, id), listVentures(tx, hub.id), listMembers(tx, hub.id)]),
-  );
+  const [task, { ventures, members }] = await Promise.all([
+    withHub(user.id, (tx) => getTask(tx, hub.id, user.id, id)),
+    hubChrome(user.id, hub.id),
+  ]);
 
   if (!task) notFound();
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getDeadline, listVentures } from "@/lib/data";
+import { getDeadline, hubChrome } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { toDateInput } from "@/lib/format";
@@ -16,9 +16,10 @@ export default async function DeadlineDetailPage({
 }) {
   const { user, hub } = await requireHub();
   const { id } = await params;
-  const [deadline, ventures] = await withHub(user.id, (tx) =>
-    Promise.all([getDeadline(tx, hub.id, user.id, id), listVentures(tx, hub.id)]),
-  );
+  const [deadline, { ventures }] = await Promise.all([
+    withHub(user.id, (tx) => getDeadline(tx, hub.id, user.id, id)),
+    hubChrome(user.id, hub.id),
+  ]);
   if (!deadline) notFound();
 
   return (

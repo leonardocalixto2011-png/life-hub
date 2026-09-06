@@ -1,12 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
+import { revalidateContent } from "@/lib/revalidate";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -54,8 +54,7 @@ export async function createDeadline(fd: FormData) {
       },
     }),
   );
-  revalidatePath("/deadlines");
-  revalidatePath("/today");
+  revalidateContent();
 }
 
 export async function updateDeadline(fd: FormData) {
@@ -74,8 +73,7 @@ export async function updateDeadline(fd: FormData) {
       },
     }),
   );
-  revalidatePath("/deadlines");
-  revalidatePath(`/deadlines/${d.id}`);
+  revalidateContent(`/deadlines/${d.id}`);
   redirect("/deadlines");
 }
 
@@ -89,14 +87,13 @@ export async function toggleDeadlineDone(fd: FormData) {
   await withHub(user.id, (tx) =>
     tx.deadline.update({ where: { id }, data: { doneAt: done ? new Date() : null } }),
   );
-  revalidatePath("/deadlines");
-  revalidatePath("/today");
+  revalidateContent();
 }
 
 export async function deleteDeadline(fd: FormData) {
   const { user } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
   await withHub(user.id, (tx) => tx.deadline.delete({ where: { id } }));
-  revalidatePath("/deadlines");
+  revalidateContent();
   redirect("/deadlines");
 }

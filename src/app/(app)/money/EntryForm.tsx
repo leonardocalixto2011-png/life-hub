@@ -62,7 +62,9 @@ export function EntryForm({
   return (
     <form ref={formRef} onSubmit={onSubmit} className="card space-y-3 p-4">
       {entry && <input type="hidden" name="id" value={entry.id} />}
-      <div className="grid grid-cols-3 gap-2">
+      {/* No currency field: the schema defaults it to CAD and nothing in the
+          app renders a second currency. */}
+      <div className="grid grid-cols-2 gap-2">
         <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
           Type
           <select name="type" defaultValue={entry?.type ?? "EXPENSE"} className="field mt-1">
@@ -79,17 +81,9 @@ export function EntryForm({
             min="0"
             inputMode="decimal"
             required
+            autoFocus={!entry}
             defaultValue={centsToInput(entry?.amountCents)}
             className="field mt-1"
-          />
-        </label>
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Currency
-          <input
-            name="currency"
-            defaultValue={entry?.currency ?? "CAD"}
-            maxLength={3}
-            className="field mt-1 uppercase"
           />
         </label>
       </div>

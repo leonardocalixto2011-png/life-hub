@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getEvent, listMembers, listVentures } from "@/lib/data";
+import { getEvent, hubChrome } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { toDateTimeInput } from "@/lib/format";
@@ -16,9 +16,10 @@ export default async function EventDetailPage({
 }) {
   const { user, hub } = await requireHub();
   const { id } = await params;
-  const [event, ventures, members] = await withHub(user.id, (tx) =>
-    Promise.all([getEvent(tx, hub.id, user.id, id), listVentures(tx, hub.id), listMembers(tx, hub.id)]),
-  );
+  const [event, { ventures, members }] = await Promise.all([
+    withHub(user.id, (tx) => getEvent(tx, hub.id, user.id, id)),
+    hubChrome(user.id, hub.id),
+  ]);
   if (!event) notFound();
 
   return (

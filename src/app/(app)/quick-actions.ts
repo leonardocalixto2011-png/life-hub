@@ -1,12 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { parseText, type Draft, type DraftKind, type ParseOutcome } from "@/lib/parse";
 import { commitDraftsCore } from "@/lib/commit-drafts";
+import { revalidateContent } from "@/lib/revalidate";
 
 export type { Draft, DraftKind };
 export type ParseResult = ParseOutcome;
@@ -47,14 +47,7 @@ export async function commitDrafts(
 
   if (!result.ok) return result;
 
-  revalidatePath("/today");
-  revalidatePath("/tasks");
-  revalidatePath("/agenda");
-  revalidatePath("/deadlines");
-  revalidatePath("/subscriptions");
-  revalidatePath("/money");
-  revalidatePath("/calendar");
-  revalidatePath("/inbox");
+  revalidateContent();
 
   return result;
 }

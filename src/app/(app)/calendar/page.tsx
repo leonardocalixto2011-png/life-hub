@@ -1,6 +1,6 @@
 import { endOfDay, startOfDay, isSameDay } from "date-fns";
 
-import { listEvents, listMembers, listVentures, type EventWithRefs } from "@/lib/data";
+import { hubChrome, listEvents, type EventWithRefs } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { EventForm } from "./EventForm";
@@ -14,13 +14,10 @@ export default async function CalendarPage() {
   const to = endOfDay(new Date(now.getTime() + 44 * 864e5)); // ~6 weeks out
 
   const { user, hub } = await requireHub();
-  const [events, ventures, members] = await withHub(user.id, (tx) =>
-    Promise.all([
-      listEvents(tx, hub.id, user.id, { from, to }),
-      listVentures(tx, hub.id),
-      listMembers(tx, hub.id),
-    ]),
-  );
+  const [events, { ventures, members }] = await Promise.all([
+    withHub(user.id, (tx) => listEvents(tx, hub.id, user.id, { from, to })),
+    hubChrome(user.id, hub.id),
+  ]);
 
   // group by calendar day
   const days: { date: Date; items: EventWithRefs[] }[] = [];

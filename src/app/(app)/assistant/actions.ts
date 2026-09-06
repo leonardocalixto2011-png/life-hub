@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { format } from "date-fns";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
@@ -11,6 +10,7 @@ import { requireHub } from "@/lib/session";
 import { dashboard, listMembers, listVentures } from "@/lib/data";
 import { notifyAssignment } from "@/lib/notify";
 import { dueLabel, fromDateInput, fromDateTimeInput, money } from "@/lib/format";
+import { revalidateContent } from "@/lib/revalidate";
 
 const MAX_ITEMS = 20;
 
@@ -138,9 +138,7 @@ export async function parseAndAdd(
     await notifyAssignment(a.taskId, a.title, a.assigneeId, user.name ?? user.email);
   }
 
-  revalidatePath("/today");
-  revalidatePath("/tasks");
-  revalidatePath("/calendar");
+  revalidateContent();
 
   const total = tasks.length + events.length;
   if (total === 0) return { ok: true, message: "Nothing actionable in that." };

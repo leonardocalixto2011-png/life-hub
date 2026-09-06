@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
@@ -11,6 +10,7 @@ import { commitDraftsCore } from "@/lib/commit-drafts";
 import { shouldOfferTrust, trustSender } from "@/lib/mail/trust";
 import type { ActionableCategory } from "@/lib/mail/classify";
 import type { Draft } from "@/lib/parse";
+import { revalidateContent } from "@/lib/revalidate";
 
 export type AcceptResult = {
   ok: boolean;
@@ -48,8 +48,7 @@ export async function acceptReview(id: string, draft: Draft): Promise<AcceptResu
     data: { status: "ACCEPTED", reviewedAt: new Date() },
   });
 
-  revalidatePath("/inbox");
-  revalidatePath("/today");
+  revalidateContent();
 
   let offerTrust: AcceptResult["offerTrust"];
   if (item.hubId && item.fromAddress && item.category) {
@@ -73,13 +72,12 @@ export async function discardReview(id: string): Promise<{ ok: boolean }> {
     where: { id, status: "PENDING" },
     data: { status: "DISCARDED", reviewedAt: new Date() },
   });
-  revalidatePath("/inbox");
-  revalidatePath("/today");
+  revalidateContent();
   return { ok: true };
 }
 
 export async function trustThisSender(hubId: string, fromAddress: string, category: ActionableCategory) {
   const { user } = await requireHub();
   await withHub(user.id, (tx) => trustSender(tx, hubId, fromAddress, category));
-  revalidatePath("/mail");
+  revalidateContent("/mail");
 }

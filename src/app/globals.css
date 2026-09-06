@@ -211,6 +211,15 @@ button {
   color: inherit;
 }
 
+/* Only `.field` had a focus style, so keyboard and switch users got no visible
+   focus on any button, link, chip or nav item. `:focus-visible` keeps it off
+   mouse clicks. */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 /* Keep iOS from zooming the viewport on input focus */
 @supports (-webkit-touch-callout: none) {
   input,

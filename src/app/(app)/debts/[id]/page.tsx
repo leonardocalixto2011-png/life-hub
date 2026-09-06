@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getDebt, listMembers, listVentures } from "@/lib/data";
+import { getDebt, hubChrome } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { toDateInput } from "@/lib/format";
@@ -18,9 +18,10 @@ export default async function DebtDetailPage({
 }) {
   const { user, hub } = await requireHub();
   const { id } = await params;
-  const [debt, ventures, members] = await withHub(user.id, (tx) =>
-    Promise.all([getDebt(tx, hub.id, id), listVentures(tx, hub.id), listMembers(tx, hub.id)]),
-  );
+  const [debt, { ventures, members }] = await Promise.all([
+    withHub(user.id, (tx) => getDebt(tx, hub.id, id)),
+    hubChrome(user.id, hub.id),
+  ]);
   if (!debt) notFound();
 
   return (

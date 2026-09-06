@@ -1,12 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
+import { revalidateContent } from "@/lib/revalidate";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -48,7 +48,7 @@ export async function createEntry(fd: FormData) {
     }),
   );
 
-  revalidatePath("/money");
+  revalidateContent();
 }
 
 const updateSchema = createSchema.extend({ id: z.string().cuid() });
@@ -77,12 +77,12 @@ export async function updateEntry(fd: FormData) {
     }),
   );
 
-  revalidatePath("/money");
+  revalidateContent();
 }
 
 export async function deleteEntry(fd: FormData) {
   const { user } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
   await withHub(user.id, (tx) => tx.budgetEntry.delete({ where: { id } }));
-  revalidatePath("/money");
+  revalidateContent();
 }

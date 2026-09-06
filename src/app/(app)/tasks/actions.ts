@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { addMonths, addWeeks } from "date-fns";
 import { z } from "zod";
@@ -11,6 +10,7 @@ import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
 import { notifyAssignment } from "@/lib/notify";
+import { revalidateContent } from "@/lib/revalidate";
 
 /**
  * Marking a recurring task done spawns its next occurrence: same fields, due date
@@ -101,8 +101,7 @@ export async function createTask(formData: FormData) {
     await notifyAssignment(task.id, task.title, data.assignedToId, user.name ?? user.email);
   }
 
-  revalidatePath("/today");
-  revalidatePath("/tasks");
+  revalidateContent();
 }
 
 export async function updateTask(formData: FormData) {
@@ -137,9 +136,7 @@ export async function updateTask(formData: FormData) {
     await notifyAssignment(after.id, after.title, data.assignedToId, user.name ?? user.email);
   }
 
-  revalidatePath("/today");
-  revalidatePath("/tasks");
-  revalidatePath(`/tasks/${data.id}`);
+  revalidateContent(`/tasks/${data.id}`);
   redirect("/tasks");
 }
 
@@ -163,8 +160,7 @@ export async function toggleTask(formData: FormData) {
     }
   });
 
-  revalidatePath("/today");
-  revalidatePath("/tasks");
+  revalidateContent();
 }
 
 export async function deleteTask(formData: FormData) {
@@ -172,17 +168,14 @@ export async function deleteTask(formData: FormData) {
   const id = z.string().cuid().parse(formData.get("id"));
   await withHub(user.id, (tx) => tx.task.delete({ where: { id } }));
 
-  revalidatePath("/today");
-  revalidatePath("/tasks");
+  revalidateContent();
   redirect("/tasks");
 }
 
 // --- Plain-arg actions for inline editing + swipe gestures -------------------
 
 function refreshTaskPaths() {
-  revalidatePath("/today");
-  revalidatePath("/tasks");
-  revalidatePath("/agenda");
+  revalidateContent();
 }
 
 /** Toggle done from JS (no FormData). Returns nothing; undo = call with !done. */

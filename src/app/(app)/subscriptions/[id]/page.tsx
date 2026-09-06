@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getSubscription, listMembers, listVentures } from "@/lib/data";
+import { getSubscription, hubChrome } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { toDateInput } from "@/lib/format";
@@ -17,13 +17,10 @@ export default async function SubscriptionDetailPage({
 }) {
   const { user, hub } = await requireHub();
   const { id } = await params;
-  const [sub, ventures, members] = await withHub(user.id, (tx) =>
-    Promise.all([
-      getSubscription(tx, hub.id, id),
-      listVentures(tx, hub.id),
-      listMembers(tx, hub.id),
-    ]),
-  );
+  const [sub, { ventures, members }] = await Promise.all([
+    withHub(user.id, (tx) => getSubscription(tx, hub.id, id)),
+    hubChrome(user.id, hub.id),
+  ]);
   if (!sub) notFound();
 
   return (
@@ -38,7 +35,6 @@ export default async function SubscriptionDetailPage({
           id: sub.id,
           name: sub.name,
           cost: centsToInput(sub.costCents),
-          currency: sub.currency,
           billingCycle: sub.billingCycle,
           renewalDate: toDateInput(sub.renewalDate),
           cancelByDate: toDateInput(sub.cancelByDate),

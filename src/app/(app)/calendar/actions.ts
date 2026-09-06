@@ -1,7 +1,6 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { addDays, differenceInCalendarDays, eachDayOfInterval, startOfDay } from "date-fns";
 import { z } from "zod";
@@ -9,6 +8,7 @@ import { z } from "zod";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput, fromDateTimeInput } from "@/lib/format";
+import { revalidateContent } from "@/lib/revalidate";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -102,8 +102,7 @@ export async function createEvent(fd: FormData) {
     );
   }
 
-  revalidatePath("/calendar");
-  revalidatePath("/today");
+  revalidateContent();
 }
 
 export async function updateEvent(fd: FormData) {
@@ -113,8 +112,7 @@ export async function updateEvent(fd: FormData) {
   await withHub(user.id, (tx) =>
     tx.event.update({ where: { id: d.id }, data: buildData(d, attendeeIds) }),
   );
-  revalidatePath("/calendar");
-  revalidatePath("/today");
+  revalidateContent();
   redirect("/calendar");
 }
 
@@ -122,7 +120,7 @@ export async function deleteEvent(fd: FormData) {
   const { user } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
   await withHub(user.id, (tx) => tx.event.delete({ where: { id } }));
-  revalidatePath("/calendar");
+  revalidateContent();
   redirect("/calendar");
 }
 
@@ -131,8 +129,7 @@ export async function deleteEvents(ids: string[]) {
   const { user } = await requireHub();
   const parsed = z.array(z.string().cuid()).min(1).max(100).parse(ids);
   await withHub(user.id, (tx) => tx.event.deleteMany({ where: { id: { in: parsed } } }));
-  revalidatePath("/calendar");
-  revalidatePath("/today");
+  revalidateContent();
 }
 
 /** Deletes this occurrence and every later one in the same series. */
@@ -149,6 +146,6 @@ export async function deleteEventSeries(fd: FormData) {
   await withHub(user.id, (tx) =>
     tx.event.deleteMany({ where: { recurrenceGroupId, startAt: { gte: startAt } } }),
   );
-  revalidatePath("/calendar");
+  revalidateContent();
   redirect("/calendar");
 }

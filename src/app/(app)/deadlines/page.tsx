@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { listDeadlines, listVentures, type DeadlineWithRefs } from "@/lib/data";
+import { hubChrome, listDeadlines, type DeadlineWithRefs } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { daysUntil } from "@/lib/format";
@@ -78,9 +78,10 @@ function Section({ title, items }: { title: string; items: DeadlineWithRefs[] })
 
 export default async function DeadlinesPage() {
   const { user, hub } = await requireHub();
-  const [deadlines, ventures] = await withHub(user.id, (tx) =>
-    Promise.all([listDeadlines(tx, hub.id, user.id, { includeDone: true }), listVentures(tx, hub.id)]),
-  );
+  const [deadlines, { ventures }] = await Promise.all([
+    withHub(user.id, (tx) => listDeadlines(tx, hub.id, user.id, { includeDone: true })),
+    hubChrome(user.id, hub.id),
+  ]);
 
   const open = deadlines.filter((d) => !d.doneAt);
   const done = deadlines.filter((d) => d.doneAt);

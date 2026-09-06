@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
@@ -8,6 +7,7 @@ import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
+import { revalidateContent } from "@/lib/revalidate";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -55,7 +55,7 @@ export async function createSubscription(fd: FormData) {
   const { user, hub } = await requireHub();
   const d = data(parse(createSchema, fd));
   await withHub(user.id, (tx) => tx.subscription.create({ data: { ...d, hubId: hub.id } }));
-  revalidatePath("/subscriptions");
+  revalidateContent();
 }
 
 export async function updateSubscription(fd: FormData) {
@@ -64,8 +64,7 @@ export async function updateSubscription(fd: FormData) {
   await withHub(user.id, (tx) =>
     tx.subscription.update({ where: { id: d.id }, data: data(d) }),
   );
-  revalidatePath("/subscriptions");
-  revalidatePath(`/subscriptions/${d.id}`);
+  revalidateContent(`/subscriptions/${d.id}`);
   redirect("/subscriptions");
 }
 
@@ -77,13 +76,13 @@ export async function setSubscriptionStatus(fd: FormData) {
   });
   const { id, status } = schema.parse({ id: fd.get("id"), status: fd.get("status") });
   await withHub(user.id, (tx) => tx.subscription.update({ where: { id }, data: { status } }));
-  revalidatePath("/subscriptions");
+  revalidateContent(`/subscriptions/${id}`);
 }
 
 export async function deleteSubscription(fd: FormData) {
   const { user } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
   await withHub(user.id, (tx) => tx.subscription.delete({ where: { id } }));
-  revalidatePath("/subscriptions");
+  revalidateContent();
   redirect("/subscriptions");
 }
