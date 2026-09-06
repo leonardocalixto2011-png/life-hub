@@ -35,6 +35,10 @@ yarn-error.log*
 .env*
 !.env.example
 
+# Real personal/financial figures for prisma/seed-finances.ts. THIS REPO IS
+# PUBLIC — balances, creditors and income must never be committed.
+*.local.json
+
 # vercel
 .vercel
 

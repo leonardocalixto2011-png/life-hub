@@ -1,0 +1,25 @@
+{
+  "_comment": "Template for prisma/finances.local.json (gitignored). Copy, fill in real figures, and never commit the copy — this repo is public. Amounts are dollars; `apr` is a percent (26.99, not 0.2699).",
+  "hubName": "Personal Finances",
+  "hubColor": "#0f766e",
+  "monthlyNetIncome": 0,
+  "incomeNote": "Net take-home. Replace with a figure from a real pay stub.",
+  "debts": [
+    {
+      "name": "Example Visa",
+      "balance": 1000,
+      "apr": 19.99,
+      "minimum": 50,
+      "actual": null,
+      "status": "CURRENT",
+      "notes": "`minimum` is the contractual minimum; set `actual` only when a negotiated or hardship payment differs from it. status: CURRENT | DEFAULT | PAID_OFF."
+    }
+  ],
+  "commitments": [
+    {
+      "name": "Rent",
+      "cost": 0,
+      "notes": "Recurring monthly costs — rent, insurance, utilities, savings clubs. These feed /budget's \"recurring commitments\" forecast."
+    }
+  ]
+}
