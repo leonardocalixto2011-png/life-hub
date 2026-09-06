@@ -12,7 +12,6 @@ export const dynamic = "force-dynamic";
 const KIND_ICON: Record<MyItem["kind"], string> = {
   task: "✓",
   deadline: "⏳",
-  event: "📅",
 };
 
 function Row({ item }: { item: MyItem }) {

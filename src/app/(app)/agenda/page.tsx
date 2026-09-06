@@ -14,6 +14,8 @@ const KIND_ICON: Record<AgendaItem["kind"], string> = {
   task: "✓",
   deadline: "⏳",
   event: "📅",
+  subscription: "🔁",
+  debt: "🏦",
 };
 
 function Row({ item }: { item: AgendaItem }) {
@@ -59,7 +61,7 @@ export default async function AgendaPage() {
       <div>
         <h1 className="text-lg font-bold">Agenda</h1>
         <p className="text-xs text-[var(--color-text-dim)]">
-          Tasks, deadlines and events on one timeline · next 30 days
+          Everything dated on one timeline · next 30 days
         </p>
       </div>
 

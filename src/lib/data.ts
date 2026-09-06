@@ -13,6 +13,7 @@ import { cache } from "react";
 
 import type { HubTx } from "@/lib/hub-context";
 import { withHub } from "@/lib/hub-context";
+import { money } from "@/lib/format";
 import { monthlyCents } from "@/lib/money";
 
 /**
@@ -420,7 +421,7 @@ export type ReviewRow = Awaited<ReturnType<typeof listPendingReviews>>[number];
 // --------------------------------------------------------------------------
 
 export type AgendaItem = {
-  kind: "task" | "deadline" | "event";
+  kind: "task" | "deadline" | "event" | "subscription" | "debt";
   id: string;
   title: string;
   at: Date;
@@ -435,7 +436,12 @@ export async function agendaItems(tx: HubTx, hubId: string, userId: string, days
   const from = startOfDay(now);
   const to = endOfDay(new Date(now.getTime() + days * 864e5));
 
-  const [tasks, deadlines, events] = await Promise.all([
+  // Same as dashboard(): roll lapsed renewals forward first, otherwise a
+  // subscription whose date has passed would be filtered out by `gte: from`
+  // below and silently vanish from the agenda.
+  await advanceLapsedRenewals(tx, hubId);
+
+  const [tasks, deadlines, events, renewals, debts] = await Promise.all([
     tx.task.findMany({
       where: { hubId, status: "OPEN", dueDate: { not: null, lte: to }, ...visibilityFilter(userId) },
       include: { venture: { select: { name: true, color: true } }, assignedTo: { select: { name: true, email: true } } },
@@ -450,6 +456,17 @@ export async function agendaItems(tx: HubTx, hubId: string, userId: string, days
       where: { hubId, endAt: { gte: from }, startAt: { lte: to }, ...eventVisibility(userId) },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { startAt: "asc" },
+    }),
+    tx.subscription.findMany({
+      where: { hubId, status: "ACTIVE", renewalDate: { gte: from, lte: to } },
+      include: { venture: { select: { name: true, color: true } } },
+      orderBy: { renewalDate: "asc" },
+    }),
+    tx.debt.findMany({
+      // Not `status: "CURRENT"` — a defaulted debt still has a payment due.
+      where: { hubId, status: { not: "PAID_OFF" }, dueDate: { gte: from, lte: to } },
+      include: { venture: { select: { name: true, color: true } } },
+      orderBy: { dueDate: "asc" },
     }),
   ]);
 
@@ -484,6 +501,29 @@ export async function agendaItems(tx: HubTx, hubId: string, userId: string, days
       venture: e.venture,
       meta: e.location,
     })),
+    ...renewals.map((s): AgendaItem => ({
+      kind: "subscription",
+      id: s.id,
+      title: `${s.name} renews`,
+      at: s.renewalDate,
+      href: `/subscriptions/${s.id}`,
+      allDay: true,
+      venture: s.venture,
+      meta: money(s.costCents, s.currency),
+    })),
+    ...debts.map((d): AgendaItem => ({
+      kind: "debt",
+      id: d.id,
+      title: `${d.name} payment`,
+      at: d.dueDate!,
+      href: `/debts/${d.id}`,
+      allDay: true,
+      venture: d.venture,
+      meta:
+        d.actualPaymentCents ?? d.minimumPaymentCents
+          ? money(d.actualPaymentCents ?? d.minimumPaymentCents!)
+          : null,
+    })),
   ];
 
   items.sort((a, b) => a.at.getTime() - b.at.getTime());
@@ -494,7 +534,12 @@ export async function agendaItems(tx: HubTx, hubId: string, userId: string, days
 // Cross-hub "Mine" view
 // --------------------------------------------------------------------------
 
-export type MyItem = AgendaItem & { hub: { id: string; name: string; color: string } };
+/** Narrower than AgendaItem: myItemsInHub only ever yields tasks and deadlines
+ *  (subscriptions and debts aren't assigned to a person). */
+export type MyItem = Omit<AgendaItem, "kind"> & {
+  kind: "task" | "deadline";
+  hub: { id: string; name: string; color: string };
+};
 
 /**
  * Assigned-to-me items across every hub the user belongs to. Unlike the rest
