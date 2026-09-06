@@ -917,8 +917,11 @@ Remaining, in order:
    schedule, DPAs with the six sub-processors listed in `DATA-INVENTORY.md`.
    Not code and not something to draft in-repo; hand the inventory to a
    lawyer. Blocks public launch *and* billing.
-2. **Inbound routing.** `INBOUND_HUB_ID` is a stopgap; real recipient-address
-   → hub mapping is the fix.
+2. ~~**Inbound routing.**~~ ✅ Done. Each hub has `hub-<token>@INBOUND_DOMAIN`
+   (`src/lib/inbound-address.ts`), minted on demand and revocable; unroutable
+   mail is rejected 422 rather than parked in a globally-visible null hub.
+   `INBOUND_HUB_ID` remains only as a pre-token fallback. **Needs
+   `INBOUND_DOMAIN` set plus MX/routing at the provider to actually receive.**
 3. **Self-serve signup.** Still deliberately not built — invite-only is
    load-bearing as both a security and a cost control. When built, ship it
    behind a flag defaulting to **off**, so it can't open before (1) lands.
