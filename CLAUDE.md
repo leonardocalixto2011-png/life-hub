@@ -693,6 +693,47 @@ Took the remaining perf items from the earlier 3-agent audit.
   in `agendaItems()` and the two digests (the digest half changes what
   lands in people's email, so ask first).
 
+### Phase 9f — Full audit pass (correctness / perf / UX / a11y)
+
+- ✅ **`src/lib/revalidate.ts` — one content route set.** Every write action
+  hand-picked its own `revalidatePath` list, which went stale constantly
+  because the aggregate views each read several models (`/today` = tasks +
+  deadlines + events + subs + debts + budget; `/money`'s forecast = subs +
+  debts + open task amounts; `/agenda` = tasks + deadlines + events).
+  Confirmed live: editing a subscription only revalidated `/subscriptions`
+  while `/money`'s "recurring commitments" kept the old figure, and
+  `acceptReview` — which can create a Task, Event, Deadline, Subscription
+  **or** BudgetEntry through `commitDraftsCore` — revalidated only
+  `/inbox` + `/today` while the sibling `commitDrafts` revalidated eight
+  paths. **Use `revalidateContent(...detailPaths)` from every action that
+  writes hub content**; don't hand-pick again. Pages are `force-dynamic`,
+  so this is about the client Router Cache (~30s of visited RSC payloads),
+  not the data cache — marking the set is cheap.
+- ✅ **`hubChrome(userId, hubId)` in `data.ts`** — the app layout *and*
+  every page separately fetched `listVentures` + `listMembers`, in two
+  different transactions, on all 14 routes. `React.cache` keyed on a `tx`
+  argument can never dedupe (fresh object per transaction), so this is
+  cached on **primitives** and opens its own `withHub`, folding in
+  `pendingReviewCount` so the layout needs no transaction of its own. Net:
+  two fewer queries per navigation at the same transaction count. Pages now
+  call `hubChrome`, never `listVentures`/`listMembers` directly.
+- ✅ **Forms trimmed** — dropped the free-text Currency input from the
+  budget-entry and subscription forms (both zod schemas already coerce a
+  missing value to `"CAD"`, and nothing in the app renders a second
+  currency, so no action change was needed). Subscription and debt forms
+  fold rarely-set fields behind a `<details>` "More options": 9 visible
+  fields → 4, and 10 → 5. Fields inside a closed `<details>` still submit
+  normally — verified by creating a subscription with only the visible
+  four.
+- ✅ **Global `:focus-visible` ring** — only `.field` had a focus style, so
+  keyboard and switch users got no visible focus on any button, link, chip
+  or bottom-nav item.
+- **Testing note**: a closed `<details>` in Chrome hides content via
+  `content-visibility` on `::details-content`, so children still report a
+  non-null `offsetParent` and a computed `display` of `block`. Checking
+  those from JS gives a false "not hidden" — screenshot or read
+  `details.open` instead.
+
 ## Commands
 
 `npm run dev` · `build` · `typecheck` · `db:migrate` · `db:push` · `db:seed` ·
