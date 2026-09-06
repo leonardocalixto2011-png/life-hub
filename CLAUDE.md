@@ -862,6 +862,56 @@ already-connected mailboxes and is demoted to a collapsed section on
   a bogus account). The code is a direct generalisation of the Yahoo
   connector, which is proven in production.
 
+### Phase 11 — Public-scale hardening (first pass)
+
+Evaluated against "millions of strangers, some malicious" rather than three
+people who trust each other. Full prioritised report is in the session; this
+is what changed and what's still open.
+
+**RLS is confirmed ENFORCED in production.** `/api/health` now returns
+`rls: "enforced" | "BYPASSED"`. Earlier notes in this file said the prod
+role rollout was still pending — that was stale; `APP_DATABASE_URL` is set.
+The check reports which *role* the app connects as: in prod (Neon, real
+per-role auth) that equals real enforcement; locally pglite authenticates
+anyone as superuser, so RLS is still inert on the dev box regardless.
+`REQUIRE_APP_DB=1` makes the app refuse to boot without the app role — safe
+to set now that prod is confirmed.
+
+**`appPrisma` used to fall back to the table owner silently.** Worst
+possible failure mode for a security control: everything works, nothing
+warns, every policy is bypassed by ownership. Now logs `[security]` loudly.
+
+**Two queries relied on RLS alone** — `listPendingReviews` /
+`pendingReviewCount` had no hub or user predicate at all. Now mirror
+`review_item_hub_isolation` in app code, per this project's standing
+defense-in-depth rule.
+
+**`/api/inbound` was open.** `if (secret && !verify(...))` meant an unset
+secret skipped verification — anonymous POST could inject review items and
+spend a paid AI call each. Now fails closed. It also created rows with
+`hubId: null`, which the policy makes visible to **every user**; it now
+requires `INBOUND_HUB_ID` and 503s without it. Its dedup and
+subscription-name lookups were unscoped cross-tenant reads on the owner
+client; both hub-scoped now.
+
+**Rate limiting exists** (`src/lib/rate-limit.ts`) — Postgres-backed fixed
+window, because in-memory counters are useless across Vercel instances.
+Fails **open** on purpose: it guards cost and spam, not access, and every
+call site is behind auth. Applied to magic links (3/hr per address), AI
+parsing (60/hr per user), inbound (120/hr). Swept by the daily cron.
+
+**Real addresses were committed to this public repo** in `prisma/seed.ts`;
+now read from `SEED_MEMBERS`. **The git history still contains them** —
+removing that needs a history rewrite.
+
+**Still open before any public launch**: legal (privacy policy, ToS,
+GDPR/consent, data export + deletion — none exist); recipient-address → hub
+routing for inbound; self-serve signup **deliberately not built**, since
+invite-only is currently load-bearing as a security and cost control;
+error tracking and uptime monitoring; i18n (`"CAD"` hardcoded at ~10 render
+sites, `en-CA` in `money()`, `America/Toronto` default timezone, all UI
+strings inline English).
+
 ## Commands
 
 `npm run dev` · `build` · `typecheck` · `db:migrate` · `db:push` · `db:seed` ·
