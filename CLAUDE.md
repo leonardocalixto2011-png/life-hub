@@ -742,9 +742,29 @@ Took the remaining perf items from the earlier 3-agent audit.
   filtered out by the `gte: from` bound. `MyItem` now narrows `kind` to
   `task | deadline`, since `/mine` is assigned-to-me and neither
   subscriptions nor debts have an assignee.
-- **Still open after this pass**: `/money`→`/budget` rename; **debts +
-  renewals in the two digests** (deliberately not done — it changes what
-  lands in people's email, so it needs the user's say-so first).
+### Phase 9g — Debts in the digests, `/money` → `/budget`
+
+Both signed off by the user after being flagged.
+
+- ✅ **Debt payments in both digests.** Subscription renewals were *already*
+  in both (and cancel-bys in the daily) — only debts were missing. Daily
+  gains a "Payments due" section; weekly gains "N debt payments due ($X)".
+  **Both queries `select` only `name`, `dueDate`, `actualPaymentCents`,
+  `minimumPaymentCents`** — balance, APR and `DEFAULT` status are
+  deliberately kept out of email: they aren't "due soon" facts, and a
+  digest lands on lock screens and gets forwarded. Keep it that way if you
+  extend these.
+- ⚠️ **Debts have no per-item privacy flag** (unlike Task/Deadline/Event,
+  which have `Visibility`). They're hub-scoped, so *every* member of a hub
+  receives that hub's debt rows in their digest — the same rows they can
+  already open on `/debts`. If personal debts need to be hidden from other
+  members, the answer is a separate hub, not a digest filter.
+- ✅ **`/money` → `/budget`** — the one route whose path didn't match its
+  nav label. `next.config.ts` has a **permanent redirect** `/money` →
+  `/budget` so bookmarks, the installed PWA's history and old links keep
+  working; Next preserves the query string, so `?m=…&venture=…` survives.
+  Renaming an App Router directory leaves stale generated route types —
+  `rm -rf .next` if the build complains about a missing `…/money/page.js`.
 
 ## Commands
 
