@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { rateLimit } from "@/lib/rate-limit";
 import { parseText, type Draft, type DraftKind, type ParseOutcome } from "@/lib/parse";
 import { commitDraftsCore } from "@/lib/commit-drafts";
 import { revalidateContent } from "@/lib/revalidate";
@@ -13,6 +14,12 @@ export type ParseResult = ParseOutcome;
 
 export async function parseQuickAdd(text: string): Promise<ParseResult> {
   const { user, hub } = await requireHub();
+
+  // Each parse is a paid Anthropic call. Authentication alone is not a cost
+  // control once signup is self-serve: one account can burn the whole budget.
+  if (!(await rateLimit(`ai:${user.id}`, 60, 3600)).ok) {
+    return { ok: false, error: "You have hit the hourly limit for AI parsing. Try again shortly." };
+  }
   if (text.trim().length > 2000) {
     return { ok: false, error: "Keep it under 2000 characters." };
   }

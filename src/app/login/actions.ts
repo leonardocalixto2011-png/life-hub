@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { signIn } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { rateLimit } from "@/lib/rate-limit";
 
 const schema = z.object({ email: z.string().email() });
 
@@ -21,13 +22,23 @@ export async function requestMagicLink(
 
   const email = parsed.data.email.toLowerCase();
 
+  // Rate limit BEFORE the lookup, and return the same generic success below
+  // either way — a distinguishable "rate limited" response would turn this
+  // into the account-enumeration oracle the constant-response design exists to
+  // prevent. Sending is what costs money (Resend) and floods an inbox, so the
+  // limit is per-address; a wide-net attacker just gets 3 mails per address
+  // per hour instead of thousands.
+  const limited = !(await rateLimit(`magic-link:${email}`, 3, 3600)).ok;
+
   // Invite-only: only seeded addresses get a link. Respond identically either
   // way so the form can't be used to probe who has an account. (The signIn
   // callback in src/auth.ts enforces the same rule on the verify step.)
-  const known = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true },
-  });
+  const known = limited
+    ? null
+    : await prisma.user.findUnique({
+        where: { email },
+        select: { id: true },
+      });
 
   if (known) {
     try {

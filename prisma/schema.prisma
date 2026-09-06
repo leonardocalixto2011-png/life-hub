@@ -566,3 +566,18 @@ model TrustedSender {
 
   @@unique([hubId, fromAddress, category])
 }
+
+/// Fixed-window rate-limit counters (src/lib/rate-limit.ts). Not hub-scoped and
+/// deliberately NOT under RLS: keys are opaque strings written by the server
+/// before a user is even authenticated (magic-link requests), so there is no
+/// app.user_id to police them by. Never read back into a user-facing surface.
+model RateLimit {
+  id          String   @id @default(cuid())
+  key         String
+  windowStart DateTime
+  count       Int      @default(0)
+  expiresAt   DateTime
+
+  @@unique([key, windowStart])
+  @@index([expiresAt])
+}

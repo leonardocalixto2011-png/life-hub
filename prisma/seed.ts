@@ -35,10 +35,20 @@ async function main() {
 
   // Teammates. NOTE: one email == one account (User.email is unique). Dan cannot
   // reuse ADMIN_EMAIL — add him with his own address.
-  const people: { email: string; name: string; role: "ADMIN" | "MEMBER" }[] = [
-    { email: "chantelleanderson.cma@gmail.com", name: "Chantelle", role: "MEMBER" },
-    { email: "leonardocalixto2011@gmail.com", name: "Dan", role: "MEMBER" },
-  ];
+  // Read from SEED_MEMBERS, not hardcoded: THIS REPOSITORY IS PUBLIC, and real
+  // addresses committed here are permanently in the git history and indexable.
+  // Format: "Name <email>,Name <email>".
+  const people: { email: string; name: string; role: "ADMIN" | "MEMBER" }[] = (
+    process.env.SEED_MEMBERS ?? ""
+  )
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const m = entry.match(/^(.*?)s*<(.+)>$/);
+      if (!m) throw new Error(`SEED_MEMBERS entry must look like "Name <email>": ${entry}`);
+      return { email: m[2].trim(), name: m[1].trim(), role: "MEMBER" as const };
+    });
   const memberUsers = [];
   for (const p of people) {
     const email = p.email.toLowerCase();

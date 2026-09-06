@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function InboxPage() {
   const { user, hub } = await requireHub();
   const [items, { ventures }] = await Promise.all([
-    withHub(user.id, (tx) => listPendingReviews(tx)),
+    withHub(user.id, (tx) => listPendingReviews(tx, user.id)),
     hubChrome(user.id, hub.id),
   ]);
   const vOpts = ventures.map((v) => ({ id: v.id, name: v.name }));

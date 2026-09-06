@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { mapLimit } from "@/lib/async";
+import { pruneRateLimits } from "@/lib/rate-limit";
 import { sendEmail } from "@/lib/email";
 import { sendPushToUser } from "@/lib/push";
 import {
@@ -71,9 +72,13 @@ export async function GET(req: Request) {
     }
   });
 
+  // Piggyback the rate-limit sweep on a job that already runs daily.
+  const prunedRateLimits = await pruneRateLimits();
+
   return NextResponse.json({
     ok: true,
     count: totalCount,
+    prunedRateLimits,
     pushed,
     emailed,
     ranAt: new Date().toISOString(),

@@ -89,7 +89,7 @@ export const hubChrome = cache(async (userId: string, hubId: string) => {
     const [ventures, members, reviewCount] = await Promise.all([
       listVentures(tx, hubId),
       listMembers(tx, hubId),
-      pendingReviewCount(tx),
+      pendingReviewCount(tx, userId),
     ]);
     return { ventures, members, reviewCount };
   });
@@ -426,20 +426,41 @@ export type EventWithRefs = Awaited<ReturnType<typeof listEvents>>[number];
 // Review inbox
 // --------------------------------------------------------------------------
 //
-// ReviewItem has no hubId yet (see plan §5, known gap not solved this phase)
-// — it stays global; accepted items land in whichever hub is current for the
-// user who clicks Accept.
+// ReviewItem.hubId is nullable: mail-connector rows always set it, the older
+// manual-forward path does not. Accepted items land in the row's hub when it
+// has one, else the accepting user's current hub.
 
-export function listPendingReviews(tx: HubTx) {
+/**
+ * App-level mirror of review_item_hub_isolation. These two were the only
+ * queries in the codebase relying on RLS *alone* — no hub or user predicate at
+ * all — so with APP_DATABASE_URL unset (owner role, policies inert) every user
+ * saw every other user's parsed email: subjects, snippets, senders, amounts.
+ *
+ * ⚠ The `hubId: null` arm is a real cross-tenant leak at any scale beyond a
+ * trusted group, and it is deliberate here only because it matches the policy.
+ * POST /api/inbound still creates hub-less rows (the pre-multi-hub
+ * manual-forward path), and a hub-less row is visible to EVERYONE. Inbound
+ * mail needs hub attribution before this app is public — see CLAUDE.md.
+ */
+function reviewVisibility(userId: string): Prisma.ReviewItemWhereInput {
+  return {
+    OR: [
+      { hubId: null },
+      { hub: { memberships: { some: { userId, status: "ACTIVE" } } } },
+    ],
+  };
+}
+
+export function listPendingReviews(tx: HubTx, userId: string) {
   return tx.reviewItem.findMany({
-    where: { status: "PENDING" },
+    where: { status: "PENDING", ...reviewVisibility(userId) },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
 }
 
-export function pendingReviewCount(tx: HubTx) {
-  return tx.reviewItem.count({ where: { status: "PENDING" } });
+export function pendingReviewCount(tx: HubTx, userId: string) {
+  return tx.reviewItem.count({ where: { status: "PENDING", ...reviewVisibility(userId) } });
 }
 
 export type ReviewRow = Awaited<ReturnType<typeof listPendingReviews>>[number];

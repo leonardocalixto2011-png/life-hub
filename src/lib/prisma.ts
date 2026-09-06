@@ -18,11 +18,31 @@ export const prisma =
   });
 
 /**
+ * True when the runtime client is the low-privilege role RLS policies apply
+ * to. When false the app is connecting as the table OWNER, which bypasses
+ * every policy by ownership — so all isolation rests on the app-level filters
+ * alone. Surfaced by /api/health so this is visible rather than assumed.
+ */
+export const rlsEnforced = Boolean(process.env.APP_DATABASE_URL);
+
+if (!rlsEnforced) {
+  // This used to fall back silently, which is the worst possible failure mode
+  // for a security control: everything works, nothing warns, and RLS is inert.
+  const msg =
+    "APP_DATABASE_URL is not set — connecting as the table owner, so ALL RLS policies are bypassed. " +
+    "Run prisma/create-app-role.sql and set APP_DATABASE_URL. See CLAUDE.md.";
+  if (process.env.REQUIRE_APP_DB === "1") {
+    // Opt-in fail-closed. Set this once APP_DATABASE_URL is confirmed working,
+    // so a future deploy can never silently drop back to the owner role.
+    throw new Error(msg);
+  }
+  console.error(`[security] ${msg}`);
+}
+
+/**
  * Low-privilege runtime client (APP_DATABASE_URL) — the role RLS policies
  * actually apply to. All request-handling queries go through this, wrapped in
  * withHub() (src/lib/hub-context.ts) so `app.user_id` is set per request.
- * Falls back to the owner connection when APP_DATABASE_URL isn't configured
- * yet (RLS is then a no-op, same as before this migration existed).
  */
 export const appPrisma =
   globalForPrisma.appPrisma ??
