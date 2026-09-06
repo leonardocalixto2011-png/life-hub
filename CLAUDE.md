@@ -600,9 +600,9 @@ findings. Full catalogue (incl. deferred items) in the plan file.
   `dashboard()`); the misleading empty-owner "Shared" `<option>` in
   `DebtForm`/`SubscriptionForm` relabelled "— (no owner)" (neither model
   has a privacy column).
-- **Deferred (audited, catalogued in the plan)**: cron fan-out
-  concurrency limiting, a batch of low-value indexes, inline debt status
-  toggle, `/money`→`/budget` rename.
+- **Deferred (audited, catalogued in the plan)**: inline debt status
+  toggle, `/money`→`/budget` rename. (Cron fan-out concurrency limiting
+  and index tuning were taken in Phase 9d below.)
 
 ### Phase 9c — Mail-detected bills carry a structured amount
 
@@ -632,6 +632,32 @@ survived only as a `"$X — "` prefix in the note string.
   `ReviewItem`s.
 - **Deferred**: digest showing bill amounts; fuzzy-matching a detected
   bill to an existing `Debt` by name.
+
+### Phase 9d — Optimisation pass 2 (bounded cron + index tuning)
+
+Took the remaining perf items from the earlier 3-agent audit.
+
+- ✅ **Bounded cron fan-out** — `src/lib/async.ts` `mapLimit(items, n, fn)`
+  (order-preserving, ≤ n in flight). `/api/cron/digest` and `/api/cron/weekly`
+  now run the per-user collect at `mapLimit(users, 4, …)` instead of
+  `Promise.all(users.map(…))`; each user's `collect*ForUser` opens its own
+  `withHub` transaction per hub, so the unbounded version spiked Neon
+  connections as the roster grew. Verified: both routes still return the
+  same shape, counters aggregate correctly, 401 without the Bearer secret.
+- ✅ **Index tuning** (migration `20260906014232_index_tuning`) —
+  `Deadline` index changed from `[hubId, dueDate]` to
+  `[hubId, doneAt, dueDate]` (every read filters `doneAt: null` and sorts
+  `(doneAt, dueDate)`); added `Subscription[hubId, status, cancelByDate]`
+  (dashboard + digest cancel-by window/sort, which
+  `[hubId, status, renewalDate]` didn't cover); added `MailAccount[hubId]`
+  (`/mail` lists a hub's accounts, previously only `[status]`).
+- **Skipped, deliberately**: `Task[hubId, isRecurring]` (low-cardinality
+  bool, `recurringSuggestions` groups in JS anyway); `Event` recurrence-
+  delete index (RLS supplies the `hubId` equality the existing
+  `[hubId, recurrenceGroupId]` needs; rare op); inbound webhook per-draft
+  loop (making it concurrent races on in-batch duplicate titles — the
+  sequential dedup is load-bearing). Still open: inline debt status toggle,
+  `/money`→`/budget` rename, debts/renewals in `agendaItems()` + digests.
 
 ## Commands
 
