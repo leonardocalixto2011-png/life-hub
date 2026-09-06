@@ -790,6 +790,47 @@ per-item privacy flag — see the Phase 9g warning.
   so debts get `dueDate: null` (they won't appear on `/today` or `/agenda`
   until set) and commitments get a clearly-labelled placeholder renewal.
 
+### Phase 10 — Debts are person-owned, with per-hub sharing
+
+Supersedes Phase 9g's warning and Phase 9h's private-hub workaround: debts
+are private by design now, not by hub placement.
+
+**Model.** `Debt.ownerId` is required and is the access key; `hubId` survives
+only so the Venture link resolves. `DebtShare(ownerId, hubId, visibility)`
+opts one person's whole tracker into one hub — absence of a row means
+hidden, which is the default. Visibility is per hub, so the same person can
+be open in one and invisible in another. New fields: `type`,
+`paymentFrequency` (the owner's real debts are mostly **biweekly**, which
+the old model silently flattened to monthly), `originalBalanceCents` for
+payoff progress.
+
+**Two things to not undo:**
+
+1. **SUMMARY grants no row access.** RLS hands out whole rows — a policy
+   permissive enough to let a member total someone's debts would let them
+   read every balance and creditor. Totals come from `src/lib/debt-sharing.ts`,
+   which verifies the share itself, aggregates with the trusted client, and
+   returns **scalars only**. If you extend that file, keep every export
+   scalar-shaped; the moment it returns a row, "summary" stops meaning
+   anything.
+2. **The policy is split per command** (`debt_select` / `debt_insert` /
+   `debt_update` / `debt_delete`). A single policy is a real hole, not a
+   style choice: DELETE is authorised by `USING` alone, so the permissive
+   read condition would let a FULL-share viewer **delete** a debt they were
+   only allowed to look at. `npm run verify:isolation` caught exactly this
+   and now guards it.
+
+**Aggregates are personal.** `/budget`, `/today`, `/agenda` and both digests
+filter debts to `ownerId: userId` — a hub-mate's car loan must not move your
+forecast. The digest queries also had to move *out* of the per-hub loop:
+filtered by owner rather than hub, they repeated every row once per hub the
+recipient belonged to.
+
+**Migration `20260906111321`** backfills ownerless rows to the hub's OWNER
+(falling back to the hub creator), sets `ownerBackfilled` so `/debts` can ask
+a human to confirm, and auto-creates FULL shares so nothing disappeared from
+anyone's view. Editing a debt clears the flag.
+
 ## Commands
 
 `npm run dev` · `build` · `typecheck` · `db:migrate` · `db:push` · `db:seed` ·
