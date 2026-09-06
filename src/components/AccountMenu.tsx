@@ -17,6 +17,7 @@ const LINKS = [
   { href: "/assistant", label: "Assistant", icon: "✨" },
   { href: "/notifications", label: "Notifications", icon: "🔔" },
   { href: "/appearance", label: "Appearance", icon: "🖼️" },
+  { href: "/account", label: "Your account", icon: "⚙️" },
 ];
 
 export function AccountMenu({
