@@ -83,7 +83,15 @@ async function extract(req: Request, raw: string): Promise<Extracted | NextRespo
 
   if (cfSecret) {
     const expected = process.env.INBOUND_SECRET;
-    if (!expected || cfSecret !== expected) {
+    // "Not configured" and "wrong secret" are different problems and get
+    // different statuses — collapsing both into 401 makes setup impossible to
+    // debug without server logs. This discloses nothing sensitive: whether the
+    // server has an env var set is not a secret, and the Resend branch below
+    // already answers the same question the same way.
+    if (!expected) {
+      return NextResponse.json({ error: "inbound not configured" }, { status: 503 });
+    }
+    if (cfSecret !== expected) {
       return NextResponse.json({ error: "bad secret" }, { status: 401 });
     }
     let payload: CloudflarePayload;
