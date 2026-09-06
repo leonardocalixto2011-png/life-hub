@@ -5,11 +5,11 @@ import { revalidatePath } from "next/cache";
  *
  * Actions used to hand-pick paths per entity, which went stale constantly:
  * the aggregate views each read from several models (/today = tasks +
- * deadlines + events + subs + debts + budget, /money's forecast = subs +
+ * deadlines + events + subs + debts + budget, /budget's forecast = subs +
  * debts + open task amounts, /agenda = tasks + deadlines + events), so a
  * write to any one model can move a number on a page that model's action
  * never thought to invalidate. Editing a subscription's cost, for instance,
- * only revalidated /subscriptions while /money's "recurring commitments"
+ * only revalidated /subscriptions while /budget's "recurring commitments"
  * total kept showing the old figure.
  *
  * Pages are all `force-dynamic`, so this is about Next's client-side Router
@@ -25,7 +25,7 @@ const CONTENT_PATHS = [
   "/calendar",
   "/subscriptions",
   "/debts",
-  "/money",
+  "/budget",
   "/inbox",
 ] as const;
 

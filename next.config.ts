@@ -2,6 +2,15 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["web-push", "@anthropic-ai/sdk", "imapflow"],
+  async redirects() {
+    return [
+      // /money became /budget (every other route matches its nav label).
+      // Keeps existing bookmarks, the installed PWA's start history, and any
+      // old digest-email links working. Query string is preserved, so the
+      // month/venture params on /money?m=…&venture=… survive.
+      { source: "/money", destination: "/budget", permanent: true },
+    ];
+  },
   async headers() {
     return [
       {

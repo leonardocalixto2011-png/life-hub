@@ -23,7 +23,7 @@ function monthFromParam(m?: string): Date {
 function href(month: Date, venture?: string): string {
   const p = new URLSearchParams({ m: format(month, "yyyy-MM") });
   if (venture) p.set("venture", venture);
-  return `/money?${p.toString()}`;
+  return `/budget?${p.toString()}`;
 }
 
 export default async function MoneyPage({

@@ -160,7 +160,7 @@ export default async function DashboardPage() {
       )}
 
       <section>
-        <SectionHead title={`Budget · ${format(d.now, "MMMM")}`} href="/money" cta="Details" />
+        <SectionHead title={`Budget · ${format(d.now, "MMMM")}`} href="/budget" cta="Details" />
         <div className="card grid grid-cols-3 divide-x divide-[var(--color-border)] p-0 text-center">
           <div className="p-3">
             <div className="text-sm font-bold tabular-nums text-[var(--color-ok)]">
