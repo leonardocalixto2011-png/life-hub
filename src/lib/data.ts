@@ -247,19 +247,47 @@ const debtInclude = {
   owner: { select: { id: true, name: true, email: true } },
 } as const;
 
-export function listDebts(tx: HubTx, hubId: string, opts: { includeOther?: boolean } = {}) {
+/** The viewer's own debts. Never anyone else's, in any hub. */
+export function listMyDebts(tx: HubTx, userId: string, opts: { includeOther?: boolean } = {}) {
   return tx.debt.findMany({
-    where: { hubId, ...(opts.includeOther ? {} : { status: { not: "PAID_OFF" } }) },
+    where: { ownerId: userId, ...(opts.includeOther ? {} : { status: { not: "PAID_OFF" } }) },
     include: debtInclude,
     orderBy: [{ status: "asc" }, { dueDate: "asc" }],
   });
 }
 
-export function getDebt(tx: HubTx, hubId: string, id: string) {
-  return tx.debt.findUnique({ where: { id, hubId }, include: debtInclude });
+/**
+ * Other people's debts, visible here only because they opened a FULL share
+ * into this hub. RLS enforces the same rule independently — this is the
+ * app-level mirror the project keeps for every policy (see visibilityFilter).
+ */
+export function listSharedDebts(tx: HubTx, hubId: string, viewerId: string) {
+  return tx.debt.findMany({
+    where: {
+      ownerId: { not: viewerId },
+      owner: {
+        debtShares: { some: { hubId, visibility: "FULL" } },
+      },
+      status: { not: "PAID_OFF" },
+    },
+    include: debtInclude,
+    orderBy: [{ ownerId: "asc" }, { dueDate: "asc" }],
+  });
 }
 
-export type DebtWithRefs = Awaited<ReturnType<typeof listDebts>>[number];
+export function getDebt(tx: HubTx, id: string) {
+  return tx.debt.findUnique({ where: { id }, include: debtInclude });
+}
+
+/** Rows whose owner the ownership migration guessed — the UI asks for confirmation. */
+export function listDebtsNeedingOwnerReview(tx: HubTx, userId: string) {
+  return tx.debt.findMany({
+    where: { ownerId: userId, ownerBackfilled: true },
+    select: { id: true, name: true },
+  });
+}
+
+export type DebtWithRefs = Awaited<ReturnType<typeof listMyDebts>>[number];
 
 // --------------------------------------------------------------------------
 // Budget
@@ -319,10 +347,10 @@ export async function upcomingSummary(tx: HubTx, hubId: string, userId: string) 
       select: { costCents: true, billingCycle: true },
     }),
     tx.debt.findMany({
-      // Not `status: "CURRENT"` — a debt in DEFAULT is still owed (often on a
-      // negotiated payment, which is exactly what actualPaymentCents holds).
-      // Only PAID_OFF stops costing money.
-      where: { hubId, status: { not: "PAID_OFF" } },
+      // Own debts only. A debt shared into this hub belongs to someone else —
+      // folding it into *your* forecast would make the number meaningless.
+      // DEFAULT still counts: it is owed, usually on a negotiated payment.
+      where: { ownerId: userId, status: { not: "PAID_OFF" } },
       select: { minimumPaymentCents: true, actualPaymentCents: true },
     }),
     tx.task.findMany({
@@ -463,8 +491,8 @@ export async function agendaItems(tx: HubTx, hubId: string, userId: string, days
       orderBy: { renewalDate: "asc" },
     }),
     tx.debt.findMany({
-      // Not `status: "CURRENT"` — a defaulted debt still has a payment due.
-      where: { hubId, status: { not: "PAID_OFF" }, dueDate: { gte: from, lte: to } },
+      // Own debts only — the agenda is your timeline, not the hub's.
+      where: { ownerId: userId, status: { not: "PAID_OFF" }, dueDate: { gte: from, lte: to } },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { dueDate: "asc" },
     }),
@@ -634,9 +662,9 @@ export async function dashboard(tx: HubTx, hubId: string, userId: string) {
       orderBy: { startAt: "asc" },
     }),
     tx.debt.findMany({
-      // Same reasoning as upcomingSummary — a defaulted debt still has a
-      // payment due, and arguably needs the reminder more.
-      where: { hubId, status: { not: "PAID_OFF" }, dueDate: { gte: todayStart, lte: soon } },
+      // Own debts only, same reasoning as upcomingSummary. DEFAULT still
+      // counts — it has a payment due and arguably needs the reminder more.
+      where: { ownerId: userId, status: { not: "PAID_OFF" }, dueDate: { gte: todayStart, lte: soon } },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { dueDate: "asc" },
     }),

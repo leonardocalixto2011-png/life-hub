@@ -45,6 +45,7 @@ model User {
   createdDeadlines   Deadline[]
   ownedSubscriptions Subscription[]
   ownedDebts         Debt[]
+  debtShares         DebtShare[]
   budgetEntries      BudgetEntry[]
   createdEvents      Event[]
   pushSubscriptions  PushSubscription[]
@@ -91,6 +92,7 @@ model Hub {
   deadlines      Deadline[]
   subscriptions  Subscription[]
   debts          Debt[]
+  debtShares     DebtShare[]
   budgetEntries  BudgetEntry[]
   events         Event[]
   mailAccounts   MailAccount[]
@@ -296,27 +298,75 @@ enum DebtStatus {
   PAID_OFF
 }
 
-model Debt {
-  id                  String     @id @default(cuid())
-  hubId               String
-  hub                 Hub        @relation(fields: [hubId], references: [id], onDelete: Cascade)
-  name                String
-  balanceCents        Int
-  aprBasisPoints      Int? // 2599 = 25.99% APR; null when unknown/undisclosed
-  minimumPaymentCents Int? // the contractual minimum
-  actualPaymentCents  Int? // what's actually being paid, if different (e.g. a
-                           // negotiated or hardship-program amount)
-  dueDate             DateTime?
-  status              DebtStatus @default(CURRENT)
-  notes               String?
-  ventureId           String?
-  venture             Venture?   @relation(fields: [ventureId], references: [id], onDelete: SetNull)
-  ownerId             String?
-  owner               User?      @relation(fields: [ownerId], references: [id], onDelete: SetNull)
-  createdAt           DateTime   @default(now())
-  updatedAt           DateTime   @updatedAt
+enum DebtType {
+  CREDIT_CARD
+  LINE_OF_CREDIT
+  LOAN
+  CAR_LOAN
+  BNPL
+  OTHER
+}
 
+enum PaymentFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+/// A debt belongs to a **person**, not a hub. Access is `ownerId` plus an
+/// explicit DebtShare — hub membership alone grants nothing (see the
+/// debt_owner_or_full_share policy). `hubId` survives only as the hub the row
+/// was created in, so the Venture link still resolves; it is NOT the access key.
+model Debt {
+  id                   String           @id @default(cuid())
+  ownerId              String
+  owner                User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  hubId                String
+  hub                  Hub              @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  name                 String
+  type                 DebtType         @default(OTHER)
+  ownerBackfilled      Boolean          @default(false) // owner was guessed by the
+                                                        // 20260906111321 migration; UI asks a human to confirm
+  balanceCents         Int
+  originalBalanceCents Int? // what it started at — drives payoff progress
+  aprBasisPoints       Int? // 2599 = 25.99% APR; null when unknown/undisclosed
+  minimumPaymentCents  Int? // the contractual minimum
+  actualPaymentCents   Int? // what's actually being paid, if different (e.g. a
+                            // negotiated or hardship-program amount)
+  paymentFrequency     PaymentFrequency @default(MONTHLY)
+  dueDate              DateTime?
+  status               DebtStatus       @default(CURRENT)
+  notes                String?
+  ventureId            String?
+  venture              Venture?         @relation(fields: [ventureId], references: [id], onDelete: SetNull)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@index([ownerId, status])
   @@index([hubId, status])
+}
+
+enum ShareVisibility {
+  SUMMARY
+  FULL
+}
+
+/// Opt-in exposure of one person's whole debt tracker into one hub. No row =
+/// hidden, which is the default. SUMMARY deliberately grants **no** row access
+/// at the RLS layer — totals are computed by a trusted server function that
+/// returns scalars only, so "summary" can't be peeled open into line items.
+model DebtShare {
+  id         String          @id @default(cuid())
+  ownerId    String
+  owner      User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  hubId      String
+  hub        Hub             @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  visibility ShareVisibility @default(SUMMARY)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@unique([ownerId, hubId])
+  @@index([hubId])
 }
 
 // ---------------------------------------------------------------------------

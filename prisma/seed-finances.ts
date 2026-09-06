@@ -7,10 +7,11 @@
  * (`*.local.json`) — this repository is public, so balances, creditors and
  * income must never be committed. See `finances.example.json` for the shape.
  *
- * Why a separate hub: `Debt` has no per-item privacy flag, unlike Task /
- * Deadline / Event which have `Visibility`. Debts are hub-scoped, so every
- * member of a hub sees them on /debts *and* receives them in their daily
- * digest. A single-member hub is the only way to keep them personal.
+ * NOTE: the private hub is no longer strictly necessary. Debts became
+ * person-owned (migration 20260906111321) and are private by default, shared
+ * into a hub only by an explicit DebtShare. A dedicated hub is still tidy for
+ * keeping personal budget entries separate, but it is no longer what makes
+ * the debts private — ownership is.
  *
  * Idempotent: rows are matched by name, so re-running updates rather than
  * duplicating. Aborts if the target hub has gained other members.

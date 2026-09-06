@@ -27,7 +27,7 @@ async function collectDigestInHub(tx: HubTx, hubId: string, userId: string, wind
 
   await advanceLapsedRenewals(tx, hubId);
 
-  const [overdueTasks, dueTasks, deadlines, renewals, cancelBys, debts] = await Promise.all([
+  const [overdueTasks, dueTasks, deadlines, renewals, cancelBys] = await Promise.all([
     tx.task.findMany({
       where: { hubId, status: "OPEN", dueDate: { lt: todayStart }, ...vis(userId) },
       include: ventureName,
@@ -53,18 +53,9 @@ async function collectDigestInHub(tx: HubTx, hubId: string, userId: string, wind
       include: ventureName,
       orderBy: { cancelByDate: "asc" },
     }),
-    tx.debt.findMany({
-      // Not `status: "CURRENT"` — a defaulted debt still has a payment due.
-      where: { hubId, status: { not: "PAID_OFF" }, dueDate: { gte: todayStart, lte: horizon } },
-      // Deliberately narrow: name, when, how much. Balance, APR and
-      // DEFAULT status stay out of email — they aren't "due in the next
-      // 48h" facts, and a digest lands on lock screens and gets forwarded.
-      select: { name: true, dueDate: true, actualPaymentCents: true, minimumPaymentCents: true },
-      orderBy: { dueDate: "asc" },
-    }),
   ]);
 
-  return { overdueTasks, dueTasks, deadlines, renewals, cancelBys, debts };
+  return { overdueTasks, dueTasks, deadlines, renewals, cancelBys };
 }
 
 /**
@@ -78,8 +69,21 @@ export async function collectDigestForUser(userId: string, windowHours = 48) {
   const now = new Date();
   const hubs = await listMyHubs(userId);
 
-  const perHub = await withHub(userId, (tx) =>
-    Promise.all(hubs.map((hub) => collectDigestInHub(tx, hub.id, userId, windowHours).then((d) => ({ hub, d })))),
+  // Debts are personal, not hub-scoped: querying them inside the per-hub loop
+  // would repeat every row once per hub the user belongs to.
+  const horizon = endOfDay(new Date(now.getTime() + windowHours * 3600_000));
+  const [perHub, debts] = await withHub(userId, (tx) =>
+    Promise.all([
+      Promise.all(hubs.map((hub) => collectDigestInHub(tx, hub.id, userId, windowHours).then((d) => ({ hub, d })))),
+      tx.debt.findMany({
+        // Only the recipient's own. A digest must never carry another member's
+        // balances into someone else's inbox. Deliberately narrow: name, when,
+        // how much — balance, APR and DEFAULT status stay out of email.
+        where: { ownerId: userId, status: { not: "PAID_OFF" }, dueDate: { gte: startOfDay(now), lte: horizon } },
+        select: { name: true, dueDate: true, actualPaymentCents: true, minimumPaymentCents: true },
+        orderBy: { dueDate: "asc" },
+      }),
+    ]),
   );
 
   const overdueTasks = perHub.flatMap(({ hub, d }) => tagHub(d.overdueTasks, hub));
@@ -87,7 +91,6 @@ export async function collectDigestForUser(userId: string, windowHours = 48) {
   const deadlines = perHub.flatMap(({ hub, d }) => tagHub(d.deadlines, hub));
   const renewals = perHub.flatMap(({ hub, d }) => tagHub(d.renewals, hub));
   const cancelBys = perHub.flatMap(({ hub, d }) => tagHub(d.cancelBys, hub));
-  const debts = perHub.flatMap(({ hub, d }) => tagHub(d.debts, hub));
 
   const count =
     overdueTasks.length +
@@ -116,18 +119,13 @@ async function collectWeeklyInHub(tx: HubTx, hubId: string, userId: string) {
   const start = startOfDay(now);
   const end = endOfDay(new Date(now.getTime() + 7 * 864e5));
 
-  const [dueTasks, overdueTasks, deadlines, renewals, debts, budget] = await Promise.all([
+  const [dueTasks, overdueTasks, deadlines, renewals, budget] = await Promise.all([
     tx.task.count({ where: { hubId, status: "OPEN", dueDate: { gte: start, lte: end }, ...vis(userId) } }),
     tx.task.count({ where: { hubId, status: "OPEN", dueDate: { lt: start }, ...vis(userId) } }),
     tx.deadline.count({ where: { hubId, doneAt: null, dueDate: { gte: start, lte: end }, ...vis(userId) } }),
     tx.subscription.findMany({
       where: { hubId, status: "ACTIVE", renewalDate: { gte: start, lte: end } },
       select: { name: true, costCents: true, currency: true },
-    }),
-    tx.debt.findMany({
-      where: { hubId, status: { not: "PAID_OFF" }, dueDate: { gte: start, lte: end } },
-      // Same narrow shape as the daily digest — no balance, APR or status.
-      select: { name: true, actualPaymentCents: true, minimumPaymentCents: true },
     }),
     (async () => {
       const from = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -145,7 +143,7 @@ async function collectWeeklyInHub(tx: HubTx, hubId: string, userId: string) {
     })(),
   ]);
 
-  return { dueTasks, overdueTasks, deadlines, renewals, debts, budget };
+  return { dueTasks, overdueTasks, deadlines, renewals, budget };
 }
 
 /** Same per-user, per-hub merge as collectDigestForUser — see its comment. */
@@ -153,8 +151,17 @@ export async function collectWeeklyForUser(userId: string) {
   const now = new Date();
   const hubs = await listMyHubs(userId);
 
-  const perHub = await withHub(userId, (tx) =>
-    Promise.all(hubs.map((hub) => collectWeeklyInHub(tx, hub.id, userId).then((w) => ({ hub, w })))),
+  // Personal, so outside the per-hub loop — see collectDigestForUser.
+  const weekStart = startOfDay(now);
+  const weekEnd = endOfDay(new Date(now.getTime() + 7 * 864e5));
+  const [perHub, debts] = await withHub(userId, (tx) =>
+    Promise.all([
+      Promise.all(hubs.map((hub) => collectWeeklyInHub(tx, hub.id, userId).then((w) => ({ hub, w })))),
+      tx.debt.findMany({
+        where: { ownerId: userId, status: { not: "PAID_OFF" }, dueDate: { gte: weekStart, lte: weekEnd } },
+        select: { name: true, actualPaymentCents: true, minimumPaymentCents: true },
+      }),
+    ]),
   );
 
   const dueTasks = perHub.reduce((n, { w }) => n + w.dueTasks, 0);
@@ -163,7 +170,6 @@ export async function collectWeeklyForUser(userId: string) {
   const renewals = perHub.flatMap(({ hub, w }) => tagHub(w.renewals, hub));
   const renewalTotal = renewals.reduce((n, r) => n + r.costCents, 0);
   const currency = renewals[0]?.currency ?? "CAD";
-  const debts = perHub.flatMap(({ hub, w }) => tagHub(w.debts, hub));
   const debtTotal = debts.reduce(
     (n, d) => n + (d.actualPaymentCents ?? d.minimumPaymentCents ?? 0),
     0,
@@ -287,7 +293,7 @@ export function digestText(d: DigestData): string {
   if (d.debts.length) {
     parts.push(
       "PAYMENTS DUE",
-      ...d.debts.map((x) => line(x.name + hubTag(x.hubName), x.dueDate, debtAmount(x))),
+      ...d.debts.map((x) => line(x.name, x.dueDate, debtAmount(x))),
       "",
     );
   }
@@ -323,7 +329,7 @@ export function digestHtml(d: DigestData, appUrl: string): string {
             d.renewals.map((s) => li(s.name, s.hubName, s.renewalDate, money(s.costCents, s.currency))),
           ),
           section("Cancel by", d.cancelBys.map((s) => li(s.name, s.hubName, s.cancelByDate, "cancel deadline"))),
-          section("Payments due", d.debts.map((x) => li(x.name, x.hubName, x.dueDate, debtAmount(x)))),
+          section("Payments due", d.debts.map((x) => li(x.name, "", x.dueDate, debtAmount(x)))),
         ].join("");
 
   return `

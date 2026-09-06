@@ -19,10 +19,11 @@ export default async function DebtDetailPage({
   const { user, hub } = await requireHub();
   const { id } = await params;
   const [debt, { ventures, members }] = await Promise.all([
-    withHub(user.id, (tx) => getDebt(tx, hub.id, id)),
+    withHub(user.id, (tx) => getDebt(tx, id)),
     hubChrome(user.id, hub.id),
   ]);
-  if (!debt) notFound();
+  // RLS lets a FULL-share viewer read the row, but only the owner may edit it.
+  if (!debt || debt.ownerId !== user.id) notFound();
 
   return (
     <div className="space-y-3 p-3">
@@ -41,8 +42,10 @@ export default async function DebtDetailPage({
           actualPayment: centsToInput(debt.actualPaymentCents),
           dueDate: toDateInput(debt.dueDate),
           status: debt.status,
+          type: debt.type,
+          originalBalance: centsToInput(debt.originalBalanceCents),
+          paymentFrequency: debt.paymentFrequency,
           ventureId: debt.ventureId,
-          ownerId: debt.ownerId,
           notes: debt.notes,
         }}
       />

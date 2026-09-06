@@ -118,8 +118,82 @@ async function main() {
     check("A2's delete of A1's private task affects 0 rows", asA2Delete.count === 0);
     const stillThere = await db.task.findUnique({ where: { id: privateTaskA.id } });
     check("A1's private task still exists after A2's blocked delete", stillThere !== null);
+
+    // --- debt sharing ---------------------------------------------------------
+    // A1 owns debts. Hidden by default, SUMMARY must expose NO rows, FULL must.
+    const debtA1 = await db.debt.create({
+      data: {
+        name: "A1 private card",
+        ownerId: userA1.id,
+        hubId: hubA.id,
+        balanceCents: 100000,
+        minimumPaymentCents: 5000,
+      },
+    });
+
+    const a2SeesHidden = await asAppUser(userA2.id, (tx) => tx.debt.findMany());
+    check(
+      "A2 sees zero of A1's debts with no share (private by default)",
+      !a2SeesHidden.some((d) => d.id === debtA1.id),
+    );
+
+    await db.debtShare.create({
+      data: { ownerId: userA1.id, hubId: hubA.id, visibility: "SUMMARY" },
+    });
+    const a2SeesSummary = await asAppUser(userA2.id, (tx) => tx.debt.findMany());
+    check(
+      "A2 still sees zero DEBT ROWS under a SUMMARY share (totals come from a trusted aggregate, not RLS)",
+      !a2SeesSummary.some((d) => d.id === debtA1.id),
+    );
+    const a2SummaryById = await asAppUser(userA2.id, (tx) =>
+      tx.debt.findUnique({ where: { id: debtA1.id } }),
+    );
+    check("A2 gets null reading a SUMMARY-shared debt by id directly", a2SummaryById === null);
+
+    await db.debtShare.update({
+      where: { ownerId_hubId: { ownerId: userA1.id, hubId: hubA.id } },
+      data: { visibility: "FULL" },
+    });
+    const a2SeesFull = await asAppUser(userA2.id, (tx) => tx.debt.findMany());
+    check(
+      "A2 CAN see the debt once A1 switches that hub to FULL",
+      a2SeesFull.some((d) => d.id === debtA1.id),
+    );
+
+    const b1SeesShared = await asAppUser(userB1.id, (tx) => tx.debt.findMany());
+    check(
+      "B1 (different hub) sees nothing even though A1 shared FULL into Hub A",
+      !b1SeesShared.some((d) => d.id === debtA1.id),
+    );
+
+    // A FULL share is read-only: a viewer must not be able to edit or delete.
+    // A FULL share admits SELECT only — debt_update and debt_delete both key
+    // their USING off ownership, so a viewer's write matches no rows at all.
+    // (This is why the policy is split per command: a single policy would
+    // authorise DELETE from the permissive read condition.)
+    let editBlocked = false;
+    try {
+      const r = await asAppUser(userA2.id, (tx) =>
+        tx.debt.updateMany({ where: { id: debtA1.id }, data: { balanceCents: 1 } }),
+      );
+      editBlocked = r.count === 0; // debt_update USING is owner-only, so nothing matches
+    } catch {
+      editBlocked = true; // or WITH CHECK refuses it outright
+    }
+    check("A2 cannot edit a FULL-shared debt", editBlocked);
+    const a2Delete = await asAppUser(userA2.id, (tx) =>
+      tx.debt.deleteMany({ where: { id: debtA1.id } }),
+    );
+    check("A2 cannot delete a FULL-shared debt (0 rows)", a2Delete.count === 0);
+    const debtIntact = await db.debt.findUnique({ where: { id: debtA1.id } });
+    check(
+      "A1's debt survives A2's blocked write attempts, unchanged",
+      debtIntact !== null && debtIntact.balanceCents === 100000,
+    );
   } finally {
     // --- teardown (owner role) ------------------------------------------------
+    await db.debtShare.deleteMany({ where: { ownerId: { in: [userA1.id, userA2.id, userB1.id] } } });
+    await db.debt.deleteMany({ where: { ownerId: { in: [userA1.id, userA2.id, userB1.id] } } });
     await db.task.deleteMany({ where: { id: { in: [sharedTaskA.id, privateTaskA.id, taskB.id] } } });
     await db.hubMembership.deleteMany({ where: { hubId: { in: [hubA.id, hubB.id] } } });
     await db.hub.deleteMany({ where: { id: { in: [hubA.id, hubB.id] } } });

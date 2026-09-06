@@ -16,8 +16,10 @@ type Existing = {
   actualPayment: string;
   dueDate: string;
   status: "CURRENT" | "DEFAULT" | "PAID_OFF";
+  type: "CREDIT_CARD" | "LINE_OF_CREDIT" | "LOAN" | "CAR_LOAN" | "BNPL" | "OTHER";
+  originalBalance: string;
+  paymentFrequency: "WEEKLY" | "BIWEEKLY" | "MONTHLY";
   ventureId: string | null;
-  ownerId: string | null;
   notes: string | null;
 };
 
@@ -41,6 +43,18 @@ function Fields({
           className="field mt-1"
           placeholder="RBC Signature Visa, Ford loan…"
         />
+      </label>
+
+      <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+        Kind
+        <select name="type" defaultValue={existing?.type ?? "CREDIT_CARD"} className="field mt-1">
+          <option value="CREDIT_CARD">Credit card</option>
+          <option value="LINE_OF_CREDIT">Line of credit</option>
+          <option value="LOAN">Loan</option>
+          <option value="CAR_LOAN">Car loan</option>
+          <option value="BNPL">Buy now, pay later</option>
+          <option value="OTHER">Other</option>
+        </select>
       </label>
 
       <div className="grid grid-cols-2 gap-3">
@@ -74,7 +88,7 @@ function Fields({
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Monthly payment
+          Payment
           <input
             name="minimumPayment"
             type="number"
@@ -86,15 +100,23 @@ function Fields({
           />
         </label>
         <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Next due date
-          <input
-            type="date"
-            name="dueDate"
-            defaultValue={existing?.dueDate}
+          How often
+          <select
+            name="paymentFrequency"
+            defaultValue={existing?.paymentFrequency ?? "MONTHLY"}
             className="field mt-1"
-          />
+          >
+            <option value="MONTHLY">Monthly</option>
+            <option value="BIWEEKLY">Every 2 weeks</option>
+            <option value="WEEKLY">Weekly</option>
+          </select>
         </label>
       </div>
+
+      <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+        Next due date
+        <input type="date" name="dueDate" defaultValue={existing?.dueDate} className="field mt-1" />
+      </label>
 
       {/* Name + balance + APR + payment + due date covers a normal card or loan.
           The rest is for the negotiated / hardship cases. */}
@@ -129,7 +151,23 @@ function Fields({
             </label>
           </div>
 
+          {/* No owner picker: a debt belongs to whoever creates it, and only
+              they can edit it. Exposure to other people is the separate,
+              explicit share control on /debts. */}
           <div className="grid grid-cols-2 gap-3">
+            <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+              Started at
+              <input
+                name="originalBalance"
+                type="number"
+                step="0.01"
+                min="0"
+                inputMode="decimal"
+                defaultValue={existing?.originalBalance}
+                className="field mt-1"
+                placeholder="for payoff %"
+              />
+            </label>
             <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
               Venture
               <select name="ventureId" defaultValue={existing?.ventureId ?? ""} className="field mt-1">
@@ -137,17 +175,6 @@ function Fields({
                 {ventures.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-              Owner
-              <select name="ownerId" defaultValue={existing?.ownerId ?? ""} className="field mt-1">
-                <option value="">— (no owner)</option>
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name ?? m.email}
                   </option>
                 ))}
               </select>
