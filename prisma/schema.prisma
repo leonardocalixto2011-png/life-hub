@@ -34,6 +34,7 @@ model User {
   backgroundImageUrl String? // Vercel Blob URL, set via /appearance — deliberately
                              // separate from `image` above (an unused Auth.js
                              // sign-in-provider avatar field, different concern)
+  themeId            String? // slug from src/lib/themes.ts; null = the default palette
   role               UserRole  @default(MEMBER)
   createdAt          DateTime  @default(now())
 

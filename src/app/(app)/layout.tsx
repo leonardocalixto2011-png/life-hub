@@ -5,11 +5,10 @@ import { withHub } from "@/lib/hub-context";
 import { listMembers, listVentures, pendingReviewCount } from "@/lib/data";
 import { QuickAdd } from "@/components/QuickAdd";
 import { BottomNav } from "@/components/BottomNav";
-import { Avatar } from "@/components/Avatar";
+import { AccountMenu } from "@/components/AccountMenu";
 import { HubSwitcher } from "@/components/HubSwitcher";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { ToastHost } from "@/components/Toast";
-import { signOutAction } from "./auth-actions";
 
 export default async function AppLayout({
   children,
@@ -40,7 +39,7 @@ export default async function AppLayout({
       <ServiceWorkerRegister />
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-2.5 backdrop-blur">
         <HubSwitcher hubs={hubs} currentHubId={hub.id} />
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <Link href="/inbox" aria-label="Review inbox" className="relative text-lg leading-none">
             📥
             {reviewCount > 0 && (
@@ -49,27 +48,7 @@ export default async function AppLayout({
               </span>
             )}
           </Link>
-          <Link href="/agenda" aria-label="Agenda" className="text-lg leading-none">
-            📋
-          </Link>
-          <Link href="/assistant" aria-label="Assistant" className="text-lg leading-none">
-            ✨
-          </Link>
-          <Link href="/calendar" aria-label="Calendar" className="text-lg leading-none">
-            📅
-          </Link>
-          <Link href="/notifications" aria-label="Notifications" className="text-lg leading-none">
-            🔔
-          </Link>
-          <Link href="/appearance" aria-label="Appearance" className="text-lg leading-none">
-            🖼️
-          </Link>
-          <Avatar name={user.name} email={user.email} size={26} />
-          <form action={signOutAction}>
-            <button className="text-xs font-semibold text-[var(--color-text-dim)]">
-              Sign out
-            </button>
-          </form>
+          <AccountMenu name={user.name} email={user.email} />
         </div>
       </header>
 

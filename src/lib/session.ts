@@ -11,6 +11,7 @@ export type SessionUser = {
   name: string | null;
   role: "ADMIN" | "MEMBER";
   backgroundImageUrl: string | null;
+  themeId: string | null;
 };
 
 export type SessionHub = {
@@ -27,33 +28,20 @@ export const CURRENT_HUB_COOKIE = "current_hub";
  * layouts + actions. `cache`d so a layout and its page (which render
  * concurrently) share one lookup per request instead of two.
  */
-export const requireUser = cache(async (): Promise<SessionUser> => {
-  const session = await auth();
-  const email = session?.user?.email?.toLowerCase();
-  if (!email) redirect("/login");
-
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, email: true, name: true, role: true, backgroundImageUrl: true },
-  });
-  if (!user?.email) redirect("/login");
-
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    backgroundImageUrl: user.backgroundImageUrl,
-  };
-});
-
 export const getUser = cache(async (): Promise<SessionUser | null> => {
   const session = await auth();
   const email = session?.user?.email?.toLowerCase();
   if (!email) return null;
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, email: true, name: true, role: true, backgroundImageUrl: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      backgroundImageUrl: true,
+      themeId: true,
+    },
   });
   return user?.email
     ? {
@@ -62,8 +50,17 @@ export const getUser = cache(async (): Promise<SessionUser | null> => {
         name: user.name,
         role: user.role,
         backgroundImageUrl: user.backgroundImageUrl,
+        themeId: user.themeId,
       }
     : null;
+});
+
+/** Delegates to `getUser` so the root layout's theme lookup and every guarded
+ *  layout/page/action share the single cached query. */
+export const requireUser = cache(async (): Promise<SessionUser> => {
+  const user = await getUser();
+  if (!user) redirect("/login");
+  return user;
 });
 
 /**

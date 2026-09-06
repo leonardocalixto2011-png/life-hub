@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { isThemeId } from "@/lib/themes";
 
 /**
  * Deletes whatever was already stored before persisting the new one, so a
@@ -39,5 +40,16 @@ export async function removeBackgroundImage() {
   await deletePreviousBlob(user.id);
   await prisma.user.update({ where: { id: user.id }, data: { backgroundImageUrl: null } });
 
+  revalidatePath("/", "layout");
+}
+
+export async function setTheme(themeId: string) {
+  const user = await requireUser();
+  if (!isThemeId(themeId)) throw new Error("Unknown theme.");
+
+  await prisma.user.update({ where: { id: user.id }, data: { themeId } });
+
+  // The palette lives on <html> in the root layout, so the whole tree has to
+  // re-render — not just /appearance.
   revalidatePath("/", "layout");
 }

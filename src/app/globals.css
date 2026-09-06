@@ -30,6 +30,144 @@
   }
 }
 
+/* --------------------------------------------------------------- themes
+   Per-user palettes (User.themeId -> <html data-theme>). Registry in
+   src/lib/themes.ts. `html[data-theme=…]` is (0,1,1) so it outranks the
+   `:root` dark block above; the dark overrides then come later in source
+   order at the same specificity, so both light and dark resolve correctly. */
+
+html[data-theme="pink"] {
+  --bg: #fdf4f7;
+  --surface: #ffffff;
+  --surface-2: #fbe9f0;
+  --border: #f3d7e3;
+  --text: #2a1a22;
+  --text-dim: #8a6b78;
+  --primary: #db2777;
+  --primary-fg: #ffffff;
+  --danger: #dc2626;
+  --ok: #15803d;
+}
+
+html[data-theme="forest"] {
+  --bg: #f4f7f4;
+  --surface: #ffffff;
+  --surface-2: #e9f0ea;
+  --border: #d7e3d9;
+  --text: #16201a;
+  --text-dim: #5f7266;
+  --primary: #047857;
+  --primary-fg: #ffffff;
+  --danger: #dc2626;
+  --ok: #15803d;
+}
+
+html[data-theme="ocean"] {
+  --bg: #f2f7fa;
+  --surface: #ffffff;
+  --surface-2: #e7f0f6;
+  --border: #d4e2ec;
+  --text: #12202a;
+  --text-dim: #5c7183;
+  --primary: #0369a1;
+  --primary-fg: #ffffff;
+  --danger: #dc2626;
+  --ok: #15803d;
+}
+
+html[data-theme="sunset"] {
+  --bg: #fdf6f0;
+  --surface: #ffffff;
+  --surface-2: #fbeade;
+  --border: #f1dccb;
+  --text: #2a1c12;
+  --text-dim: #866852;
+  --primary: #c2410c;
+  --primary-fg: #ffffff;
+  --danger: #dc2626;
+  --ok: #15803d;
+}
+
+html[data-theme="mono"] {
+  --bg: #f5f5f5;
+  --surface: #ffffff;
+  --surface-2: #ededed;
+  --border: #dedede;
+  --text: #171717;
+  --text-dim: #6b6b6b;
+  --primary: #262626;
+  --primary-fg: #ffffff;
+  --danger: #dc2626;
+  --ok: #15803d;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-theme="pink"] {
+    --bg: #1a1013;
+    --surface: #241519;
+    --surface-2: #2f1c22;
+    --border: #3d252d;
+    --text: #f5e6ec;
+    --text-dim: #b596a3;
+    --primary: #ec4899;
+    --primary-fg: #ffffff;
+    --danger: #f87171;
+    --ok: #4ade80;
+  }
+
+  html[data-theme="forest"] {
+    --bg: #0f1512;
+    --surface: #16201b;
+    --surface-2: #1e2b24;
+    --border: #2b3a31;
+    --text: #e6efe9;
+    --text-dim: #93a89c;
+    --primary: #10b981;
+    --primary-fg: #06231a;
+    --danger: #f87171;
+    --ok: #4ade80;
+  }
+
+  html[data-theme="ocean"] {
+    --bg: #0d1319;
+    --surface: #141d25;
+    --surface-2: #1c2831;
+    --border: #293a46;
+    --text: #e4eef5;
+    --text-dim: #90a5b5;
+    --primary: #38bdf8;
+    --primary-fg: #08131b;
+    --danger: #f87171;
+    --ok: #4ade80;
+  }
+
+  html[data-theme="sunset"] {
+    --bg: #17110d;
+    --surface: #211811;
+    --surface-2: #2c2117;
+    --border: #3b2c20;
+    --text: #f5eae0;
+    --text-dim: #b59b83;
+    --primary: #fb923c;
+    --primary-fg: #1a1109;
+    --danger: #f87171;
+    --ok: #4ade80;
+  }
+
+  html[data-theme="mono"] {
+    --bg: #0f0f0f;
+    --surface: #191919;
+    --surface-2: #232323;
+    --border: #303030;
+    --text: #ededed;
+    --text-dim: #969696;
+    --primary: #e5e5e5;
+    --primary-fg: #171717;
+    --danger: #f87171;
+    --ok: #4ade80;
+  }
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
