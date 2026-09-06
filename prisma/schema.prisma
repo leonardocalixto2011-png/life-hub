@@ -85,6 +85,10 @@ model Hub {
   createdById String
   createdBy   User     @relation("HubCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now())
+  /// Random slug in this hub's inbound email alias (hub-<token>@…). Null until
+  /// someone asks for the address. Unique so a forwarded mail resolves to
+  /// exactly one hub — see src/lib/inbound-address.ts.
+  inboundToken String? @unique
 
   memberships    HubMembership[]
   ventures       Venture[]

@@ -16,6 +16,7 @@ import {
 import { OAUTH_STATE_COOKIE } from "@/lib/mail/constants";
 import { encrypt } from "@/lib/mail/crypto";
 import { testImapLogin } from "@/lib/mail/imap";
+import { ensureInboundAddress, rotateInboundAddress } from "@/lib/inbound-address";
 
 /**
  * Starts the Gmail connect flow. The state value is stashed in a short-lived
@@ -149,4 +150,26 @@ export async function removeTrustedSender(id: string) {
   const parsedId = z.string().cuid().parse(id);
   await withHub(user.id, (tx) => tx.trustedSender.delete({ where: { id: parsedId } }));
   revalidatePath("/mail");
+}
+
+/**
+ * Reveals (minting on first use) this hub's forwarding address. Any active
+ * member can see it — the address is a shared property of the hub, and
+ * anyone who can read the hub's review inbox can already see what arrives.
+ */
+export async function revealInboundAddress(): Promise<string | null> {
+  const { hub } = await requireHub();
+  return ensureInboundAddress(hub.id);
+}
+
+/**
+ * Issues a new address, invalidating the old one. The point of rotation:
+ * anyone holding the address can post into this hub's review inbox, so a
+ * leaked address needs a way to be cut off.
+ */
+export async function rotateInbound(): Promise<string | null> {
+  const { hub } = await requireHub();
+  const next = await rotateInboundAddress(hub.id);
+  revalidatePath("/mail");
+  return next;
 }

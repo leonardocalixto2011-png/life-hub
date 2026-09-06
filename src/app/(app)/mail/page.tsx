@@ -5,6 +5,9 @@ import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { googleOAuthConfigured } from "@/lib/mail/google";
 import { microsoftOAuthConfigured } from "@/lib/mail/microsoft";
+import { addressFor, inboundDomain } from "@/lib/inbound-address";
+import { prisma } from "@/lib/prisma";
+import { ForwardingAddress } from "./ForwardingAddress";
 import {
   startGoogleConnect,
   startMicrosoftConnect,
@@ -42,6 +45,12 @@ export default async function MailPage({
       }),
     ]),
   );
+
+  // Show the existing address if one has been minted; ForwardingAddress mints
+  // on demand so a hub that never uses forwarding never gets a token.
+  const hubRow = inboundDomain()
+    ? await prisma.hub.findUnique({ where: { id: hub.id }, select: { inboundToken: true } })
+    : null;
 
   const configured = googleOAuthConfigured();
   const microsoftConfigured = microsoftOAuthConfigured();
@@ -105,6 +114,8 @@ export default async function MailPage({
           ))
         )}
       </div>
+
+      {inboundDomain() && <ForwardingAddress initial={addressFor(hubRow?.inboundToken ?? null)} />}
 
       <form action={connectImapAccount} className="card space-y-2 p-3">
         <input type="hidden" name="provider" value="GMAIL_IMAP" />

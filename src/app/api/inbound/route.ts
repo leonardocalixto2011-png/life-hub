@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseText, type Draft } from "@/lib/parse";
 import { rateLimit } from "@/lib/rate-limit";
+import { resolveHubFromRecipient } from "@/lib/inbound-address";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,6 +47,7 @@ function stripHtml(html: string): string {
 type ResendPayload = {
   data?: {
     from?: string | { address?: string; name?: string };
+    to?: string | { address?: string; name?: string };
     subject?: string;
     text?: string;
     html?: string;
@@ -65,7 +67,13 @@ type CloudflarePayload = {
   };
 };
 
-type Extracted = { from: string | null; subject: string; body: string; sourceRef: string | null };
+type Extracted = {
+  from: string | null;
+  to: string | null;
+  subject: string;
+  body: string;
+  sourceRef: string | null;
+};
 
 /** Two inbound paths land here: Resend Inbound (Svix-signed) or a Cloudflare
  * Email Worker (shared-secret header, see workers/inbound-email). Whichever
@@ -87,6 +95,7 @@ async function extract(req: Request, raw: string): Promise<Extracted | NextRespo
     const d = payload.data ?? {};
     return {
       from: d.from ?? null,
+      to: d.to ?? null,
       subject: d.subject ?? "",
       body: d.text?.trim() || (d.html ? stripHtml(d.html) : ""),
       sourceRef: d.messageId ?? null,
@@ -113,6 +122,7 @@ async function extract(req: Request, raw: string): Promise<Extracted | NextRespo
   const d = payload.data ?? {};
   return {
     from: typeof d.from === "string" ? d.from : (d.from?.address ?? null),
+    to: typeof d.to === "string" ? d.to : (d.to?.address ?? null),
     subject: d.subject ?? "",
     body: d.text?.trim() || (d.html ? stripHtml(d.html) : ""),
     sourceRef: d.message_id ?? d.email_id ?? null,
@@ -124,18 +134,21 @@ export async function POST(req: Request) {
   const extracted = await extract(req, raw);
   if (extracted instanceof NextResponse) return extracted;
 
-  // A ReviewItem with a null hubId is visible to EVERY user (see
-  // review_item_hub_isolation and reviewVisibility in lib/data.ts). That was
-  // survivable when the whole userbase was three people who trusted each
-  // other; it is a cross-tenant leak otherwise. Inbound mail therefore has to
-  // land in a specific hub, and until there's a real recipient-address → hub
-  // routing design, that hub is named explicitly in config.
-  const hubId = process.env.INBOUND_HUB_ID;
-  if (!hubId) {
-    return NextResponse.json({ error: "INBOUND_HUB_ID is not set" }, { status: 503 });
-  }
+  const { from, to, subject, body, sourceRef } = extracted;
 
-  const { from, subject, body, sourceRef } = extracted;
+  // Route by the address it was sent to: hub-<token>@INBOUND_DOMAIN. A
+  // ReviewItem with a null hubId is visible to EVERY user (see
+  // review_item_hub_isolation), so an unroutable message is rejected rather
+  // than parked somewhere global. INBOUND_HUB_ID remains as a fallback for
+  // the pre-token setup, and is the only reason a message with no usable
+  // recipient still lands anywhere.
+  const hubId = (await resolveHubFromRecipient(to)) ?? process.env.INBOUND_HUB_ID ?? null;
+  if (!hubId) {
+    return NextResponse.json(
+      { error: "could not route: unknown recipient address" },
+      { status: 422 },
+    );
+  }
   if (!body && !subject) return NextResponse.json({ ok: true, skipped: "empty" });
 
   // Each accepted message costs a paid AI parse. The signature check already
