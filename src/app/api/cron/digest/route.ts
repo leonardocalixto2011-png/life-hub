@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { reportError } from "@/lib/observability";
+
 import { prisma } from "@/lib/prisma";
 import { mapLimit } from "@/lib/async";
 import { pruneRateLimits } from "@/lib/rate-limit";
@@ -41,12 +43,14 @@ export async function GET(req: Request) {
 
   let pushed = 0;
   let emailed = 0;
+  let failed = 0;
   let totalCount = 0;
 
   // Bounded fan-out: each user's collect opens its own withHub transaction
   // per hub, so unbounded Promise.all would spike Neon connections as the
   // roster grows.
   await mapLimit(users, 4, async (u) => {
+    try {
     const digest = await collectDigestForUser(u.id, 48);
     totalCount += digest.count;
     if (digest.count === 0) return;
@@ -70,6 +74,11 @@ export async function GET(req: Request) {
       await sendEmail({ to: u.email, subject, html, text });
       emailed++;
     }
+    } catch (err) {
+      // One person's digest failing must not abort everyone else's.
+      failed++;
+      await reportError("cron.digest.user_failed", err, { userId: u.id });
+    }
   });
 
   // Piggyback the rate-limit sweep on a job that already runs daily.
@@ -79,6 +88,7 @@ export async function GET(req: Request) {
     ok: true,
     count: totalCount,
     prunedRateLimits,
+    failed,
     pushed,
     emailed,
     ranAt: new Date().toISOString(),

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { reportError } from "@/lib/observability";
+
 import { pollAllMailAccounts } from "@/lib/mail/poll";
 
 export const runtime = "nodejs";

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { reportError } from "@/lib/observability";
+
 import { prisma } from "@/lib/prisma";
 import { mapLimit } from "@/lib/async";
 import { sendEmail } from "@/lib/email";

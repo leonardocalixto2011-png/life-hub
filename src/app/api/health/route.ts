@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma, rlsEnforced } from "@/lib/prisma";
+import { reportStartupPosture } from "@/lib/observability";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,7 +14,13 @@ export const dynamic = "force-dynamic";
  * (it's a boolean about the server's own config, not user data) so uptime
  * monitoring can alert on it instead of it going unnoticed for months.
  */
+let posturedReported = false;
+
 export async function GET() {
+  if (!posturedReported) {
+    posturedReported = true;
+    reportStartupPosture();
+  }
   try {
     await prisma.$queryRaw`SELECT 1`;
     return NextResponse.json({
