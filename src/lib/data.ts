@@ -293,7 +293,10 @@ export async function upcomingSummary(tx: HubTx, hubId: string, userId: string) 
       select: { costCents: true, billingCycle: true },
     }),
     tx.debt.findMany({
-      where: { hubId, status: "CURRENT" },
+      // Not `status: "CURRENT"` — a debt in DEFAULT is still owed (often on a
+      // negotiated payment, which is exactly what actualPaymentCents holds).
+      // Only PAID_OFF stops costing money.
+      where: { hubId, status: { not: "PAID_OFF" } },
       select: { minimumPaymentCents: true, actualPaymentCents: true },
     }),
     tx.task.findMany({
@@ -561,7 +564,9 @@ export async function dashboard(tx: HubTx, hubId: string, userId: string) {
       orderBy: { startAt: "asc" },
     }),
     tx.debt.findMany({
-      where: { hubId, status: "CURRENT", dueDate: { gte: todayStart, lte: soon } },
+      // Same reasoning as upcomingSummary — a defaulted debt still has a
+      // payment due, and arguably needs the reminder more.
+      where: { hubId, status: { not: "PAID_OFF" }, dueDate: { gte: todayStart, lte: soon } },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { dueDate: "asc" },
     }),

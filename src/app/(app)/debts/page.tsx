@@ -7,6 +7,7 @@ import { countdownLabel, money } from "@/lib/format";
 import { VentureChip } from "@/components/VentureChip";
 import { Avatar } from "@/components/Avatar";
 import { DebtForm } from "./DebtForm";
+import { DebtStatusChip } from "./DebtStatusChip";
 import { LogPaymentButton } from "./LogPaymentButton";
 
 export const dynamic = "force-dynamic";
@@ -31,14 +32,7 @@ function Row({ d }: { d: DebtWithRefs }) {
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           {d.venture && <VentureChip name={d.venture.name} color={d.venture.color} />}
           {d.owner && <Avatar name={d.owner.name} email={d.owner.email} size={18} />}
-          {d.status === "DEFAULT" && (
-            <span
-              className="chip"
-              style={{ background: "var(--color-danger)", borderColor: "var(--color-danger)", color: "#fff" }}
-            >
-              in default
-            </span>
-          )}
+          <DebtStatusChip id={d.id} status={d.status} />
           {!paidOff && d.dueDate && (
             <span className="text-[0.68rem] text-[var(--color-text-dim)]">
               due {countdownLabel(d.dueDate)}

@@ -76,6 +76,11 @@ export async function setDebtStatus(fd: FormData) {
   const { id, status } = schema.parse({ id: fd.get("id"), status: fd.get("status") });
   await withHub(user.id, (tx) => tx.debt.update({ where: { id }, data: { status } }));
   revalidatePath("/debts");
+  revalidatePath(`/debts/${id}`);
+  // Only CURRENT debts count toward the Budget forecast and the /today
+  // "Payments due" list, so a status change has to invalidate both.
+  revalidatePath("/money");
+  revalidatePath("/today");
 }
 
 export async function deleteDebt(fd: FormData) {
