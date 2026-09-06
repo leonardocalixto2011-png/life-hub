@@ -733,6 +733,18 @@ Took the remaining perf items from the earlier 3-agent audit.
   non-null `offsetParent` and a computed `display` of `block`. Checking
   those from JS gives a false "not hidden" — screenshot or read
   `details.open` instead.
+- ✅ **Agenda completeness** — `agendaItems()` merged only tasks, deadlines
+  and events, so a renewal and a debt due date appeared on `/today` but not
+  on the screen that's meant to *be* the timeline. It now also pulls ACTIVE
+  subscription renewals and non-`PAID_OFF` debt due dates in the window
+  (amount as the row's `meta`, icons 🔁 and 🏦), and calls
+  `advanceLapsedRenewals` first — without that a lapsed renewal would be
+  filtered out by the `gte: from` bound. `MyItem` now narrows `kind` to
+  `task | deadline`, since `/mine` is assigned-to-me and neither
+  subscriptions nor debts have an assignee.
+- **Still open after this pass**: `/money`→`/budget` rename; **debts +
+  renewals in the two digests** (deliberately not done — it changes what
+  lands in people's email, so it needs the user's say-so first).
 
 ## Commands
 
