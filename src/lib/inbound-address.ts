@@ -16,7 +16,24 @@ import { prisma } from "@/lib/prisma";
  * exactly the property forwarding needs, and the reason it is revocable.
  */
 
-const PREFIX = "hub-";
+/**
+ * Two address shapes, both accepted on the way in:
+ *
+ *   hub-<token>@domain   "dash" — needs a catch-all rule at the provider.
+ *   hub+<token>@domain   "plus" — needs ONE custom-address rule plus
+ *                        subaddressing support.
+ *
+ * The distinction is operational, not cosmetic. Cloudflare Email Routing only
+ * offers catch-all at the zone apex, so the dash style on a real business
+ * domain would swallow every message that doesn't match another rule. The plus
+ * style routes through a single explicit address and leaves the rest of the
+ * domain's mail alone, which is the safer default on a domain already in use.
+ *
+ * INBOUND_ADDRESS_STYLE picks what we hand out; resolution accepts either, so
+ * switching styles doesn't strand addresses already given out.
+ */
+const localPart = () => process.env.INBOUND_LOCAL_PART ?? "hub";
+const usePlusStyle = () => process.env.INBOUND_ADDRESS_STYLE === "plus";
 
 export function inboundDomain(): string | null {
   return process.env.INBOUND_DOMAIN ?? null;
@@ -32,7 +49,8 @@ function newToken(): string {
 export function addressFor(token: string | null): string | null {
   const domain = inboundDomain();
   if (!domain || !token) return null;
-  return `${PREFIX}${token}@${domain}`;
+  const sep = usePlusStyle() ? "+" : "-";
+  return `${localPart()}${sep}${token}@${domain}`;
 }
 
 /**
@@ -83,19 +101,29 @@ export async function resolveHubFromRecipient(to: string | null | undefined): Pr
     })
     .filter(Boolean);
 
+  const base = localPart().toLowerCase();
+
   for (const address of candidates) {
     const [local, host] = address.split("@");
     if (!local || host !== domain.toLowerCase()) continue;
-    // Gmail-style "+" suffixes are stripped so a forwarding rule that appends
-    // one still resolves.
-    const token = local.replace(/\+.*$/, "").slice(PREFIX.length);
-    if (!local.startsWith(PREFIX) || !token) continue;
 
-    const hub = await prisma.hub.findUnique({
-      where: { inboundToken: token },
-      select: { id: true },
-    });
-    if (hub) return hub.id;
+    // Collect every plausible token from this local part rather than assuming
+    // a style — a hub handed out a dash address must keep working after a
+    // switch to plus. A token is 32 hex chars, so a wrong guess just fails the
+    // lookup; there is no ambiguity to resolve.
+    const [beforePlus, ...plusParts] = local.split("+");
+    const tokens = [
+      plusParts.length > 0 ? plusParts.join("+") : null,
+      beforePlus.startsWith(`${base}-`) ? beforePlus.slice(base.length + 1) : null,
+    ].filter((t): t is string => Boolean(t));
+
+    for (const token of tokens) {
+      const hub = await prisma.hub.findUnique({
+        where: { inboundToken: token },
+        select: { id: true },
+      });
+      if (hub) return hub.id;
+    }
   }
 
   return null;
