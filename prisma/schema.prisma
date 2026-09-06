@@ -512,7 +512,8 @@ model ReviewItem {
 // ---------------------------------------------------------------------------
 
 enum MailProvider {
-  GOOGLE
+  GOOGLE // Gmail over OAuth + REST
+  GMAIL_IMAP // Gmail over IMAP with an app password — no 7-day token expiry
   YAHOO
   MICROSOFT
 }

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { commitDraftsCore } from "@/lib/commit-drafts";
 import { classifyEmail, type ActionableCategory } from "./classify";
 import { fetchGoogleBatch } from "./google";
-import { fetchYahooBatch } from "./yahoo";
+import { fetchImapBatch } from "./imap";
 import { fetchMicrosoftBatch } from "./microsoft";
 import { isTrusted } from "./trust";
 import { RUN_TIME_BUDGET_MS, type MailBatchItem } from "./types";
@@ -40,7 +40,9 @@ function extractAddress(from: string): string {
  */
 async function fetchBatch(account: MailAccount): Promise<MailBatchItem[]> {
   if (account.provider === "GOOGLE") return fetchGoogleBatch(account);
-  if (account.provider === "YAHOO") return fetchYahooBatch(account);
+  if (account.provider === "YAHOO" || account.provider === "GMAIL_IMAP") {
+    return fetchImapBatch(account);
+  }
   if (account.provider === "MICROSOFT") return fetchMicrosoftBatch(account);
   throw new Error(`Unhandled mail provider: ${account.provider}`);
 }

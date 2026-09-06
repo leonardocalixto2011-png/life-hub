@@ -1,23 +1,41 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
-import type { MailAccount } from "@prisma/client";
+import type { MailAccount, MailProvider } from "@prisma/client";
 
 import { decrypt } from "./crypto";
 import { MAX_MESSAGES_PER_RUN, stripHtml, type MailBatchItem, type ParsedMessage } from "./types";
 
 /**
- * Yahoo Mail — plain IMAP with an app-specific password (see mail/actions.ts
- * for why: Yahoo has no self-serve OAuth2+IMAP access for third parties,
- * only a formal commercial-access application). No SDK — `imapflow` is the
- * one exception to this project's fetch-only style, since hand-rolling the
- * IMAP protocol (unlike a REST API) is impractical. Read-only: every mailbox
- * lock below is opened `readOnly: true` and fetches use `source: true`
- * (peek semantics — never marks messages `\Seen`).
+ * Plain IMAP with an app-specific password, shared by every provider we reach
+ * that way. No SDK — `imapflow` is the one exception to this project's
+ * fetch-only style, since hand-rolling IMAP (unlike a REST API) is
+ * impractical. Read-only throughout: every mailbox lock is `readOnly: true`
+ * and fetches use `source: true`, which is peek semantics — messages are
+ * never marked `\Seen`.
+ *
+ * Why Gmail is here and not only under OAuth: a Google Cloud OAuth client in
+ * "Testing" publishing status issues refresh tokens that expire after 7 days,
+ * which breaks a background poller weekly. Escaping that means publishing to
+ * Production, and `gmail.readonly` is a *restricted* scope — that requires
+ * Google verification plus an annual third-party CASA security assessment.
+ * An app password sidesteps all of it. The OAuth path (mail/google.ts) still
+ * works and is left in place for accounts already connected that way.
  */
 
-function client(email: string, appPassword: string): ImapFlow {
+const IMAP_HOSTS: Partial<Record<MailProvider, string>> = {
+  YAHOO: "imap.mail.yahoo.com",
+  GMAIL_IMAP: "imap.gmail.com",
+};
+
+export function imapHostFor(provider: MailProvider): string {
+  const host = IMAP_HOSTS[provider];
+  if (!host) throw new Error(`${provider} is not an IMAP provider`);
+  return host;
+}
+
+function client(host: string, email: string, appPassword: string): ImapFlow {
   return new ImapFlow({
-    host: "imap.mail.yahoo.com",
+    host,
     port: 993,
     secure: true,
     auth: { user: email, pass: appPassword },
@@ -28,9 +46,13 @@ function client(email: string, appPassword: string): ImapFlow {
   });
 }
 
-/** Verifies credentials work before saving them — see connectYahooAccount. */
-export async function testYahooLogin(email: string, appPassword: string): Promise<void> {
-  const c = client(email, appPassword);
+/** Verifies credentials work before saving them — see connectImapAccount. */
+export async function testImapLogin(
+  provider: MailProvider,
+  email: string,
+  appPassword: string,
+): Promise<void> {
+  const c = client(imapHostFor(provider), email, appPassword);
   await c.connect();
   try {
     const lock = await c.getMailboxLock("INBOX", { readOnly: true });
@@ -41,15 +63,18 @@ export async function testYahooLogin(email: string, appPassword: string): Promis
 }
 
 /**
- * Yahoo caps IMAP to 5 concurrent connections per source IP. A non-issue
- * today since lib/mail/poll.ts polls accounts sequentially — don't
- * parallelize that loop without accounting for this.
+ * Yahoo caps IMAP to 5 concurrent connections per source IP (Gmail's limit is
+ * higher but also finite). A non-issue today since lib/mail/poll.ts polls
+ * accounts sequentially — don't parallelize that loop without accounting for it.
  */
-export async function fetchYahooBatch(account: MailAccount): Promise<MailBatchItem[]> {
+export async function fetchImapBatch(account: MailAccount): Promise<MailBatchItem[]> {
   const appPassword = decrypt(account.appPasswordEnc!);
-  const c = client(account.emailAddress, appPassword);
+  const c = client(imapHostFor(account.provider), account.emailAddress, appPassword);
   await c.connect();
   try {
+    // Gmail exposes labels as folders and duplicates a message into "[Gmail]/All
+    // Mail"; polling INBOX only (as here) is what we want — the same messages a
+    // person sees when they open their inbox, once each.
     const lock = await c.getMailboxLock("INBOX", { readOnly: true });
     try {
       const status = await c.status("INBOX", { uidValidity: true });
@@ -78,7 +103,7 @@ export async function fetchYahooBatch(account: MailAccount): Promise<MailBatchIt
           // id used as ReviewItem.sourceRef — see poll.ts's dedup check,
           // which guards against a rare UIDVALIDITY-reset reprocessing the
           // same message under a fresh UID.
-          id: parsed.messageId ?? `yahoo:${status.uidValidity}:${msg.uid}`,
+          id: parsed.messageId ?? `imap:${account.provider}:${status.uidValidity}:${msg.uid}`,
           from: parsed.from?.text ?? "",
           subject: parsed.subject ?? "",
           // No server-side snippet over IMAP (unlike Gmail's API) — synthesize one.

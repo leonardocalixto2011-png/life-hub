@@ -8,7 +8,7 @@ import { microsoftOAuthConfigured } from "@/lib/mail/microsoft";
 import {
   startGoogleConnect,
   startMicrosoftConnect,
-  connectYahooAccount,
+  connectImapAccount,
   disconnectMailAccount,
   removeTrustedSender,
 } from "./actions";
@@ -71,12 +71,6 @@ export default async function MailPage({
         </div>
       )}
 
-      {!configured && (
-        <div className="card border-[var(--color-danger)] p-4 text-xs text-[var(--color-danger)]">
-          Google OAuth isn't configured on the server yet (no
-          GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET). Ask an admin to set it up.
-        </div>
-      )}
 
       <div className="card divide-y divide-[var(--color-border)] p-0">
         {accounts.length === 0 ? (
@@ -112,9 +106,57 @@ export default async function MailPage({
         )}
       </div>
 
-      <form action={startGoogleConnect}>
-        <button type="submit" disabled={!configured} className="btn btn-primary w-full">
+      <form action={connectImapAccount} className="card space-y-2 p-3">
+        <input type="hidden" name="provider" value="GMAIL_IMAP" />
+        <div className="text-xs font-semibold">Connect Gmail</div>
+        <p className="text-[0.68rem] text-[var(--color-text-dim)]">
+          Turn on 2-step verification, then create an app password at{" "}
+          <span className="font-medium">myaccount.google.com → Security → App passwords</span> and
+          paste it below. This avoids Google&apos;s sign-in screen entirely, which otherwise makes
+          you reconnect every week.
+        </p>
+        <input
+          type="email"
+          name="email"
+          placeholder="you@gmail.com"
+          required
+          className="field w-full"
+        />
+        <input
+          type="password"
+          name="appPassword"
+          placeholder="App password"
+          required
+          className="field w-full"
+        />
+        <button type="submit" className="btn btn-primary w-full">
           + Connect Gmail
+        </button>
+      </form>
+
+      <form action={connectImapAccount} className="card space-y-2 p-3">
+        <input type="hidden" name="provider" value="YAHOO" />
+        <div className="text-xs font-semibold">Connect Yahoo Mail</div>
+        <p className="text-[0.68rem] text-[var(--color-text-dim)]">
+          Yahoo Account Security → External connections → Create app password
+          (needs two-step verification on first).
+        </p>
+        <input
+          type="email"
+          name="email"
+          placeholder="you@yahoo.com"
+          required
+          className="field w-full"
+        />
+        <input
+          type="password"
+          name="appPassword"
+          placeholder="App password"
+          required
+          className="field w-full"
+        />
+        <button type="submit" className="btn btn-primary w-full">
+          + Connect Yahoo
         </button>
       </form>
 
@@ -135,32 +177,26 @@ export default async function MailPage({
         </p>
       </div>
 
-      <form action={connectYahooAccount} className="card space-y-2 p-3">
-        <div className="text-xs font-semibold">Connect Yahoo Mail</div>
-        <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-          Yahoo doesn&apos;t support one-tap sign-in for this — generate an app
-          password (Yahoo Account Security → External connections → Create app
-          password; requires two-step verification turned on first) and paste it
-          below.
-        </p>
-        <input
-          type="email"
-          name="email"
-          placeholder="you@yahoo.com"
-          required
-          className="field w-full"
-        />
-        <input
-          type="password"
-          name="appPassword"
-          placeholder="App password"
-          required
-          className="field w-full"
-        />
-        <button type="submit" className="btn btn-primary w-full">
-          + Connect Yahoo
-        </button>
-      </form>
+      {/* Gmail-over-OAuth is kept only for mailboxes already connected that way.
+          Its refresh tokens expire every 7 days while the Google Cloud client is
+          in "Testing", so new connections should use the app-password form above. */}
+      <details className="text-[0.68rem] text-[var(--color-text-dim)]">
+        <summary className="cursor-pointer font-semibold text-[var(--color-primary)]">
+          Connect Gmail the old way (Google sign-in)
+        </summary>
+        <div className="mt-2 space-y-1.5">
+          <p>
+            Needs you to be on the app&apos;s Google test-user list, and stops working
+            about once a week until Google verifies the app — use the app-password
+            form above instead.
+          </p>
+          <form action={startGoogleConnect}>
+            <button type="submit" disabled={!configured} className="btn w-full">
+              Sign in with Google
+            </button>
+          </form>
+        </div>
+      </details>
 
       {trustedSenders.length > 0 && (
         <section>

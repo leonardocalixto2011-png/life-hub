@@ -15,7 +15,7 @@ import {
 } from "@/lib/mail/microsoft";
 import { OAUTH_STATE_COOKIE } from "@/lib/mail/constants";
 import { encrypt } from "@/lib/mail/crypto";
-import { testYahooLogin } from "@/lib/mail/yahoo";
+import { testImapLogin } from "@/lib/mail/imap";
 
 /**
  * Starts the Gmail connect flow. The state value is stashed in a short-lived
@@ -63,44 +63,59 @@ export async function startMicrosoftConnect() {
   redirect(buildMicrosoftAuthUrl(state));
 }
 
-const YahooConnectSchema = z.object({
+const ImapConnectSchema = z.object({
+  provider: z.enum(["YAHOO", "GMAIL_IMAP"]),
   email: z.string().email(),
   appPassword: z.string().min(1),
 });
 
 /**
- * No OAuth redirect here — Yahoo app passwords are a static credential the
- * user pastes in directly (see the plan: Yahoo has no self-serve OAuth2+IMAP
- * access for third parties). Verifies the credentials actually work before
- * saving, so a typo surfaces immediately instead of on the next silent poll
- * failure.
+ * No OAuth redirect here — an app password is a static credential the user
+ * pastes in directly. Yahoo has no self-serve OAuth2+IMAP access at all; for
+ * Gmail this is the deliberate escape from OAuth "Testing" mode, whose refresh
+ * tokens expire every 7 days and break the background poller (going to
+ * Production instead would need Google verification plus a CASA assessment,
+ * since gmail.readonly is a restricted scope).
+ *
+ * Verifies the credentials actually work before saving, so a typo surfaces
+ * immediately instead of as a silent poll failure later.
  */
-export async function connectYahooAccount(formData: FormData) {
+export async function connectImapAccount(formData: FormData) {
   const { user, hub } = await requireHub();
 
-  const parsed = YahooConnectSchema.safeParse({
+  const parsed = ImapConnectSchema.safeParse({
+    provider: formData.get("provider"),
     email: formData.get("email"),
     appPassword: formData.get("appPassword"),
   });
   if (!parsed.success) {
     redirect("/mail?error=" + encodeURIComponent("Enter a valid email and app password."));
   }
-  const { email, appPassword } = parsed.data;
+  const { provider, email, appPassword } = parsed.data;
 
   try {
-    await testYahooLogin(email, appPassword);
-  } catch {
-    // Never pass the underlying IMAP error through — unlike an OAuth error,
-    // its message can be close to the credential itself.
+    await testImapLogin(provider, email, appPassword);
+  } catch (err) {
+    // Never pass the underlying IMAP error text through — unlike an OAuth
+    // error, it can echo something close to the credential itself. The error
+    // *code* is safe though, and worth branching on: reporting "check your
+    // password" when the real problem was a network timeout sends someone
+    // hunting a bug that isn't there.
+    const code = (err as { code?: string })?.code ?? "";
+    const timedOut = code === "ETIMEOUT" || code === "ETIMEDOUT" || code === "ECONNREFUSED";
     redirect(
       "/mail?error=" +
-        encodeURIComponent("Couldn't verify that email/app password — check both and try again."),
+        encodeURIComponent(
+          timedOut
+            ? "Couldn't reach the mail server — that's a connection problem, not your password. Try again in a moment."
+            : "Couldn't verify that email/app password. Make sure it's an app password (not your normal one) and that two-step verification is on.",
+        ),
     );
   }
 
   await withHub(user.id, (tx) =>
     tx.mailAccount.upsert({
-      where: { provider_emailAddress: { provider: "YAHOO", emailAddress: email } },
+      where: { provider_emailAddress: { provider, emailAddress: email } },
       update: {
         userId: user.id,
         hubId: hub.id,
@@ -111,7 +126,7 @@ export async function connectYahooAccount(formData: FormData) {
       create: {
         userId: user.id,
         hubId: hub.id,
-        provider: "YAHOO",
+        provider,
         emailAddress: email,
         appPasswordEnc: encrypt(appPassword),
       },
