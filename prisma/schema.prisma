@@ -238,7 +238,9 @@ model Deadline {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
-  @@index([hubId, dueDate])
+  // Every read filters doneAt: null and sorts by (doneAt, dueDate) — see
+  // listDeadlines / dashboard / digest in lib/data.ts + lib/digest.ts.
+  @@index([hubId, doneAt, dueDate])
 }
 
 // ---------------------------------------------------------------------------
@@ -278,6 +280,8 @@ model Subscription {
   updatedAt    DateTime           @updatedAt
 
   @@index([hubId, status, renewalDate])
+  // dashboard() + digest query cancel-bys on their own date window/sort.
+  @@index([hubId, status, cancelByDate])
 }
 
 // ---------------------------------------------------------------------------
@@ -493,6 +497,7 @@ model MailAccount {
 
   @@unique([provider, emailAddress])
   @@index([status])
+  @@index([hubId]) // /mail lists a hub's accounts
 }
 
 // Sender-based learning (prompt §3): after a few accepted ReviewItems from the

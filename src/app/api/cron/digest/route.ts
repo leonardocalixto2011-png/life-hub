@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { mapLimit } from "@/lib/async";
 import { sendEmail } from "@/lib/email";
 import { sendPushToUser } from "@/lib/push";
 import {
@@ -41,33 +42,34 @@ export async function GET(req: Request) {
   let emailed = 0;
   let totalCount = 0;
 
-  await Promise.all(
-    users.map(async (u) => {
-      const digest = await collectDigestForUser(u.id, 48);
-      totalCount += digest.count;
-      if (digest.count === 0) return;
+  // Bounded fan-out: each user's collect opens its own withHub transaction
+  // per hub, so unbounded Promise.all would spike Neon connections as the
+  // roster grows.
+  await mapLimit(users, 4, async (u) => {
+    const digest = await collectDigestForUser(u.id, 48);
+    totalCount += digest.count;
+    if (digest.count === 0) return;
 
-      const pref = u.notificationPref;
-      const subject = digestSubject(digest);
-      const text = digestText(digest);
-      const html = digestHtml(digest, appUrl);
+    const pref = u.notificationPref;
+    const subject = digestSubject(digest);
+    const text = digestText(digest);
+    const html = digestHtml(digest, appUrl);
 
-      if ((pref?.pushEnabled ?? true) && u._count.pushSubscriptions > 0) {
-        const r = await sendPushToUser(u.id, {
-          title: "Life Hub — daily digest",
-          body: `${digest.count} thing${digest.count === 1 ? "" : "s"} due in the next 48h. Tap to review.`,
-          url: "/today",
-          tag: "digest",
-        });
-        if (r.sent > 0) pushed++;
-      }
+    if ((pref?.pushEnabled ?? true) && u._count.pushSubscriptions > 0) {
+      const r = await sendPushToUser(u.id, {
+        title: "Life Hub — daily digest",
+        body: `${digest.count} thing${digest.count === 1 ? "" : "s"} due in the next 48h. Tap to review.`,
+        url: "/today",
+        tag: "digest",
+      });
+      if (r.sent > 0) pushed++;
+    }
 
-      if ((pref?.emailDigestEnabled ?? true) && u.email) {
-        await sendEmail({ to: u.email, subject, html, text });
-        emailed++;
-      }
-    }),
-  );
+    if ((pref?.emailDigestEnabled ?? true) && u.email) {
+      await sendEmail({ to: u.email, subject, html, text });
+      emailed++;
+    }
+  });
 
   return NextResponse.json({
     ok: true,
