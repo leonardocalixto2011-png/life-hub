@@ -831,6 +831,37 @@ recipient belonged to.
 a human to confirm, and auto-creates FULL shares so nothing disappeared from
 anyone's view. Editing a debt clears the flag.
 
+### Phase 10b — Gmail over IMAP (app password)
+
+**Read this before touching Gmail auth again.** Connecting Gmail via OAuth
+fails for anyone not on the Google Cloud project's test-user list
+("Access blocked: … has not completed the Google verification process",
+403 access_denied). Adding testers is *not* a fix: an external OAuth client
+in **Testing** publishing status issues refresh tokens that **expire after
+7 days**, so the background poller breaks weekly. Publishing to Production
+is not viable either — `gmail.readonly` is a Google **restricted** scope,
+which requires OAuth verification *plus* an annual third-party CASA
+security assessment.
+
+So Gmail is reached the same way Yahoo is: plain IMAP with an app password.
+`yahoo.ts` became `imap.ts` with the host as a parameter (`imap.gmail.com`
+vs `imap.mail.yahoo.com` is the only difference), `MailProvider` gained
+`GMAIL_IMAP`, and `connectYahooAccount` became `connectImapAccount(provider,
+…)`. The OAuth path (`mail/google.ts`, provider `GOOGLE`) still works for
+already-connected mailboxes and is demoted to a collapsed section on
+`/mail`.
+
+- Each person needs 2-step verification on, then an app password:
+  Google → myaccount.google.com → Security → App passwords.
+- Connect errors distinguish a network timeout from a rejected credential.
+  The underlying IMAP error *text* is still never shown — it can echo
+  something close to the credential — but the error `code` is safe to branch
+  on.
+- **Untested end-to-end**: a live IMAP handshake couldn't be completed from
+  the dev sandbox (TCP 993 opens to both hosts; Gmail stalls the greeting for
+  a bogus account). The code is a direct generalisation of the Yahoo
+  connector, which is proven in production.
+
 ## Commands
 
 `npm run dev` · `build` · `typecheck` · `db:migrate` · `db:push` · `db:seed` ·
