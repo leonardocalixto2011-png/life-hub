@@ -656,8 +656,42 @@ Took the remaining perf items from the earlier 3-agent audit.
   delete index (RLS supplies the `hubId` equality the existing
   `[hubId, recurrenceGroupId]` needs; rare op); inbound webhook per-draft
   loop (making it concurrent races on in-batch duplicate titles — the
-  sequential dedup is load-bearing). Still open: inline debt status toggle,
-  `/money`→`/budget` rename, debts/renewals in `agendaItems()` + digests.
+  sequential dedup is load-bearing).
+
+### Phase 9e — Per-user themes, header declutter, debt-status fixes
+
+- ✅ **Per-user colour themes** — `User.themeId` (migration
+  `20260906015733_user_theme`) selects one of six palettes: indigo
+  (default), pink, forest, ocean, sunset, mono. Registry + validator in
+  `src/lib/themes.ts`; the palettes themselves are `html[data-theme="…"]`
+  blocks in `globals.css`, each with a light and a dark variant.
+  **Specificity matters here**: `html[data-theme=…]` is (0,1,1) so it beats
+  the `:root` dark block, and the themed dark overrides then come later in
+  source order at equal specificity — reorder those blocks and dark mode
+  breaks. Set on `<html>` by the *root* layout (not the app layout) so
+  `body` and the PWA `theme-color` follow; picked on `/appearance` beside
+  the background photo. `setTheme` revalidates `("/", "layout")`.
+- ✅ **`requireUser` delegates to `getUser`** — both were separate `cache`d
+  functions doing the same query. Now one lookup serves the root layout's
+  theme read and every guarded layout/page/action.
+- ✅ **Header declutter** — six unlabelled emoji links plus a text "Sign
+  out" overflowed a 375px header (the text wrapped to two lines). They move
+  into `components/AccountMenu.tsx` behind the avatar with real labels;
+  the header keeps hub switcher · review-inbox badge · avatar.
+- ✅ **Inline debt status** (`debts/DebtStatusChip.tsx`) — debts were the
+  only list with no inline action. The static "in default" badge is now a
+  select that writes status in place. `setDebtStatus` gained
+  `revalidatePath("/money")` + `("/today")`.
+- ✅ **Defaulted debts count as owed** — `upcomingSummary()` and
+  `dashboard()` filtered debts to `status: "CURRENT"`, so a debt in
+  `DEFAULT` silently vanished from the Budget forecast and "Payments due"
+  even though it's still owed (usually on a negotiated payment, which is
+  exactly what `actualPaymentCents` holds). Both now use
+  `status: { not: "PAID_OFF" }`. Caught by seeding a DEFAULT debt while
+  testing the chip — worth remembering that `CURRENT` is not "not paid off".
+- **Still open**: `/money`→`/budget` rename; debts + subscription renewals
+  in `agendaItems()` and the two digests (the digest half changes what
+  lands in people's email, so ask first).
 
 ## Commands
 
