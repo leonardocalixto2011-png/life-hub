@@ -766,10 +766,35 @@ Both signed off by the user after being flagged.
   Renaming an App Router directory leaves stale generated route types —
   `rm -rf .next` if the build complains about a missing `…/money/page.js`.
 
+### Phase 9h — `prisma/seed-finances.ts`
+
+Seeds one person's real financial picture (debts, recurring commitments,
+monthly income) into a **private single-member hub**, because `Debt` has no
+per-item privacy flag — see the Phase 9g warning.
+
+- **The figures are NOT in the repo.** They live in
+  `prisma/finances.local.json`, gitignored via a `*.local.json` rule.
+  **This repository is public** — balances, creditors, default statuses and
+  income must never be committed. `finances.example.json` documents the
+  shape. When editing the script, keep real amounts out of comments too (a
+  float-drift example using a real balance had to be scrubbed pre-commit).
+- Run: `SEED_FINANCES=yes ADMIN_EMAIL=… npm run db:seed-finances`. Guarded
+  behind `SEED_FINANCES=yes`, idempotent (rows matched by name), and it
+  **aborts** if the target hub has picked up other members.
+- Models recurring essentials (rent, insurance, utilities, a savings club)
+  as `Subscription`s, since that's what feeds `/budget`'s "recurring
+  commitments" forecast — Subscription is any fixed recurring cost here,
+  not just streaming. Only income is seeded as a `BudgetEntry`: an entry
+  asserts a transaction *happened*, and commitments haven't been paid yet.
+- Debt due dates and subscription renewal dates aren't part of the input,
+  so debts get `dueDate: null` (they won't appear on `/today` or `/agenda`
+  until set) and commitments get a clearly-labelled placeholder renewal.
+
 ## Commands
 
 `npm run dev` · `build` · `typecheck` · `db:migrate` · `db:push` · `db:seed` ·
-`db:studio` · `gen:vapid` · `verify:isolation` · `node scripts/gen-icons.mjs`
+`db:seed-finances` · `db:studio` · `gen:vapid` · `verify:isolation` ·
+`node scripts/gen-icons.mjs`
 
 ## Backlog (post-feature-complete)
 
