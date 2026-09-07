@@ -904,7 +904,7 @@ parsing (60/hr per user), inbound (120/hr). Swept by the daily cron.
 now read from `SEED_MEMBERS`. **The git history still contains them** —
 removing that needs a history rewrite.
 
-### Ordered queue (as of 2026-09-06)
+### Ordered queue (as of 2026-09-06, late)
 
 Done since the Phase 11 report: **data export + account deletion** (Art. 15/20/17,
 `src/lib/account.ts`, `/account`) and **error reporting + structured logging**
@@ -920,14 +920,21 @@ Remaining, in order:
 2. ~~**Inbound routing.**~~ ✅ Done. Each hub has `hub-<token>@INBOUND_DOMAIN`
    (`src/lib/inbound-address.ts`), minted on demand and revocable; unroutable
    mail is rejected 422 rather than parked in a globally-visible null hub.
-   `INBOUND_HUB_ID` remains only as a pre-token fallback. **Needs
-   `INBOUND_DOMAIN` set plus MX/routing at the provider to actually receive.**
+   `INBOUND_HUB_ID` remains only as a pre-token fallback. **Verified live
+   end-to-end** over Cloudflare Email Routing → Worker → /api/inbound
+   (subaddressing must be ON in Cloudflare Settings, or mail bounces 550).
 3. **Self-serve signup.** Still deliberately not built — invite-only is
    load-bearing as both a security and a cost control. When built, ship it
    behind a flag defaulting to **off**, so it can't open before (1) lands.
 4. **Monitoring wiring.** Code exists; still needs `ALERT_WEBHOOK_URL` set and
    an uptime monitor on `/api/health` alerting if `rls` stops reading
-   `"enforced"`.
+   `"enforced"`. Also worth setting `REQUIRE_APP_DB=1` now that prod is
+   confirmed enforced, so a future deploy cannot silently drop to the owner role.
+
+4b. **Muted senders.** The prefilter (`lib/mail/prefilter.ts`) skips bulk mail
+   with no money/date signal, but a sender you never want classified still
+   costs a call whenever they mention a price. A per-sender mute — the mirror
+   of `TrustedSender` — would be exact and permanent.
 5. **i18n.** `"CAD"` hardcoded at ~10 render sites, `en-CA` in `money()`,
    `America/Toronto` default timezone, all UI strings inline English.
 6. **Monetization.** Analysis in `MONETIZATION.md` — recommended $4.99/mo or
@@ -949,8 +956,6 @@ Remaining, in order:
 - **Per-item dated reminders** — deadline `remindDaysBefore` (7/3/1) and
   subscription `cancelByDate` as their own dated push events, not just the 48h
   digest summary. Needs a "sent" ledger table so the cron doesn't re-fire.
-- **Recurring tasks** — `Task.isRecurring` / `recurrence` are stored but nothing
-  regenerates the next occurrence on completion.
 - **Assistant** could also draft the digest email copy; currently the digest is
   templated in `lib/digest.ts`.
 - Real-device iOS push test; deploy.
