@@ -7,8 +7,32 @@ import {
   isYesterday,
 } from "date-fns";
 
-export function money(cents: number, currency = "CAD"): string {
-  return new Intl.NumberFormat("en-CA", {
+import { DEFAULT_LOCALE } from "@/lib/locales";
+
+/**
+ * Formats an amount. `locale` controls grouping and symbol placement — the
+ * same 1234.56 EUR is "€1,234.56" in en-CA and "1 234,56 €" in fr-FR — so a
+ * hardcoded en-CA misformats every non-Canadian user even when the currency
+ * code is right. Falls back to en-CA rather than the runtime default, since
+ * the server's locale is an accident of hosting, not a user preference.
+ */
+/**
+ * Validated against what the runtime actually supports, NOT by try/catch.
+ * `new Intl.NumberFormat("not-a-locale")` does not throw — it silently falls
+ * back to the *system* locale, so on Vercel an unrecognised stored value would
+ * render whatever country the container happens to be configured for. Only a
+ * structurally malformed tag throws. supportedLocalesOf catches both.
+ */
+function safeLocale(locale: string): string {
+  try {
+    return Intl.NumberFormat.supportedLocalesOf(locale).length > 0 ? locale : DEFAULT_LOCALE;
+  } catch {
+    return DEFAULT_LOCALE;
+  }
+}
+
+export function money(cents: number, currency = "CAD", locale: string = DEFAULT_LOCALE): string {
+  return new Intl.NumberFormat(safeLocale(locale), {
     style: "currency",
     currency,
   }).format(cents / 100);

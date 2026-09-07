@@ -42,7 +42,17 @@ function progress(d: DebtWithRefs): number | null {
   return Math.max(0, Math.min(1, paid / d.originalBalanceCents));
 }
 
-function Row({ d, own }: { d: DebtWithRefs; own: boolean }) {
+function Row({
+  d,
+  own,
+  currency,
+  locale,
+}: {
+  d: DebtWithRefs;
+  own: boolean;
+  currency: string;
+  locale: string;
+}) {
   const paidOff = d.status === "PAID_OFF";
   const payment = d.actualPaymentCents ?? d.minimumPaymentCents;
   const pct = progress(d);
@@ -102,15 +112,15 @@ function Row({ d, own }: { d: DebtWithRefs; own: boolean }) {
         </div>
 
         <div className="flex flex-col items-end text-right">
-          <div className="font-semibold tabular-nums">{money(d.balanceCents, "CAD")}</div>
+          <div className="font-semibold tabular-nums">{money(d.balanceCents, currency, locale)}</div>
           <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
             {payment != null
-              ? `${money(payment, "CAD")}${FREQ_SUFFIX[d.paymentFrequency]}`
+              ? `${money(payment, currency, locale)}${FREQ_SUFFIX[d.paymentFrequency]}`
               : "balance"}
             {d.aprBasisPoints != null ? ` · ${(d.aprBasisPoints / 100).toFixed(2)}%` : ""}
           </div>
           {own && !paidOff && payment != null && payment > 0 && (
-            <LogPaymentButton id={d.id} amountCents={payment} />
+            <LogPaymentButton id={d.id} amountCents={payment} currency={currency} locale={locale} />
           )}
         </div>
       </div>
@@ -148,6 +158,9 @@ export default async function DebtsPage() {
     sharedDebtSummaries(hub.id, user.id),
   ]);
 
+  const currency = hub.currency;
+  const locale = user.locale ?? "en-CA";
+
   const current = mine.filter((d) => d.status !== "PAID_OFF");
   const paidOff = mine.filter((d) => d.status === "PAID_OFF");
   const totalBalance = current.reduce((n, d) => n + d.balanceCents, 0);
@@ -181,13 +194,13 @@ export default async function DebtsPage() {
 
       <div className="card grid grid-cols-2 divide-x divide-[var(--color-border)] p-0">
         <div className="p-3 text-center">
-          <div className="text-lg font-bold tabular-nums">{money(totalBalance, "CAD")}</div>
+          <div className="text-lg font-bold tabular-nums">{money(totalBalance, currency, locale)}</div>
           <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
             total balance
           </div>
         </div>
         <div className="p-3 text-center">
-          <div className="text-lg font-bold tabular-nums">{money(totalMonthly, "CAD")}</div>
+          <div className="text-lg font-bold tabular-nums">{money(totalMonthly, currency, locale)}</div>
           <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
             per month · {current.length} current
           </div>
@@ -209,7 +222,7 @@ export default async function DebtsPage() {
           </h2>
           <div className="card divide-y divide-[var(--color-border)]">
             {current.map((d) => (
-              <Row key={d.id} d={d} own />
+              <Row key={d.id} d={d} own currency={currency} locale={locale} />
             ))}
           </div>
         </section>
@@ -222,7 +235,7 @@ export default async function DebtsPage() {
           </h2>
           <div className="card divide-y divide-[var(--color-border)]">
             {paidOff.map((d) => (
-              <Row key={d.id} d={d} own />
+              <Row key={d.id} d={d} own currency={currency} locale={locale} />
             ))}
           </div>
         </section>
@@ -250,10 +263,10 @@ export default async function DebtsPage() {
                   </div>
                   <div className="text-right">
                     <div className="font-semibold tabular-nums">
-                      {money(s.totalBalanceCents, "CAD")}
+                      {money(s.totalBalanceCents, currency, locale)}
                     </div>
                     <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
-                      {money(s.monthlyPaymentCents, "CAD")}/mo
+                      {money(s.monthlyPaymentCents, currency, locale)}/mo
                     </div>
                   </div>
                 </div>
@@ -264,7 +277,7 @@ export default async function DebtsPage() {
           {shared.length > 0 && (
             <div className="card divide-y divide-[var(--color-border)]">
               {shared.map((d) => (
-                <Row key={d.id} d={d} own={false} />
+                <Row key={d.id} d={d} own={false} currency={currency} locale={locale} />
               ))}
             </div>
           )}

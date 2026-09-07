@@ -7,6 +7,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { isThemeId } from "@/lib/themes";
+import { isLocale } from "@/lib/locales";
 
 /**
  * Deletes whatever was already stored before persisting the new one, so a
@@ -51,5 +52,17 @@ export async function setTheme(themeId: string) {
 
   // The palette lives on <html> in the root layout, so the whole tree has to
   // re-render — not just /appearance.
+  revalidatePath("/", "layout");
+}
+
+/**
+ * Number/date formatting only — this does not translate the interface, which
+ * is still English. Per-user, because two people sharing a hub can reasonably
+ * want different formatting.
+ */
+export async function setLocale(locale: string) {
+  const user = await requireUser();
+  if (!isLocale(locale)) throw new Error("Unknown locale.");
+  await prisma.user.update({ where: { id: user.id }, data: { locale } });
   revalidatePath("/", "layout");
 }

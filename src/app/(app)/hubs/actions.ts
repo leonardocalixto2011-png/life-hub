@@ -2,6 +2,8 @@
 
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { isCurrency } from "@/lib/locales";
+import { revalidateContent } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
@@ -184,4 +186,24 @@ export async function removeMember(hubId: string, targetUserId: string) {
   await prisma.hubMembership.delete({ where: { hubId_userId: { hubId, userId: targetUserId } } });
 
   revalidatePath(`/hubs/${hubId}/members`);
+}
+
+/**
+ * One currency per hub — every total on /budget, /subscriptions and /debts is
+ * a sum across rows, which only means anything in a single currency. Owners
+ * only: changing it re-labels money everyone in the hub can see.
+ */
+export async function setHubCurrency(hubId: string, currency: string) {
+  const user = await requireUser();
+  z.string().cuid().parse(hubId);
+  if (!isCurrency(currency)) throw new Error("Unsupported currency.");
+
+  const membership = await prisma.hubMembership.findFirst({
+    where: { hubId, userId: user.id, role: "OWNER", status: "ACTIVE" },
+    select: { id: true },
+  });
+  if (!membership) throw new Error("Only a hub owner can change its currency.");
+
+  await prisma.hub.update({ where: { id: hubId }, data: { currency } });
+  revalidateContent(`/hubs/${hubId}/members`);
 }

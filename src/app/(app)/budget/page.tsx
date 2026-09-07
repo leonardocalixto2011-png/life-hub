@@ -44,7 +44,10 @@ export default async function MoneyPage({
       ]),
     ),
   ]);
-  const currency = data.entries[0]?.currency ?? "CAD";
+  // Hub currency, not the first row's: the totals above sum every entry, so
+  // labelling them with one row's currency is only correct by luck.
+  const currency = hub.currency;
+  const locale = user.locale ?? "en-CA";
   const maxCat = data.categories[0]?.cents ?? 1;
   const upcomingTotal = upcoming
     ? upcoming.subscriptionsCents + upcoming.debtsCents + upcoming.billsCents
@@ -72,14 +75,14 @@ export default async function MoneyPage({
       <div className="card grid grid-cols-3 divide-x divide-[var(--color-border)] p-0 text-center">
         <div className="p-3">
           <div className="text-sm font-bold tabular-nums text-[var(--color-ok)]">
-            {money(data.income, currency)}
+            {money(data.income, currency, locale)}
           </div>
           <div className="text-[0.6rem] uppercase tracking-wide text-[var(--color-text-dim)]">
             in
           </div>
         </div>
         <div className="p-3">
-          <div className="text-sm font-bold tabular-nums">{money(data.expense, currency)}</div>
+          <div className="text-sm font-bold tabular-nums">{money(data.expense, currency, locale)}</div>
           <div className="text-[0.6rem] uppercase tracking-wide text-[var(--color-text-dim)]">
             out
           </div>
@@ -89,7 +92,7 @@ export default async function MoneyPage({
             className="text-sm font-bold tabular-nums"
             style={{ color: data.net < 0 ? "var(--color-danger)" : "var(--color-ok)" }}
           >
-            {money(data.net, currency)}
+            {money(data.net, currency, locale)}
           </div>
           <div className="text-[0.6rem] uppercase tracking-wide text-[var(--color-text-dim)]">
             net
@@ -102,14 +105,14 @@ export default async function MoneyPage({
           {upcomingTotal > 0 && (
             <>
               <div className="font-semibold">
-                {money(upcomingTotal, currency)}/mo in recurring commitments
+                {money(upcomingTotal, currency, locale)}/mo in recurring commitments
               </div>
               <div className="text-[var(--color-text-dim)]">
-                {money(upcoming.subscriptionsCents, currency)} subscriptions
+                {money(upcoming.subscriptionsCents, currency, locale)} subscriptions
                 {" + "}
-                {money(upcoming.debtsCents, currency)} debt payments
+                {money(upcoming.debtsCents, currency, locale)} debt payments
                 {upcoming.billsCents > 0 && (
-                  <> {" + "}{money(upcoming.billsCents, currency)} bills</>
+                  <> {" + "}{money(upcoming.billsCents, currency, locale)} bills</>
                 )}
                 {" "}— separate from what&apos;s logged above
               </div>
@@ -165,7 +168,7 @@ export default async function MoneyPage({
                 <div className="flex justify-between text-xs">
                   <span>{c.category}</span>
                   <span className="tabular-nums text-[var(--color-text-dim)]">
-                    {money(c.cents, currency)}
+                    {money(c.cents, currency, locale)}
                   </span>
                 </div>
                 <div className="mt-1 h-1.5 rounded-full bg-[var(--color-surface-2)]">

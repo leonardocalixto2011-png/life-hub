@@ -1,15 +1,17 @@
 import Link from "next/link";
 
-import { requireUser } from "@/lib/session";
+import { requireHub } from "@/lib/session";
 import { resolveThemeId } from "@/lib/themes";
+import { resolveLocale } from "@/lib/locales";
 import { BackgroundUploadForm } from "./BackgroundUploadForm";
 import { ThemePicker } from "./ThemePicker";
+import { LocalePicker } from "./LocalePicker";
 import { removeBackgroundImage } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppearancePage() {
-  const user = await requireUser();
+  const { user, hub } = await requireHub();
 
   return (
     <div className="space-y-4 p-3">
@@ -33,6 +35,13 @@ export default async function AppearancePage() {
           Each theme has a light and a dark version — it follows whatever your
           phone is set to.
         </p>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+          Number &amp; date format
+        </h2>
+        <LocalePicker current={resolveLocale(user.locale)} currency={hub.currency} />
       </section>
 
       <section className="space-y-2">

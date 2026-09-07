@@ -12,12 +12,14 @@ export type SessionUser = {
   role: "ADMIN" | "MEMBER";
   backgroundImageUrl: string | null;
   themeId: string | null;
+  locale: string | null;
 };
 
 export type SessionHub = {
   id: string;
   name: string;
   color: string;
+  currency: string;
   role: "OWNER" | "MEMBER";
 };
 
@@ -41,6 +43,7 @@ export const getUser = cache(async (): Promise<SessionUser | null> => {
       role: true,
       backgroundImageUrl: true,
       themeId: true,
+      locale: true,
     },
   });
   return user?.email
@@ -51,6 +54,7 @@ export const getUser = cache(async (): Promise<SessionUser | null> => {
         role: user.role,
         backgroundImageUrl: user.backgroundImageUrl,
         themeId: user.themeId,
+        locale: user.locale,
       }
     : null;
 });
@@ -71,13 +75,14 @@ export const requireUser = cache(async (): Promise<SessionUser> => {
 export const listMyHubs = cache(async (userId: string): Promise<SessionHub[]> => {
   const memberships = await prisma.hubMembership.findMany({
     where: { userId, status: "ACTIVE" },
-    include: { hub: { select: { id: true, name: true, color: true } } },
+    include: { hub: { select: { id: true, name: true, color: true, currency: true } } },
     orderBy: { joinedAt: "asc" },
   });
   return memberships.map((m) => ({
     id: m.hub.id,
     name: m.hub.name,
     color: m.hub.color,
+    currency: m.hub.currency,
     role: m.role,
   }));
 });

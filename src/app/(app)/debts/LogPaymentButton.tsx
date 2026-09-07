@@ -7,7 +7,17 @@ import { money } from "@/lib/format";
 import { logDebtPayment } from "./actions";
 
 /** One-tap "log the usual payment" for a debt row. */
-export function LogPaymentButton({ id, amountCents }: { id: string; amountCents: number }) {
+export function LogPaymentButton({
+  id,
+  amountCents,
+  currency,
+  locale,
+}: {
+  id: string;
+  amountCents: number;
+  currency: string;
+  locale: string;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState(false);
@@ -34,7 +44,7 @@ export function LogPaymentButton({ id, amountCents }: { id: string; amountCents:
       disabled={pending}
       className="mt-1 text-[0.62rem] font-semibold text-[var(--color-primary)] underline disabled:opacity-50"
     >
-      {pending ? "logging…" : error ? "failed — retry" : `log ${money(amountCents, "CAD")} payment`}
+      {pending ? "logging…" : error ? "failed — retry" : `log ${money(amountCents, currency, locale)} payment`}
     </button>
   );
 }

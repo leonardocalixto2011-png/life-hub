@@ -35,6 +35,7 @@ model User {
                              // separate from `image` above (an unused Auth.js
                              // sign-in-provider avatar field, different concern)
   themeId            String? // slug from src/lib/themes.ts; null = the default palette
+  locale             String? // BCP-47 tag for number/date formatting; null = en-CA
   role               UserRole  @default(MEMBER)
   createdAt          DateTime  @default(now())
 
@@ -82,6 +83,10 @@ model Hub {
   name        String
   color       String   @default("#6366f1")
   plan        String   @default("free") // placeholder for future Stripe billing
+  /// One currency per hub. Deliberately not per-row for display: totals across
+  /// mixed currencies are meaningless without FX rates, and the pages used to
+  /// sum everything then label it with whichever row happened to be first.
+  currency    String   @default("CAD")
   createdById String
   createdBy   User     @relation("HubCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now())

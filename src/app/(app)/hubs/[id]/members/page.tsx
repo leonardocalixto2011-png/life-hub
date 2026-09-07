@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { requireHub } from "@/lib/session";
+import { CurrencyPicker } from "./CurrencyPicker";
 import { prisma } from "@/lib/prisma";
 import { Avatar } from "@/components/Avatar";
 import { inviteMember, removeMember, leaveHub } from "../../actions";
@@ -47,6 +48,12 @@ export default async function HubMembersPage({
           {members.filter((m) => m.status === "ACTIVE").length === 1 ? "" : "s"}
         </p>
       </div>
+
+      {isOwner && (
+        <div className="card p-4">
+          <CurrencyPicker hubId={hubId} current={hub.currency} />
+        </div>
+      )}
 
       {isOwner && (
         <form action={inviteMember.bind(null, hubId)} className="card space-y-2 p-4">

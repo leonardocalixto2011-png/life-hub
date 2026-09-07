@@ -81,7 +81,10 @@ export default async function SubscriptionsPage() {
   const cancelled = subs.filter((s) => s.status === "CANCELLED");
   const monthTotal = active.reduce((n, s) => n + monthlyCents(s.costCents, s.billingCycle), 0);
   const yearTotal = active.reduce((n, s) => n + yearlyCents(s.costCents, s.billingCycle), 0);
-  const currency = active[0]?.currency ?? "CAD";
+  // Hub currency, not the first row's — monthTotal/yearTotal sum across
+  // every subscription, which is only meaningful in a single currency.
+  const currency = hub.currency;
+  const locale = user.locale ?? "en-CA";
 
   // Creep signal: monthly value of subs added in the last 60 days.
   const since = new Date(Date.now() - 60 * 864e5);

@@ -152,7 +152,7 @@ export async function logDebtPayment(fd: FormData) {
         type: "EXPENSE",
         amountCents,
         hubId: hub.id,
-        currency: "CAD",
+        currency: hub.currency,
         category: debt.name,
         description: "Debt payment",
         date: fromDateInput(date) ?? new Date(),
