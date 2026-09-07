@@ -3,6 +3,7 @@ import type { MailAccount } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { decrypt, encrypt } from "./crypto";
 import { MAX_MESSAGES_PER_RUN, stripHtml, type MailBatchItem, type ParsedMessage } from "./types";
+import { detectBulk } from "./prefilter";
 
 /**
  * Microsoft 365 / Outlook (Microsoft Graph) — raw `fetch`, no SDK, matching
@@ -140,6 +141,7 @@ type GraphMessage = {
   receivedDateTime?: string;
   bodyPreview?: string;
   body?: { contentType?: string; content?: string };
+  internetMessageHeaders?: { name: string; value: string }[];
   "@removed"?: { reason?: string };
 };
 
@@ -151,7 +153,7 @@ type DeltaResponse = {
 
 function firstDeltaUrl(): string {
   const params = new URLSearchParams({
-    $select: "subject,from,receivedDateTime,bodyPreview,body,internetMessageId",
+    $select: "subject,from,receivedDateTime,bodyPreview,body,internetMessageId,internetMessageHeaders",
     changeType: "created",
   });
   return `${GRAPH_BASE}/me/mailFolders('Inbox')/messages/delta?${params.toString()}`;
@@ -175,6 +177,11 @@ function toParsedMessage(m: GraphMessage): ParsedMessage {
     snippet: m.bodyPreview ?? "",
     bodyText: bodyText.slice(0, 4000),
     internalDate: m.receivedDateTime ? new Date(m.receivedDateTime) : new Date(),
+    isBulk: detectBulk(
+      (name) =>
+        m.internetMessageHeaders?.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ??
+        null,
+    ),
   };
 }
 

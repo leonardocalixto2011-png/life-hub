@@ -3,6 +3,7 @@ import type { MailAccount } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { commitDraftsCore } from "@/lib/commit-drafts";
 import { classifyEmail, type ActionableCategory } from "./classify";
+import { prefilter } from "./prefilter";
 import { fetchGoogleBatch } from "./google";
 import { fetchImapBatch } from "./imap";
 import { fetchMicrosoftBatch } from "./microsoft";
@@ -47,7 +48,8 @@ async function fetchBatch(account: MailAccount): Promise<MailBatchItem[]> {
   throw new Error(`Unhandled mail provider: ${account.provider}`);
 }
 
-async function pollMailAccount(account: MailAccount, runStartedAt: number): Promise<void> {
+async function pollMailAccount(account: MailAccount, runStartedAt: number): Promise<number> {
+  let skipped = 0;
   try {
     const batch = await fetchBatch(account);
 
@@ -66,8 +68,16 @@ async function pollMailAccount(account: MailAccount, runStartedAt: number): Prom
         select: { id: true },
       });
 
+      const verdict = prefilter(message);
+
       if (alreadyReviewed) {
         // skip re-processing, but still advance the checkpoint below
+      } else if (!verdict.classify) {
+        // Bulk mail with no money or date signal. Nothing is stored: a
+        // newsletter is not something to review later, and keeping it would
+        // make the review inbox the thing users stop opening. The checkpoint
+        // still advances below, so it is never looked at again.
+        skipped++;
       } else {
         const result = await classifyEmail({
           subject: message.subject,
@@ -143,6 +153,7 @@ async function pollMailAccount(account: MailAccount, runStartedAt: number): Prom
       data: { status: "ERROR", lastError: message.slice(0, 500) },
     });
   }
+  return skipped;
 }
 
 /**
@@ -159,19 +170,26 @@ async function pollMailAccount(account: MailAccount, runStartedAt: number): Prom
  * IMAP/REST round trip — so budget is checked before starting it, not
  * just between messages) and picked up on the next scheduled run.
  */
-export async function pollAllMailAccounts(): Promise<{ accounts: number; errors: number }> {
+export async function pollAllMailAccounts(): Promise<{
+  accounts: number;
+  errors: number;
+  skipped: number;
+}> {
   const accounts = await prisma.mailAccount.findMany({ where: { status: { not: "REVOKED" } } });
   const runStartedAt = Date.now();
   let errors = 0;
   let processed = 0;
+  let skipped = 0;
 
   for (const account of accounts) {
     if (Date.now() - runStartedAt > RUN_TIME_BUDGET_MS) break;
-    await pollMailAccount(account, runStartedAt);
+    skipped += await pollMailAccount(account, runStartedAt);
     processed++;
     const fresh = await prisma.mailAccount.findUnique({ where: { id: account.id } });
     if (fresh?.status === "ERROR") errors++;
   }
 
-  return { accounts: processed, errors };
+  //  = bulk messages filtered out before any AI call. Surfaced so
+  // the saving is measurable rather than assumed.
+  return { accounts: processed, errors, skipped };
 }

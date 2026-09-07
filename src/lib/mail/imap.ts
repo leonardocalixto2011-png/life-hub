@@ -4,6 +4,7 @@ import type { MailAccount, MailProvider } from "@prisma/client";
 
 import { decrypt } from "./crypto";
 import { MAX_MESSAGES_PER_RUN, stripHtml, type MailBatchItem, type ParsedMessage } from "./types";
+import { detectBulk } from "./prefilter";
 
 /**
  * Plain IMAP with an app-specific password, shared by every provider we reach
@@ -110,6 +111,10 @@ export async function fetchImapBatch(account: MailAccount): Promise<MailBatchIte
           snippet: bodyText.replace(/\s+/g, " ").trim().slice(0, 200),
           bodyText,
           internalDate: msg.internalDate ? new Date(msg.internalDate) : new Date(),
+          isBulk: detectBulk((name) => {
+            const v = parsed.headers.get(name);
+            return typeof v === "string" ? v : v ? String(v) : null;
+          }),
         };
         items.push({
           message,

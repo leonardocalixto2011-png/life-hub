@@ -18,6 +18,9 @@ export type ParsedMessage = {
   snippet: string;
   bodyText: string;
   internalDate: Date;
+  /** Provider said this looks like bulk/marketing mail — see prefilter.ts.
+   *  False when the provider exposes no headers to judge by. */
+  isBulk: boolean;
 };
 
 /** Fields to persist onto `MailAccount` once a message has been processed. */

@@ -3,6 +3,7 @@ import type { MailAccount } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { decrypt, encrypt } from "./crypto";
 import { MAX_MESSAGES_PER_RUN, stripHtml, type MailBatchItem, type ParsedMessage } from "./types";
+import { detectBulk } from "./prefilter";
 
 /**
  * Gmail (Google Cloud OAuth client) — raw `fetch` against Google's endpoints,
@@ -190,6 +191,7 @@ export async function getMessage(accessToken: string, id: string): Promise<Parse
     snippet: data.snippet ?? "",
     bodyText: extractPlainText(data.payload).slice(0, 4000),
     internalDate: new Date(Number(data.internalDate ?? Date.now())),
+    isBulk: detectBulk((name) => header(name) || null),
   };
 }
 
