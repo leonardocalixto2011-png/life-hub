@@ -167,7 +167,9 @@ export async function POST(req: Request) {
   }
 
   const text = `${subject}\n\n${body}`.slice(0, 6000);
-  const result = await parseText(text);
+  // Charged to the hub, not a user: forwarded mail arrives with no session.
+  // `hubId` is resolved above and is non-null by this point.
+  const result = await parseText(text, undefined, 25, hubId);
 
   if (!result.ok) {
     // Still record it so the user can see something arrived and triage manually.

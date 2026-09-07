@@ -89,6 +89,7 @@ async function pollMailAccount(account: MailAccount, runStartedAt: number): Prom
           from: message.from,
           snippet: message.snippet,
           body: message.bodyText,
+          budgetSubject: account.hubId,
         });
 
         // Assistant unavailable or the call failed — still record a bare

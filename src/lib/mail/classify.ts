@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { overAiBudget, recordAiSpend } from "@/lib/ai-budget";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 import { ai, aiEnabled, AI_MODEL } from "@/lib/ai";
@@ -30,6 +31,13 @@ export type ClassifyInput = {
   from: string;
   snippet: string;
   body: string;
+  /**
+   * Whose AI budget this classification is charged to — the hub id, since
+   * polling runs from cron with no user attached. A hub with a busy mailbox
+   * is exactly the case that can quietly run up a bill, so it is metered the
+   * same as an interactive call.
+   */
+  budgetSubject?: string;
 };
 
 export type ClassifyResult = {
@@ -84,6 +92,11 @@ function toDraft(
  */
 export async function classifyEmail(input: ClassifyInput): Promise<ClassifyResult | null> {
   if (!aiEnabled()) return null;
+  // Returning null here is the same path as "the call failed": poll.ts records
+  // a bare review item so the message is still visible to a human, it just
+  // arrives unclassified. Running out of budget degrades the feature rather
+  // than losing mail.
+  if (input.budgetSubject && (await overAiBudget(input.budgetSubject))) return null;
 
   const system = [
     "Classify one email for a shared life/business admin app into exactly one category:",
@@ -113,6 +126,7 @@ export async function classifyEmail(input: ClassifyInput): Promise<ClassifyResul
       system,
       messages: [{ role: "user", content: message }],
     });
+    if (input.budgetSubject) await recordAiSpend(input.budgetSubject, res.usage);
     const parsed = res.parsed_output;
     if (!parsed) return null;
 

@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { recordAiSpend } from "@/lib/ai-budget";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
@@ -78,6 +79,13 @@ export async function parseText(
   text: string,
   hub?: { tx: HubTx; hubId: string },
   maxItems = 25,
+  /**
+   * Whose AI budget this call is charged to — a user id from the app, a hub
+   * id from inbound mail, which has no user attached. Optional so the two
+   * existing callers can adopt it independently; when absent the call still
+   * runs but nothing is metered, which is the pre-existing behaviour.
+   */
+  subject?: string,
 ): Promise<ParseOutcome> {
   const clean = text.trim();
   if (!clean) return { ok: false, error: "Nothing to parse." };
@@ -116,6 +124,7 @@ export async function parseText(
       system,
       messages: [{ role: "user", content: clean.slice(0, 6000) }],
     });
+    if (subject) await recordAiSpend(subject, res.usage);
     parsed = res.parsed_output;
     truncated = res.stop_reason === "max_tokens";
   } catch (err) {

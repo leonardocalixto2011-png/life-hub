@@ -904,6 +904,158 @@ parsing (60/hr per user), inbound (120/hr). Swept by the daily cron.
 now read from `SEED_MEMBERS`. **The git history still contains them** —
 removing that needs a history rewrite.
 
+### Phase 12 — Responsiveness, security audit, design direction
+
+Three efforts, one branch (`design-direction-and-hardening`). Not yet merged
+to `main` at time of writing.
+
+**Responsiveness.** Measured first: warm production page ≈200ms, cold ≈2.2s.
+Cold is the real complaint — an app used a few times a day is cold most
+visits (Vercel function boot + Prisma engine init + Neon scale-to-zero). That
+is an infra decision, not code; the 2.2s is still open.
+
+What *was* code: there were **zero `loading.tsx` files**, so navigating a
+dynamic route left the browser on the old page with no feedback until the
+server answered. Added one at `(app)/loading.tsx` covering every route in the
+group — skeleton at 81ms vs content at 390ms, measured. The task checkbox
+also waited a full round trip before showing a tick; now `useOptimistic`,
+verified painting at 60ms.
+
+⚠️ **Tried and reverted: lazy/Proxy-wrapped Prisma clients** to halve
+cold-start engine init. Unmeasured gain, and a Proxy in the module that picks
+which DB *role* runs each query is a bad place for subtle bugs (it recursed
+twice — `Reflect.get` with the Proxy as receiver, then a poisoned
+`globalThis`). Do not retry without a cold-start measurement justifying it.
+
+**Security audit** — full pass over auth, authz/IDOR, data protection,
+injection, secrets, infra. Fixed:
+
+- **An invited-but-not-accepted member could read a hub's roster** at
+  `/hubs/<id>/members`. The page checked a membership row *existed*, not that
+  it was `ACTIVE`, and it queries with the owner client so RLS was no
+  backstop. All owner-gated actions now go through one `requireHubOwner()`
+  helper in `hubs/actions.ts` — three call sites had drifted apart.
+- `/assistant` called a paid API with **no rate limit** while quick-add capped
+  the same budget. Both now share one `ai:<user>` bucket.
+- **No CSP existed on app pages**, only `/sw.js`. Added, plus HSTS and
+  Permissions-Policy (`next.config.ts`). `script-src` keeps `'unsafe-inline'`
+  — removing it needs per-request nonces through the proxy — but no
+  third-party origin can load, and `connect-src 'self'` blocks exfiltration.
+- Sessions were the Auth.js default **30 days**; now 7 with a 1-day
+  `updateAge` (`auth.config.ts`).
+- `src/lib/blob-url.ts`: stored image URLs must be our own Blob host in
+  production. `z.string().url()` accepts any scheme/host, and a **hub cover
+  loads in other people's browsers** — an arbitrary host would harvest the
+  hub's IP addresses.
+- Constant-time bearer compare for the three scheduled endpoints
+  (`src/lib/bearer.ts`); `getDebt`/`listSharedDebts` scope themselves rather
+  than trusting callers.
+- `/api/health` probes **both** clients separately and returns a Prisma error
+  code instead of swallowing everything behind `db:"down"`.
+
+⚠️ **Things that look like bugs and are NOT — do not "fix" these:**
+- `sharedDebtSummaries` and the `debt_select` policy ignore `Debt.hubId` and
+  span all of an owner's hubs. Correct: the tracker is **person-scoped**
+  (`listMyDebts` isn't hub-filtered either), so what the owner sees is exactly
+  what a FULL share exposes. `Debt.hubId` is vestigial.
+- The cron/poll routes do **not** fail open when their secret is unset — all
+  three guard it. An 8-line grep window hid the guard.
+- `/api/appearance/upload` **is** authenticated — inside
+  `onBeforeGenerateToken`, not at the top of the handler.
+- JWT `token.role` is decorative; every authz check reads the DB, so a
+  demoted owner loses access immediately.
+- `npm audit`'s 3 "high" are `deepmerge-ts` under the **prisma CLI** dev
+  chain, not runtime-reachable.
+
+**Design direction — "celebration is proportional".** Preview artifact:
+`https://claude.ai/code/artifact/b4907661-effd-419b-9f09-587af33dfbcb`.
+
+The governing rule, and the thing to preserve: a **celebration ladder**.
+Routine (tick, log, snooze) 160ms and silent. Progress 220ms. Arrival (hub
+joined) 300ms + stagger. Milestone (debt cleared) ~1.2s — the only place the
+app spends real time. Do not add celebration to routine actions.
+
+- **Two faces, strictly rationed.** Fraunces (`.display`) is the app's
+  *voice* — greeting, empty-state headlines, "Cleared.", hub welcome — and
+  appears nowhere operational. Instrument Sans replaced Geist for the
+  interface because it is narrower and this app is half French.
+- **Motion is three CSS variables** (`--fast`/`--base`/`--moment` + two
+  easings). Everything animated reads them, which is what makes "reduce
+  motion" one switch. Zeroed by `prefers-reduced-motion` *and* by
+  `html.calm` (Appearance toggle → `localStorage`, applied by a blocking
+  script from `src/lib/motion.ts`). Durations go to 0.01ms not 0 so
+  `transitionend` still fires.
+- **Hub colour is a second layer, orthogonal to the user theme.** `--hub`
+  from `Hub.color` drives a 3px hairline only. `--color-primary` stays the
+  user's theme, so Chantelle keeps pink controls in a green hub. The header
+  tint was tried and removed: 7% indigo over a sunset theme reads lavender.
+- **`Hub.coverImageUrl` + `coverById`** — a shared cover photo every member
+  sees, owner-only write, on the invite card and members page. Distinct from
+  `User.backgroundImageUrl`, which stays private. Keep that distinction.
+- `Figure` component for money: headline totals were `text-sm`, the same size
+  as their own labels.
+- `Celebrate`, `HubCover`, `MotionToggle`, `InviteCard` are the new components.
+
+⚠️ **Background-photo legibility.** Built and tested against a plain
+background first, which was wrong — with a photo set, every `--text-dim`
+element (section headings, the date under the greeting) sat on the photo and
+became unreadable. Fixed in two halves: a **58%** scrim (higher veils the
+photo into a ghost, which defeats the feature) plus, under `[data-photo]`,
+`--text-dim` raised to 92% of full text. Measured over a near-black photo:
+78% → 2.93:1, 88% → 4.11:1, **92% → 4.68:1** (4.5:1 is the AA floor for small
+text). Hierarchy there comes from size and weight, not colour.
+
+⚠️ **`@theme inline` gotcha, cost an hour.** Overriding `--text-dim` under
+`[data-photo]` changed *nothing*, while the inspector showed the override
+applied. `@theme inline` maps `--color-text-dim: var(--text-dim)` at `:root`,
+and a custom property is substituted **where it is declared, not where it is
+used** — so the mapping had already resolved. Both names must be overridden.
+Verify by reading the rendered `getComputedStyle(el).color`, not the variable.
+
+⚠️ **Do not render a literal `<head>` with a `<script>` in the root layout.**
+React logs "Encountered a script tag while rendering React component" and the
+script does not run on client renders — the reduce-motion preference could
+silently stop applying. Use `next/script` with `strategy="beforeInteractive"`.
+
+⚠️ In **dev only**, streaming sometimes leaves page content parked in a
+`<div id="S:0">` outside the layout shell, so `[data-photo]` variables do not
+inherit and contrast measurements read the wrong values. Production composes
+correctly. Check `shell.contains(el)` before trusting a dev measurement.
+
+**AI spend ceiling** (`src/lib/ai-budget.ts`). The rate limits cap how *often*
+Claude is called, never how much each call costs — and the calls are not the
+same size (a quick-add is a sentence; a weekly briefing sends the whole
+dashboard). Now counts tokens against a monthly budget per subject: user id
+for interactive paths, **hub id** for mail classification and inbound, which
+run from cron with no user. Reuses the `RateLimit` table (already a keyed
+counter over a window with a prune job) rather than adding a model — the only
+difference is incrementing by tokens instead of 1. `AI_TOKEN_BUDGET` overrides
+the 2M default. Check before the call, record after, because cost is unknown
+until the response returns; a single call can overshoot and the next is
+refused. Fails open on a DB error, like the rate limiter.
+
+### Ordered queue (as of 2026-09-07)
+
+Supersedes the 2026-09-06 list below, which is kept for its detail.
+
+1. **Merge `design-direction-and-hardening` to `main`.** Three commits,
+   verified: build, typecheck, eslint (no new problems beyond the standing
+   17), 16/16 RLS isolation. Migration `20260907120000_hub_cover_photo`
+   applies itself — `vercel-build` runs `prisma migrate deploy`.
+2. **Rotate the two exposed secrets.** `INBOUND_SECRET` and the hub inbound
+   address were both pasted into a chat transcript, and this repo is public.
+3. **Legal writing** — unchanged and still the gate for anything public.
+4. **Monitoring wiring** — `ALERT_WEBHOOK_URL`, `REQUIRE_APP_DB=1`, uptime
+   monitor on `/api/health` watching the `rls` field.
+5. **Cold start (2.2s).** Infra, not code: Neon scale-to-zero plus function
+   boot. Options are a paid Neon plan or a keep-warm ping every ~4 min from
+   the external scheduler already used for `/api/mail/poll` (its 15–30 min
+   interval is too slow to prevent suspension).
+6. **Google CASA** for `gmail.readonly` if the Gmail connector is ever offered
+   publicly — restricted scope, annual assessment, real money. Launching
+   without the connector (forward-to-inbound needs no Google approval)
+   removes this from the critical path entirely.
+
 ### Ordered queue (as of 2026-09-06, late)
 
 Done since the Phase 11 report: **data export + account deletion** (Art. 15/20/17,

@@ -8,6 +8,7 @@ import { ai, aiEnabled, AI_MODEL } from "@/lib/ai";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { rateLimit } from "@/lib/rate-limit";
+import { overAiBudget, recordAiSpend, AI_BUDGET_MESSAGE } from "@/lib/ai-budget";
 import { dashboard, listMembers, listVentures } from "@/lib/data";
 import { notifyAssignment } from "@/lib/notify";
 import { dueLabel, fromDateInput, fromDateTimeInput, money } from "@/lib/format";
@@ -51,6 +52,8 @@ export async function parseAndAdd(
   if (!(await rateLimit(`ai:${user.id}`, 60, 3600)).ok) {
     return { ok: false, message: "You have hit the hourly AI limit. Try again shortly." };
   }
+  // The hourly limit caps how often; this caps how much. See ai-budget.ts.
+  if (await overAiBudget(user.id)) return { ok: false, message: AI_BUDGET_MESSAGE };
   const clean = text.trim();
   if (!clean) return { ok: false, message: "Type something first." };
   if (clean.length > 4000) {
@@ -80,6 +83,7 @@ export async function parseAndAdd(
       system,
       messages: [{ role: "user", content: clean }],
     });
+    await recordAiSpend(user.id, res.usage);
     parsed = res.parsed_output;
   } catch (err) {
     return {
@@ -168,6 +172,7 @@ export async function weeklyBriefing(): Promise<{ ok: boolean; text: string }> {
   if (!(await rateLimit(`ai:${user.id}`, 60, 3600)).ok) {
     return { ok: false, text: "You have hit the hourly AI limit. Try again shortly." };
   }
+  if (await overAiBudget(user.id)) return { ok: false, text: AI_BUDGET_MESSAGE };
 
   const d = await withHub(user.id, (tx) => dashboard(tx, hub.id, user.id));
   const lines: string[] = [];
@@ -204,6 +209,7 @@ export async function weeklyBriefing(): Promise<{ ok: boolean; text: string }> {
         },
       ],
     });
+    await recordAiSpend(user.id, res.usage);
     const text = res.content
       .map((b) => (b.type === "text" ? b.text : ""))
       .join("")

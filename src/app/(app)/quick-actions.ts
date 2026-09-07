@@ -5,6 +5,7 @@ import { z } from "zod";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { rateLimit } from "@/lib/rate-limit";
+import { overAiBudget, AI_BUDGET_MESSAGE } from "@/lib/ai-budget";
 import { parseText, type Draft, type DraftKind, type ParseOutcome } from "@/lib/parse";
 import { commitDraftsCore } from "@/lib/commit-drafts";
 import { revalidateContent } from "@/lib/revalidate";
@@ -23,7 +24,8 @@ export async function parseQuickAdd(text: string): Promise<ParseResult> {
   if (text.trim().length > 2000) {
     return { ok: false, error: "Keep it under 2000 characters." };
   }
-  return withHub(user.id, (tx) => parseText(text, { tx, hubId: hub.id }));
+  if (await overAiBudget(user.id)) return { ok: false, error: AI_BUDGET_MESSAGE };
+  return withHub(user.id, (tx) => parseText(text, { tx, hubId: hub.id }, 25, user.id));
 }
 
 const CommitSchema = z.object({
