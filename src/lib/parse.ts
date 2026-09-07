@@ -3,7 +3,7 @@ import { recordAiSpend } from "@/lib/ai-budget";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
-import { ai, aiEnabled, AI_MODEL } from "@/lib/ai";
+import { ai, aiEnabled, AI_MODEL_FAST } from "@/lib/ai";
 import { reportError } from "@/lib/observability";
 import { listVentures } from "@/lib/data";
 import type { HubTx } from "@/lib/hub-context";
@@ -114,7 +114,7 @@ export async function parseText(
   let truncated = false;
   try {
     const res = await ai().messages.parse({
-      model: AI_MODEL,
+      model: AI_MODEL_FAST,
       // A long multi-item paste (e.g. a dozen budget lines) needs real
       // headroom — each item's structured JSON runs ~150-250 tokens, so the
       // old 1536 silently truncated anything past ~9-10 items. `stop_reason`
@@ -133,7 +133,7 @@ export async function parseText(
     // carry operator detail — billing state, request ids — that is not the
     // user's problem and not theirs to see. The real error goes to the logs
     // and the alert webhook instead.
-    await reportError("ai.parse_failed", err, { model: AI_MODEL });
+    await reportError("ai.parse_failed", err, { model: AI_MODEL_FAST });
     return { ok: false, error: friendlyAiError(err) };
   }
   if (!parsed || parsed.items.length === 0) {
