@@ -923,9 +923,14 @@ Remaining, in order:
    `INBOUND_HUB_ID` remains only as a pre-token fallback. **Verified live
    end-to-end** over Cloudflare Email Routing → Worker → /api/inbound
    (subaddressing must be ON in Cloudflare Settings, or mail bounces 550).
-3. **Self-serve signup.** Still deliberately not built — invite-only is
-   load-bearing as both a security and a cost control. When built, ship it
-   behind a flag defaulting to **off**, so it can't open before (1) lands.
+3. **Self-serve signup.** ✅ Built, **closed by default**. `SIGNUPS_OPEN=1`
+   is the only thing that opens it (`src/lib/signup.ts`). Account creation
+   happens in the Auth.js `signIn` callback — i.e. only after a magic link is
+   provably received — so there is no separate verification step and no
+   password anywhere. A new user gets a hub immediately rather than landing
+   on /hubs/new. Login copy and the per-IP rate limit both follow the flag.
+   **Do not set it before (1) lands**: it removes the cost control on the
+   Anthropic budget as well as the security boundary.
 4. **Monitoring wiring.** Code exists; still needs `ALERT_WEBHOOK_URL` set and
    an uptime monitor on `/api/health` alerting if `rls` stops reading
    `"enforced"`. Also worth setting `REQUIRE_APP_DB=1` now that prod is
