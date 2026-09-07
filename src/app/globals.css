@@ -205,6 +205,55 @@ html[data-theme="mono"] {
   --font-display: var(--font-display), Georgia, "Times New Roman", serif;
 }
 
+/* ------------------------------------------------------- background photo
+   `--text-dim` is a low-contrast grey chosen to sit quietly on `--bg`. Put a
+   photograph behind it and it stops being quiet and starts being invisible —
+   which is what happened to the section headings and the date under the
+   greeting once someone set a background.
+
+   Rather than veiling the photo until it is a ghost, raise the text instead:
+   dim text moves most of the way to full-strength text, and the few things
+   that sit directly on the photo get a soft halo in the page colour so they
+   stay readable over a light patch and a dark one alike. Scoped to
+   `[data-photo]`, so nobody without a photo pays for this.
+
+   Text-shadow rather than a backdrop panel behind each heading: a panel would
+   mean every section heading in the app growing a box, which is exactly the
+   heavy chrome the design is trying to avoid. */
+[data-photo] {
+  /* BOTH names, and `--color-text-dim` is the one that actually does the
+     work. `@theme inline` maps `--color-text-dim: var(--text-dim)` at :root,
+     and a custom property's value is substituted where it is *declared*, not
+     where it is used — so overriding `--text-dim` here alone changed nothing
+     and the paragraphs kept rendering the original #6b6b66. Easy to miss,
+     because the variable inspector shows the override applied correctly.
+
+     Derived from --text and --bg rather than from --text-dim itself: a
+     property that references its own name is invalid at computed-value time
+     and silently drops. Mixing keeps this right in all six themes and in
+     dark mode. */
+  /* 92%, i.e. very nearly full-strength text. Measured rather than guessed:
+     over the worst case (a near-black photo under the 58% scrim) 78% gave
+     2.93:1 and 88% gave 4.11:1 — both under the 4.5:1 that small text needs.
+     92% clears it at 4.67:1.
+
+     The cost is that "dim" stops being very dim once a photo is set, so the
+     hierarchy has to come from size and weight instead of colour. That is the
+     honest trade: you cannot have quiet grey text over a photograph and have
+     it remain readable, and readable wins. */
+  --text-dim: color-mix(in srgb, var(--text) 92%, var(--bg));
+  --color-text-dim: color-mix(in srgb, var(--text) 92%, var(--bg));
+}
+
+/* Only text sitting *directly* on the photo needs the halo. Anything inside a
+   card already has an opaque surface under it, and haloed text on a white
+   card looks smudged — hence the `:not(.card *)`. */
+[data-photo] :is(h1, h2, p, a, span):not(.card *):not(.chip):not(.btn) {
+  text-shadow:
+    0 1px 2px color-mix(in srgb, var(--bg) 75%, transparent),
+    0 0 10px color-mix(in srgb, var(--bg) 60%, transparent);
+}
+
 /* ----------------------------------------------------------------- motion
    Both routes to "calm" collapse the same three variables, so every animation
    in the app stops without any of them knowing about accessibility: the OS

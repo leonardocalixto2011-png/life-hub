@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Fraunces, Instrument_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -66,10 +67,22 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       data-theme={resolveThemeId(user?.themeId)}
       className={`${sans.variable} ${display.variable} h-full antialiased`}
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: MOTION_INIT_SCRIPT }} />
-      </head>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        {/*
+          next/script with beforeInteractive rather than a bare <script> in a
+          hand-written <head>. React logs "Encountered a script tag while
+          rendering React component — scripts inside React components are
+          never executed when rendering on the client" for the bare version,
+          and it means what it says: the tag runs on the initial HTML but not
+          when React re-renders this tree on the client, so the reduce-motion
+          preference could silently stop applying. This strategy is the
+          supported way to run something before hydration.
+        */}
+        <Script id="motion-init" strategy="beforeInteractive">
+          {MOTION_INIT_SCRIPT}
+        </Script>
+        {children}
+      </body>
     </html>
   );
 }

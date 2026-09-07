@@ -23,6 +23,9 @@ export default async function AppLayout({
   return (
     <div
       className="relative mx-auto flex min-h-dvh max-w-md flex-col"
+      // Lets the stylesheet raise text contrast only for people who actually
+      // set a photo, instead of dimming the app for everyone.
+      data-photo={user.backgroundImageUrl ? "" : undefined}
       style={{
         // The hub's own colour, exposed to the chrome below. Hubs are places;
         // this is what stops "which hub am I in?" from ever being a question.
@@ -41,23 +44,24 @@ export default async function AppLayout({
       }}
     >
       {/*
-        A scrim over the background photo.
+        A scrim over the background photo — and, crucially, not a heavy one.
+        Legibility here is solved in two halves rather than by hiding the
+        picture, because a photo veiled until it is a grey ghost may as well
+        not be set.
 
-        Without it the photo sits directly behind the page and every piece of
-        secondary text — the section headings, the date under the greeting —
-        lands on whatever happens to be in the picture and becomes unreadable.
-        Those use --color-text-dim, which is chosen for contrast against
-        --color-bg, not against someone's living room.
+        Half one is this: 58%, enough to compress the photo's contrast toward
+        the page colour so text has a predictable-ish ground, while the photo
+        is still plainly the photo. Half two is in globals.css — `[data-photo]`
+        strengthens --text-dim, because the real problem was never the photo's
+        brightness, it was that the dim text colour is tuned for contrast
+        against --color-bg and nothing else.
 
-        88% rather than a full cover: the photo still reads as *your* photo
-        around the edges and through the gaps between cards, but nothing on
-        top of it has to fight for legibility. Only rendered when there is a
-        photo, so a plain background stays exactly as it was.
+        Only rendered when a photo exists, so a plain background is untouched.
       */}
       {user.backgroundImageUrl && (
         <div
           className="pointer-events-none absolute inset-0 z-0"
-          style={{ background: "color-mix(in srgb, var(--color-bg) 88%, transparent)" }}
+          style={{ background: "color-mix(in srgb, var(--color-bg) 58%, transparent)" }}
           aria-hidden
         />
       )}
