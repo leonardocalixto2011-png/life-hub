@@ -968,9 +968,11 @@ Remaining, in order:
 
 ## Backlog (post-feature-complete)
 
-- **Per-item dated reminders** — deadline `remindDaysBefore` (7/3/1) and
-  subscription `cancelByDate` as their own dated push events, not just the 48h
-  digest summary. Needs a "sent" ledger table so the cron doesn't re-fire.
+- ~~**Per-item dated reminders**~~ ✅ Done for deadlines (`lib/reminders.ts`,
+  `ReminderSent` ledger, dispatched from the daily digest cron since Hobby
+  caps us at two schedules). **Still open**: subscription `cancelByDate` and
+  `Task.remindDaysBefore` — the dispatcher takes an `entityType` so both plug
+  in, but Task has no UI to set the field and subs need a different shape.
 - **Assistant** could also draft the digest email copy; currently the digest is
   templated in `lib/digest.ts`.
 - Real-device iOS push test; deploy.
