@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { bearerMatches } from "@/lib/bearer";
 
 import { reportError } from "@/lib/observability";
 
@@ -9,9 +10,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 function authorized(req: Request): boolean {
-  const secret = process.env.MAIL_POLL_SECRET;
-  if (!secret) return false;
-  return req.headers.get("authorization") === `Bearer ${secret}`;
+  return bearerMatches(req, process.env.MAIL_POLL_SECRET);
 }
 
 /**

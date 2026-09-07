@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState, useTransition } from "react";
+import { useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addDays, format } from "date-fns";
 
@@ -44,7 +44,15 @@ export function TaskRow({
   const [dx, setDx] = useState(0);
   const drag = useRef<{ x: number; y: number; active: boolean }>({ x: 0, y: 0, active: false });
 
-  const done = task.status === "DONE";
+  /**
+   * Ticking a checkbox used to wait for `setTaskDone` *and* a full
+   * `router.refresh()` before the tick appeared — a server round trip for a
+   * result the client already knows. On a phone that's the single most
+   * repeated interaction in the app, and the delay read as the app being
+   * stuck. The optimistic value paints immediately and React reverts it on
+   * its own if the action throws.
+   */
+  const [done, setDoneOptimistic] = useOptimistic(task.status === "DONE");
   const due = task.dueDate ? new Date(task.dueDate) : null;
   const overdue = !done && isOverdue(due);
   const canEdit = Boolean(ventures && members);
@@ -56,15 +64,24 @@ export function TaskRow({
     });
   }
 
+  /** `next` is absolute, not a toggle, so a double-tap can't land inverted. */
+  function setDone(next: boolean) {
+    startTransition(async () => {
+      setDoneOptimistic(next);
+      await setTaskDone(task.id, next);
+      router.refresh();
+    });
+  }
+
   function toggle() {
-    act(() => setTaskDone(task.id, !done));
+    setDone(!done);
   }
 
   function completeBySwipe() {
-    act(() => setTaskDone(task.id, true));
+    setDone(true);
     showToast({
       message: "Marked done",
-      onAction: () => act(() => setTaskDone(task.id, false)),
+      onAction: () => setDone(false),
     });
   }
 
@@ -114,7 +131,20 @@ export function TaskRow({
 
       <div
         className="relative bg-[var(--color-surface)]"
-        style={{ transform: `translateX(${dx}px)`, transition: dx === 0 ? "transform .18s" : "none" }}
+        style={{
+          transform: `translateX(${dx}px)`,
+          // Mid-swipe the row must track the finger exactly, so transform gets
+          // no transition at all; opacity keeps one either way, because a
+          // completed row settling is a separate thing from the drag.
+          transition:
+            dx === 0
+              ? "transform var(--base) var(--ease), opacity var(--base) var(--ease)"
+              : "opacity var(--base) var(--ease)",
+          // A done row recedes rather than vanishing — you can still see what
+          // you just finished. The heavier fade is the not-yet-saved state of
+          // the inline editor below, which isn't optimistic.
+          opacity: pending && editing ? 0.6 : done ? 0.62 : 1,
+        }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
@@ -123,26 +153,28 @@ export function TaskRow({
           <button
             type="button"
             onClick={toggle}
-            disabled={pending}
+            // Deliberately not disabled while pending: the optimistic tick is
+            // already showing, so disabling would only block the undo tap.
             aria-label={done ? "Mark not done" : "Mark done"}
-            className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border"
-            style={{
-              borderColor: done ? "var(--color-ok)" : "var(--color-border)",
-              background: done ? "var(--color-ok)" : "transparent",
-              color: "#fff",
-            }}
+            aria-pressed={done}
+            data-done={done ? "" : undefined}
+            className="tick mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border"
           >
-            {done ? "✓" : ""}
+            {/* Drawn rather than typed. A "✓" character appears all at once;
+                a stroked path can be dashed, so the check writes itself in the
+                same beat the circle fills. Bottom rung of the ladder — 220ms,
+                no sound, nothing to dismiss. */}
+            <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3 w-3">
+              <path d="M3 8.4 6.4 11.8 13 5.2" />
+            </svg>
           </button>
 
           <div className="min-w-0 flex-1">
             <Link
               href={`/tasks/${task.id}`}
-              className="block truncate text-[0.95rem]"
-              style={{
-                textDecoration: done ? "line-through" : "none",
-                color: done ? "var(--color-text-dim)" : "var(--color-text)",
-              }}
+              className="task-title block max-w-full truncate text-[0.95rem]"
+              data-done={done ? "" : undefined}
+              style={{ color: done ? "var(--color-text-dim)" : "var(--color-text)" }}
             >
               {task.priority === "HIGH" && !done && (
                 <span className="mr-1 text-[var(--color-danger)]">!</span>

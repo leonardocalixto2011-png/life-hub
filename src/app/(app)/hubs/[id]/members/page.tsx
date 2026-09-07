@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 
 import { requireHub } from "@/lib/session";
 import { CurrencyPicker } from "./CurrencyPicker";
+import { CoverUpload } from "./CoverUpload";
+import { HubCover } from "@/components/HubCover";
 import { prisma } from "@/lib/prisma";
 import { Avatar } from "@/components/Avatar";
 import { inviteMember, removeMember, leaveHub } from "../../actions";
@@ -17,13 +19,23 @@ export default async function HubMembersPage({
   const { user } = await requireHub();
   const { id: hubId } = await params;
 
+  // `status: ACTIVE`, not merely "a row exists". An INVITED row is created the
+  // moment someone is invited, before they have accepted anything — without
+  // this check, being invited was enough to read the hub's whole roster
+  // (every member's name and email address) by visiting this URL directly.
+  // Nothing else guards it: this page queries with the owner-role client, so
+  // RLS is not a backstop here, and `listMyHubs` filtering on ACTIVE only ever
+  // hid the hub from the switcher, not from a typed-in address.
   const membership = await prisma.hubMembership.findUnique({
     where: { hubId_userId: { hubId, userId: user.id } },
   });
-  if (!membership) notFound();
+  if (!membership || membership.status !== "ACTIVE") notFound();
 
   const [hub, members] = await Promise.all([
-    prisma.hub.findUniqueOrThrow({ where: { id: hubId } }),
+    prisma.hub.findUniqueOrThrow({
+      where: { id: hubId },
+      include: { coverBy: { select: { name: true, email: true } } },
+    }),
     prisma.hubMembership.findMany({
       where: { hubId },
       include: { user: { select: { id: true, name: true, email: true } } },
@@ -32,6 +44,8 @@ export default async function HubMembersPage({
   ]);
 
   const isOwner = membership.role === "OWNER";
+  // First name only — the credit is a friendly touch, not a directory entry.
+  const coverBy = hub.coverBy?.name?.split(" ")[0] ?? null;
 
   return (
     <div className="space-y-4 p-3">
@@ -39,14 +53,26 @@ export default async function HubMembersPage({
         <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
           ← Today
         </Link>
-        <div className="mt-1 flex items-center gap-2">
-          <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: hub.color }} />
-          <h1 className="text-lg font-bold">{hub.name}</h1>
-        </div>
-        <p className="text-xs text-[var(--color-text-dim)]">
+        <p className="mt-2 text-xs text-[var(--color-text-dim)]">
           {members.filter((m) => m.status === "ACTIVE").length} member
           {members.filter((m) => m.status === "ACTIVE").length === 1 ? "" : "s"}
         </p>
+      </div>
+
+      {/* The hub's own face, at the top of its own page. */}
+      <div className="card overflow-hidden p-0">
+        <HubCover
+          name={hub.name}
+          color={hub.color}
+          imageUrl={hub.coverImageUrl}
+          by={coverBy}
+          height="h-32"
+        />
+        {isOwner && (
+          <div className="border-t border-[var(--color-border)] p-3">
+            <CoverUpload hubId={hubId} hasCover={Boolean(hub.coverImageUrl)} />
+          </div>
+        )}
       </div>
 
       {isOwner && (

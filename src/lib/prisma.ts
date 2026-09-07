@@ -7,9 +7,14 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /**
- * Owner-role client (DATABASE_URL). Bypasses RLS by table-ownership — used
- * only by migrations, seed.ts, and prisma/backfill-hubs.ts. Not used by app
- * request-handling code once the multi-hub rework lands (see appPrisma).
+ * Owner-role client (DATABASE_URL). Bypasses RLS by table-ownership.
+ *
+ * This comment used to claim the owner client was "not used by app
+ * request-handling code". That is not true and hasn't been for a while:
+ * auth.ts, session.ts, push, rate-limit, notify and the cron routes all query
+ * through it. What remains true — and is the rule that matters — is that
+ * anything **hub-scoped** must go through appPrisma inside withHub(), because
+ * that is the only path RLS policies apply to.
  */
 export const prisma =
   globalForPrisma.prisma ??

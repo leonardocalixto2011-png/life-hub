@@ -6,6 +6,7 @@ import { resolveLocale } from "@/lib/locales";
 import { BackgroundUploadForm } from "./BackgroundUploadForm";
 import { ThemePicker } from "./ThemePicker";
 import { LocalePicker } from "./LocalePicker";
+import { MotionToggle } from "@/components/MotionToggle";
 import { removeBackgroundImage } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +36,13 @@ export default async function AppearancePage() {
           Each theme has a light and a dark version — it follows whatever your
           phone is set to.
         </p>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+          Motion
+        </h2>
+        <MotionToggle />
       </section>
 
       <section className="space-y-2">

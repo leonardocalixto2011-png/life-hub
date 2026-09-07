@@ -2,6 +2,7 @@ import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
 
 import { getUser } from "@/lib/session";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +27,13 @@ export async function POST(request: Request) {
       onBeforeGenerateToken: async () => {
         const user = await getUser();
         if (!user) throw new Error("Not signed in.");
+        // Being signed in was the only limit: 15MB per file, unlimited files.
+        // Blob storage is billed, so one account could run up the bill (or
+        // just fill it) by looping. Ten background photos an hour is far more
+        // than anyone changing a wallpaper needs.
+        if (!(await rateLimit(`upload:${user.id}`, 10, 3600)).ok) {
+          throw new Error("Too many uploads. Try again in a little while.");
+        }
         return {
           allowedContentTypes: ["image/jpeg", "image/png", "image/webp", "image/heic"],
           maximumSizeInBytes: 15 * 1024 * 1024,

@@ -13,6 +13,25 @@
   --danger: #dc2626;
   --ok: #15803d;
   --radius: 12px;
+
+  /* Semantic washes, mixed from the semantic colour into whatever `--surface`
+     is. Two reasons for color-mix rather than literals: they follow all six
+     themes and both light/dark without twelve more blocks, and they stay tied
+     to --ok/--danger rather than --primary — "cleared" has to keep reading as
+     money-good in the pink theme, where the accent is itself pink. */
+  --ok-wash: color-mix(in srgb, var(--ok) 12%, var(--surface));
+  --danger-wash: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  --primary-wash: color-mix(in srgb, var(--primary) 10%, var(--surface));
+
+  /* ------------------------------------------------------------- motion
+     Three durations and two curves, and every animation in the app reads
+     them. That is what makes "reduce motion" a single switch rather than a
+     hunt through stylesheets — see the prefers-reduced-motion block below. */
+  --fast: 160ms;   /* routine: a tick, a press, a chip */
+  --base: 220ms;   /* progress: a row settling, a panel opening */
+  --moment: 300ms; /* arrival: joining a hub, a celebration landing */
+  --ease: cubic-bezier(0.2, 0.8, 0.3, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -179,7 +198,47 @@ html[data-theme="mono"] {
   --color-primary-fg: var(--primary-fg);
   --color-danger: var(--danger);
   --color-ok: var(--ok);
-  --font-sans: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-ok-wash: var(--ok-wash);
+  --color-danger-wash: var(--danger-wash);
+  --color-primary-wash: var(--primary-wash);
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-display), Georgia, "Times New Roman", serif;
+}
+
+/* ----------------------------------------------------------------- motion
+   Both routes to "calm" collapse the same three variables, so every animation
+   in the app stops without any of them knowing about accessibility: the OS
+   setting, and `html.calm` from the Appearance toggle for people whose OS
+   setting is off (or who just find motion distracting on this one app).
+
+   Durations go to 0.01ms rather than 0 so transitionend/animationend still
+   fire — several components sequence work off those events, and killing the
+   event would leave them stuck mid-state. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --fast: 0.01ms;
+    --base: 0.01ms;
+    --moment: 0.01ms;
+  }
+}
+
+html.calm {
+  --fast: 0.01ms;
+  --base: 0.01ms;
+  --moment: 0.01ms;
+}
+
+/* Backstop for anything that animates without reading the scale — a stray
+   third-party keyframe, or a rule added later that forgets the tokens. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ------------------------------------------------------------------- base */
@@ -237,6 +296,18 @@ button {
     border-radius: var(--radius);
   }
 
+  /* The app's voice. Reserved for the handful of places Life Hub speaks to a
+     person rather than reporting a fact — greetings, empty states, the debt
+     "Cleared" stamp, the hub welcome. Deliberately NOT available as a general
+     heading style: rationing it is what keeps it meaning something. */
+  .display {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    font-variation-settings: "SOFT" 50;
+    text-wrap: balance;
+  }
+
   .btn {
     display: inline-flex;
     align-items: center;
@@ -250,9 +321,18 @@ button {
     font-size: 0.9rem;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+    transition:
+      transform var(--fast) var(--ease),
+      filter var(--fast) var(--ease),
+      background var(--fast) var(--ease);
   }
+  /* Scale, not translate: a button that shrinks under the thumb reads as
+     pressed on a touchscreen, where there is no hover state to lean on. */
   .btn:active {
-    transform: translateY(1px);
+    transform: scale(0.97);
+  }
+  .btn-primary:hover {
+    filter: brightness(1.07);
   }
   .btn-primary {
     background: var(--color-primary);
@@ -295,5 +375,177 @@ button {
 
   .safe-b {
     padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* --- the task tick -----------------------------------------------------
+     The app's most repeated interaction, so it gets the smallest gesture that
+     still feels like something happened: the circle fills, the check draws
+     itself, and that is all. */
+  .tick {
+    border-color: var(--color-border);
+    background: transparent;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      background var(--fast) var(--ease),
+      border-color var(--fast) var(--ease);
+  }
+  .tick:hover {
+    border-color: var(--color-ok);
+  }
+  .tick svg {
+    display: block;
+    overflow: visible;
+  }
+  .tick path {
+    fill: none;
+    stroke: #fff;
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 18;
+    stroke-dashoffset: 18;
+  }
+  .tick[data-done] {
+    background: var(--color-ok);
+    border-color: var(--color-ok);
+    animation: tick-pop var(--base) var(--ease);
+  }
+  .tick[data-done] path {
+    animation: tick-draw var(--base) var(--ease) forwards;
+  }
+  @keyframes tick-pop {
+    0% {
+      transform: scale(1);
+    }
+    45% {
+      transform: scale(1.22);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  @keyframes tick-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* Strikethrough that sweeps rather than appears. Paired with the tick above,
+     it is what makes completing a task read as an action with a direction
+     instead of a value flipping. */
+  .task-title {
+    position: relative;
+    width: fit-content;
+    transition: color var(--base) var(--ease);
+  }
+  .task-title::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 52%;
+    height: 1.5px;
+    width: 100%;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform var(--base) var(--ease);
+  }
+  .task-title[data-done]::after {
+    transform: scaleX(1);
+  }
+
+  /* --- the milestone moment ---------------------------------------------
+     Used by <Celebrate>. The scrim stays light so the page behind is still
+     legible — this is a moment, not a modal, and it must never feel like
+     something blocking the way back to work. */
+  .celebrate-scrim {
+    background: color-mix(in srgb, var(--color-bg) 72%, transparent);
+    backdrop-filter: blur(2px);
+    animation: fade-in var(--fast) var(--ease);
+  }
+  .celebrate-card {
+    animation: celebrate-in var(--moment) var(--ease-out);
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes celebrate-in {
+    0% {
+      opacity: 0;
+      transform: scale(0.9) rotate(-1.5deg);
+    }
+    60% {
+      transform: scale(1.02) rotate(0.4deg);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
+    }
+  }
+
+  /* The toast rises from the bottom nav rather than appearing — it comes
+     *from* the thing you just did. Bottom rung, so `--base` and no more. */
+  .toast-in {
+    animation: toast-in var(--base) var(--ease-out);
+  }
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.96);
+    }
+  }
+
+  /* Members' avatars landing one after another on the invite card. The
+     stagger is what makes a hub read as somewhere people already are, rather
+     than a form to fill in — each delay is set inline per face. */
+  .hub-faces > * {
+    opacity: 0;
+    transform: translateY(6px) scale(0.8);
+    animation: face-land var(--moment) var(--ease-out) forwards;
+  }
+  @keyframes face-land {
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* Loading sweep, tinted with the theme accent instead of a grey shimmer, so
+     a skeleton still looks like this app rather than a generic placeholder. */
+  .sk {
+    border-radius: 8px;
+    background: var(--color-surface-2);
+    position: relative;
+    overflow: hidden;
+  }
+  .sk::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--color-primary) 14%, transparent),
+      transparent
+    );
+    animation: sweep 1.4s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sk::after {
+      animation: none;
+    }
+  }
+  html.calm .sk::after {
+    animation: none;
+  }
+  @keyframes sweep {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(200%);
+    }
   }
 }

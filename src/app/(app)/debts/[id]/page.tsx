@@ -19,10 +19,13 @@ export default async function DebtDetailPage({
   const { user, hub } = await requireHub();
   const { id } = await params;
   const [debt, { ventures, members }] = await Promise.all([
-    withHub(user.id, (tx) => getDebt(tx, id)),
+    withHub(user.id, (tx) => getDebt(tx, user.id, id)),
     hubChrome(user.id, hub.id),
   ]);
-  // RLS lets a FULL-share viewer read the row, but only the owner may edit it.
+  // getDebt is now owner-scoped itself (RLS would otherwise let a FULL-share
+  // viewer read the row, and this page is the edit form). Kept as a belt on
+  // top of that brace — it costs nothing and states the rule at the point a
+  // reader of this page will look for it.
   if (!debt || debt.ownerId !== user.id) notFound();
 
   return (

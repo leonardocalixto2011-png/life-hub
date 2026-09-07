@@ -22,18 +22,32 @@ export default async function InboxPage() {
         <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
           ← Today
         </Link>
-        <h1 className="mt-1 text-lg font-bold">Review inbox</h1>
+        <h1 className="display mt-1 text-2xl">
+          {items.length === 0
+            ? "Nothing to review."
+            : `${items.length} to review`}
+        </h1>
         <p className="text-xs text-[var(--color-text-dim)]">
           Parsed from forwarded emails. Nothing here is live until you accept it.
         </p>
       </div>
 
       {items.length === 0 ? (
-        <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
-          Nothing to review. Forward a bill, renewal notice or booking to this
-          hub&apos;s address — find it on{" "}
-          <Link href="/mail" className="underline">Connected mailboxes</Link> — and it lands here.
-        </p>
+        // An empty review inbox is the app working, not a gap to apologise
+        // for — so it explains how mail gets here rather than restating that
+        // there is none.
+        <div className="card p-6 text-center">
+          <p className="mx-auto max-w-[34ch] text-sm text-[var(--color-text-dim)]">
+            Forward a bill, renewal notice or booking to this hub&apos;s address and it lands
+            here as a draft for you to check.
+          </p>
+          <Link
+            href="/mail"
+            className="mt-3 inline-block text-xs font-semibold text-[var(--color-primary)]"
+          >
+            Find the address →
+          </Link>
+        </div>
       ) : (
         <div className="space-y-3">
           {items.map((it) => (

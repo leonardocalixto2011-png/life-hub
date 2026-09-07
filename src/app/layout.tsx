@@ -1,11 +1,38 @@
 import type { Metadata, Viewport } from "next";
-import { Geist } from "next/font/google";
+import { Fraunces, Instrument_Sans } from "next/font/google";
 import "./globals.css";
 
 import { getUser } from "@/lib/session";
 import { resolveThemeId, themeColor } from "@/lib/themes";
+import { MOTION_INIT_SCRIPT } from "@/lib/motion";
 
-const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+/**
+ * Two faces, strictly rationed — see the design direction.
+ *
+ * Fraunces is the app's voice: greetings, empty states, the "Cleared" stamp.
+ * Nowhere operational. The SOFT axis rounds its terminals so it stays warm at
+ * the large sizes those moments use; used everywhere it would just become
+ * wallpaper, which is why nothing else is allowed to reach for it.
+ *
+ * Instrument Sans replaces Geist for the interface. It is slightly narrower,
+ * which is the actual reason: this app is half French, and "Ligne de crédit"
+ * and "Prêt comptant" have to fit a debt row on a phone without truncating.
+ *
+ * Both are self-hosted by next/font, so the Content-Security-Policy added in
+ * the security pass needs no font exception.
+ */
+const display = Fraunces({
+  variable: "--font-display",
+  subsets: ["latin"],
+  axes: ["SOFT"],
+  display: "swap",
+});
+
+const sans = Instrument_Sans({
+  variable: "--font-sans",
+  subsets: ["latin"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Life Hub",
@@ -37,8 +64,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       data-theme={resolveThemeId(user?.themeId)}
-      className={`${geist.variable} h-full antialiased`}
+      className={`${sans.variable} ${display.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: MOTION_INIT_SCRIPT }} />
+      </head>
       <body className="min-h-full">{children}</body>
     </html>
   );

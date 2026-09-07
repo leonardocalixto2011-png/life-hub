@@ -7,7 +7,22 @@ import type { NextAuthConfig } from "next-auth";
  */
 export const authConfig = {
   pages: { signIn: "/login" },
-  session: { strategy: "jwt" as const },
+  /**
+   * Auth.js defaults to a 30-day session. That is a long time to hold a
+   * bearer credential for an app showing bank balances and debts, especially
+   * on a phone: the cookie is the whole credential, and with the JWT strategy
+   * there is no server-side session row to revoke if a device is lost.
+   *
+   * 7 days, refreshed at most once a day (`updateAge`). Someone using this
+   * daily is never signed out; someone who stops has a cookie that expires
+   * within the week. Signing back in is one emailed link, so the cost of
+   * being wrong in the strict direction is very low.
+   */
+  session: {
+    strategy: "jwt" as const,
+    maxAge: 60 * 60 * 24 * 7,
+    updateAge: 60 * 60 * 24,
+  },
   // Trust the deployment host (Vercel, custom domain) for callback URL building.
   trustHost: true,
   providers: [],

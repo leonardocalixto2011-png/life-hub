@@ -7,6 +7,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { ai, aiEnabled, AI_MODEL } from "@/lib/ai";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { rateLimit } from "@/lib/rate-limit";
 import { dashboard, listMembers, listVentures } from "@/lib/data";
 import { notifyAssignment } from "@/lib/notify";
 import { dueLabel, fromDateInput, fromDateTimeInput, money } from "@/lib/format";
@@ -41,6 +42,14 @@ export async function parseAndAdd(
   const { user, hub } = await requireHub();
   if (!aiEnabled()) {
     return { ok: false, message: "Assistant isn’t configured (no ANTHROPIC_API_KEY)." };
+  }
+  // Same `ai:<user>` bucket as parseQuickAdd, deliberately: the limit is meant
+  // to cap what one account can spend, and a per-entry-point bucket would let
+  // the same person spend the cap once here and again from the quick-add box.
+  // This path had no limit at all, so /assistant was an unmetered door to a
+  // paid API for anyone with an account.
+  if (!(await rateLimit(`ai:${user.id}`, 60, 3600)).ok) {
+    return { ok: false, message: "You have hit the hourly AI limit. Try again shortly." };
   }
   const clean = text.trim();
   if (!clean) return { ok: false, message: "Type something first." };
@@ -153,6 +162,11 @@ export async function weeklyBriefing(): Promise<{ ok: boolean; text: string }> {
   const { user, hub } = await requireHub();
   if (!aiEnabled()) {
     return { ok: false, text: "Assistant isn’t configured (no ANTHROPIC_API_KEY)." };
+  }
+  // A briefing sends the whole dashboard as context, so it is the most
+  // expensive call in the app — the last one that should have been unmetered.
+  if (!(await rateLimit(`ai:${user.id}`, 60, 3600)).ok) {
+    return { ok: false, text: "You have hit the hourly AI limit. Try again shortly." };
   }
 
   const d = await withHub(user.id, (tx) => dashboard(tx, hub.id, user.id));

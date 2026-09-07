@@ -67,7 +67,8 @@ export default async function AgendaPage() {
 
       {items.length === 0 && (
         <EmptyState
-          title="Nothing scheduled. Add something with a date — the box up top understands plain sentences:"
+          headline="A clear week ahead."
+          title="Add something with a date — the box up top understands plain sentences:"
           examples={QUICK_ADD_EXAMPLES}
         />
       )}

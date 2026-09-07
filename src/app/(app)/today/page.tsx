@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Figure } from "@/components/Figure";
 import { format } from "date-fns";
 
 import { dashboard, hubChrome } from "@/lib/data";
@@ -46,7 +47,9 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-5 p-3">
       <div>
-        <h1 className="text-lg font-bold">
+        {/* The greeting is the app addressing a person by name — the clearest
+            case for the display serif, and the first thing seen each morning. */}
+        <h1 className="display text-2xl">
           {first ? `Hi, ${first}` : "Today"}
         </h1>
         <p className="text-xs text-[var(--color-text-dim)]">{format(d.now, "EEEE, MMMM d")}</p>
@@ -54,7 +57,8 @@ export default async function DashboardPage() {
 
       {nothing && (
         <EmptyState
-          title="All clear this week. Capture something — the box up top understands plain sentences:"
+          headline="All clear this week."
+          title="Capture something — the box up top understands plain sentences:"
           examples={QUICK_ADD_EXAMPLES}
         />
       )}
@@ -161,25 +165,19 @@ export default async function DashboardPage() {
 
       <section>
         <SectionHead title={`Budget · ${format(d.now, "MMMM")}`} href="/budget" cta="Details" />
-        <div className="card grid grid-cols-3 divide-x divide-[var(--color-border)] p-0 text-center">
+        <div className="card grid grid-cols-3 divide-x divide-[var(--color-border)] p-0">
           <div className="p-3">
-            <div className="text-sm font-bold tabular-nums text-[var(--color-ok)]">
-              {money(d.budget.income)}
-            </div>
-            <div className="text-[0.58rem] uppercase tracking-wide text-[var(--color-text-dim)]">in</div>
+            <Figure cents={d.budget.income} label="in" tone="ok" />
           </div>
           <div className="p-3">
-            <div className="text-sm font-bold tabular-nums">{money(d.budget.expense)}</div>
-            <div className="text-[0.58rem] uppercase tracking-wide text-[var(--color-text-dim)]">out</div>
+            <Figure cents={d.budget.expense} label="out" />
           </div>
           <div className="p-3">
-            <div
-              className="text-sm font-bold tabular-nums"
-              style={{ color: d.budget.net < 0 ? "var(--color-danger)" : "var(--color-ok)" }}
-            >
-              {money(d.budget.net)}
-            </div>
-            <div className="text-[0.58rem] uppercase tracking-wide text-[var(--color-text-dim)]">net</div>
+            <Figure
+              cents={d.budget.net}
+              label="net"
+              tone={d.budget.net < 0 ? "danger" : "ok"}
+            />
           </div>
         </div>
       </section>

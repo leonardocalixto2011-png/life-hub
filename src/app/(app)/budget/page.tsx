@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Figure } from "@/components/Figure";
 import { addMonths, endOfMonth, format, isValid, parse as parseDate, startOfMonth, subMonths } from "date-fns";
 
 import { budgetMonth, hubChrome, upcomingSummary } from "@/lib/data";
@@ -72,31 +73,23 @@ export default async function MoneyPage({
         </Link>
       </div>
 
-      <div className="card grid grid-cols-3 divide-x divide-[var(--color-border)] p-0 text-center">
+      {/* Net is the answer to the question this page exists to ask, so it is
+          the one figure at `lg`; in and out are its working. */}
+      <div className="card grid grid-cols-3 divide-x divide-[var(--color-border)] p-0">
         <div className="p-3">
-          <div className="text-sm font-bold tabular-nums text-[var(--color-ok)]">
-            {money(data.income, currency, locale)}
-          </div>
-          <div className="text-[0.6rem] uppercase tracking-wide text-[var(--color-text-dim)]">
-            in
-          </div>
+          <Figure cents={data.income} currency={currency} locale={locale} label="in" tone="ok" />
         </div>
         <div className="p-3">
-          <div className="text-sm font-bold tabular-nums">{money(data.expense, currency, locale)}</div>
-          <div className="text-[0.6rem] uppercase tracking-wide text-[var(--color-text-dim)]">
-            out
-          </div>
+          <Figure cents={data.expense} currency={currency} locale={locale} label="out" />
         </div>
         <div className="p-3">
-          <div
-            className="text-sm font-bold tabular-nums"
-            style={{ color: data.net < 0 ? "var(--color-danger)" : "var(--color-ok)" }}
-          >
-            {money(data.net, currency, locale)}
-          </div>
-          <div className="text-[0.6rem] uppercase tracking-wide text-[var(--color-text-dim)]">
-            net
-          </div>
+          <Figure
+            cents={data.net}
+            currency={currency}
+            locale={locale}
+            label="net"
+            tone={data.net < 0 ? "danger" : "ok"}
+          />
         </div>
       </div>
 

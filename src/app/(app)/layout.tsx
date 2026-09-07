@@ -23,18 +23,34 @@ export default async function AppLayout({
   return (
     <div
       className="mx-auto flex min-h-dvh max-w-md flex-col"
-      style={
-        user.backgroundImageUrl
+      style={{
+        // The hub's own colour, exposed to the chrome below. Hubs are places;
+        // this is what stops "which hub am I in?" from ever being a question.
+        // Deliberately NOT --color-primary: that belongs to the user's chosen
+        // theme and drives buttons and links, so the two layers coexist —
+        // Chantelle keeps pink controls inside a green hub.
+        ["--hub" as string]: hub.color,
+        ...(user.backgroundImageUrl
           ? {
               backgroundImage: `url(${user.backgroundImageUrl})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
             }
-          : undefined
-      }
+          : {}),
+      }}
     >
       <ServiceWorkerRegister />
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-2.5 backdrop-blur">
+      {/* A hairline of the hub's colour across the top of the app. Small on
+          purpose — enough to register when you switch hubs, not enough to
+          fight the user's own theme. */}
+      <div className="h-[3px] shrink-0" style={{ background: "var(--hub)" }} aria-hidden />
+      <header
+        className="sticky top-0 z-20 flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2.5 backdrop-blur"
+        style={{
+          background:
+            "color-mix(in srgb, var(--hub) 7%, color-mix(in srgb, var(--color-surface) 95%, transparent))",
+        }}
+      >
         <HubSwitcher hubs={hubs} currentHubId={hub.id} />
         <div className="flex items-center gap-3">
           <Link href="/inbox" aria-label="Review inbox" className="relative text-lg leading-none">

@@ -1,7 +1,9 @@
 "use server";
 
+import { del } from "@vercel/blob";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { blobUrlSchema } from "@/lib/blob-url";
 import { isCurrency } from "@/lib/locales";
 import { revalidateContent } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
@@ -50,6 +52,26 @@ export async function switchHub(hubId: string) {
 const emailSchema = z.string().trim().toLowerCase().email();
 
 /**
+ * Throws unless `userId` is an **active** owner of `hubId`.
+ *
+ * A single helper rather than the check written out at each call site: the
+ * three owner-gated actions had drifted apart, two testing only `role` while
+ * `setHubCurrency` also tested `status`. An INVITED row exists from the moment
+ * someone is invited, so "has a membership row" is not "is in this hub" — and
+ * these actions run on the owner-role client, where RLS will not catch a
+ * mistake. Every owner-only action must go through here.
+ */
+async function requireHubOwner(hubId: string, userId: string, action: string) {
+  const membership = await prisma.hubMembership.findUnique({
+    where: { hubId_userId: { hubId, userId } },
+    select: { role: true, status: true },
+  });
+  if (!membership || membership.role !== "OWNER" || membership.status !== "ACTIVE") {
+    throw new Error(`Only the hub owner can ${action}.`);
+  }
+}
+
+/**
  * Owner-only. Invite creation writes a HubMembership row for someone else, so
  * it runs on the owner-role client — RLS's self-only HubMembership policy
  * would reject it under app_user regardless of who's asking (documented gap,
@@ -59,12 +81,7 @@ export async function inviteMember(hubId: string, formData: FormData) {
   const user = await requireUser();
   const email = emailSchema.parse(formData.get("email"));
 
-  const membership = await prisma.hubMembership.findUnique({
-    where: { hubId_userId: { hubId, userId: user.id } },
-  });
-  if (!membership || membership.role !== "OWNER") {
-    throw new Error("Only the hub owner can invite people.");
-  }
+  await requireHubOwner(hubId, user.id, "invite people");
 
   const hub = await prisma.hub.findUniqueOrThrow({ where: { id: hubId } });
 
@@ -172,12 +189,7 @@ export async function leaveHub(hubId: string) {
  */
 export async function removeMember(hubId: string, targetUserId: string) {
   const { user } = await requireHub();
-  const membership = await prisma.hubMembership.findUnique({
-    where: { hubId_userId: { hubId, userId: user.id } },
-  });
-  if (!membership || membership.role !== "OWNER") {
-    throw new Error("Only the hub owner can remove members.");
-  }
+  await requireHubOwner(hubId, user.id, "remove members");
   if (targetUserId === user.id) {
     throw new Error("Use \"Leave hub\" to remove yourself.");
   }
@@ -198,12 +210,59 @@ export async function setHubCurrency(hubId: string, currency: string) {
   z.string().cuid().parse(hubId);
   if (!isCurrency(currency)) throw new Error("Unsupported currency.");
 
-  const membership = await prisma.hubMembership.findFirst({
-    where: { hubId, userId: user.id, role: "OWNER", status: "ACTIVE" },
-    select: { id: true },
-  });
-  if (!membership) throw new Error("Only a hub owner can change its currency.");
+  await requireHubOwner(hubId, user.id, "change its currency");
 
   await prisma.hub.update({ where: { id: hubId }, data: { currency } });
   revalidateContent(`/hubs/${hubId}/members`);
+}
+
+/**
+ * The hub's shared cover photo — everyone in the hub sees the same one.
+ *
+ * Owner-only, because this is the one image in the app a person picks *for
+ * other people*: it appears on the invite before anyone has agreed to
+ * anything, and on the members page thereafter. `User.backgroundImageUrl`
+ * stays exactly as it was — personal, private, unaffected.
+ */
+export async function setHubCover(hubId: string, url: string) {
+  const user = await requireUser();
+  z.string().cuid().parse(hubId);
+  const parsedUrl = blobUrlSchema.parse(url);
+
+  await requireHubOwner(hubId, user.id, "change the cover photo");
+
+  await deletePreviousCover(hubId);
+  await prisma.hub.update({
+    where: { id: hubId },
+    data: { coverImageUrl: parsedUrl, coverById: user.id },
+  });
+  revalidateContent(`/hubs/${hubId}/members`, "/hubs/invites");
+}
+
+export async function removeHubCover(hubId: string) {
+  const user = await requireUser();
+  z.string().cuid().parse(hubId);
+
+  await requireHubOwner(hubId, user.id, "change the cover photo");
+
+  await deletePreviousCover(hubId);
+  await prisma.hub.update({
+    where: { id: hubId },
+    data: { coverImageUrl: null, coverById: null },
+  });
+  revalidateContent(`/hubs/${hubId}/members`, "/hubs/invites");
+}
+
+/** One cover blob per hub, so changing the photo doesn't orphan the old file. */
+async function deletePreviousCover(hubId: string) {
+  const existing = await prisma.hub.findUnique({
+    where: { id: hubId },
+    select: { coverImageUrl: true },
+  });
+  if (!existing?.coverImageUrl) return;
+  try {
+    await del(existing.coverImageUrl);
+  } catch {
+    // Already gone or unreachable — not worth failing the request over.
+  }
 }

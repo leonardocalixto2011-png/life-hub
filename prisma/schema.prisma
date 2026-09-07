@@ -52,6 +52,7 @@ model User {
   pushSubscriptions  PushSubscription[]
   notificationPref   NotificationPreference?
   createdHubs        Hub[]                   @relation("HubCreatedBy")
+  hubCoversSet       Hub[]                   @relation("HubCoverBy")
   hubMemberships     HubMembership[]
   mailAccounts       MailAccount[]
   remindersSent      ReminderSent[]
@@ -95,6 +96,17 @@ model Hub {
   /// someone asks for the address. Unique so a forwarded mail resolves to
   /// exactly one hub — see src/lib/inbound-address.ts.
   inboundToken String? @unique
+
+  /// The hub's shared cover photo — everyone in the hub sees the same one.
+  /// Deliberately distinct from `User.backgroundImageUrl`, which stays private
+  /// to one person: this is what makes a hub feel like a place rather than a
+  /// row, and it is the first thing an invited person sees. Owner-only write
+  /// (see setHubCover), readable by any active member.
+  coverImageUrl String?
+  /// Who set it, so the invite can say "shared by Chantelle". SetNull rather
+  /// than Cascade: losing the person must not silently blank the hub's cover.
+  coverById     String?
+  coverBy       User?   @relation("HubCoverBy", fields: [coverById], references: [id], onDelete: SetNull)
 
   memberships    HubMembership[]
   ventures       Venture[]

@@ -2,10 +2,10 @@
 
 import { del } from "@vercel/blob";
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { blobUrlSchema } from "@/lib/blob-url";
 import { isThemeId } from "@/lib/themes";
 import { isLocale } from "@/lib/locales";
 
@@ -27,7 +27,7 @@ async function deletePreviousBlob(userId: string) {
 
 export async function setBackgroundImage(url: string) {
   const user = await requireUser();
-  const parsedUrl = z.string().url().parse(url);
+  const parsedUrl = blobUrlSchema.parse(url);
 
   await deletePreviousBlob(user.id);
   await prisma.user.update({ where: { id: user.id }, data: { backgroundImageUrl: parsedUrl } });

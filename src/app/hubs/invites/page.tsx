@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { acceptInvite, declineInvite } from "@/app/(app)/hubs/actions";
+import { InviteCard } from "./InviteCard";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,19 @@ export default async function InvitesPage() {
           id: true,
           name: true,
           color: true,
+          coverImageUrl: true,
+          coverBy: { select: { name: true, email: true } },
           createdBy: { select: { name: true, email: true } },
+          // Who is already inside. Only enough to draw an avatar — no email
+          // is rendered, so accepting isn't a precondition for seeing that
+          // the hub is real, but declining doesn't hand over a contact list
+          // either.
+          memberships: {
+            where: { status: "ACTIVE" },
+            select: { user: { select: { id: true, name: true, email: true } } },
+            orderBy: { joinedAt: "asc" },
+            take: 5,
+          },
         },
       },
     },
@@ -26,9 +38,12 @@ export default async function InvitesPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-6 p-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Hub invites</h1>
+        <h1 className="display text-3xl">
+          {invites.length === 0 ? "Nothing waiting." : "You've been invited."}
+        </h1>
         <p className="mt-1 text-sm text-[var(--color-text-dim)]">
-          Accept to join, or decline to remove the invite.
+          Joining a hub shares its bills, deadlines and calendar. Your debts stay private
+          until you choose otherwise.
         </p>
       </div>
 
@@ -42,32 +57,16 @@ export default async function InvitesPage() {
       ) : (
         <div className="space-y-3">
           {invites.map((inv) => (
-            <div key={inv.id} className="card space-y-3 p-4">
-              <div className="flex items-center gap-2">
-                <span
-                  className="h-3 w-3 shrink-0 rounded-full"
-                  style={{ background: inv.hub.color }}
-                />
-                <div>
-                  <div className="font-semibold">{inv.hub.name}</div>
-                  <div className="text-xs text-[var(--color-text-dim)]">
-                    invited by {inv.hub.createdBy.name ?? inv.hub.createdBy.email}
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <form action={acceptInvite.bind(null, inv.hub.id)} className="flex-1">
-                  <button type="submit" className="btn btn-primary w-full">
-                    Accept
-                  </button>
-                </form>
-                <form action={declineInvite.bind(null, inv.hub.id)} className="flex-1">
-                  <button type="submit" className="btn btn-ghost w-full">
-                    Decline
-                  </button>
-                </form>
-              </div>
-            </div>
+            <InviteCard
+              key={inv.id}
+              hubId={inv.hub.id}
+              name={inv.hub.name}
+              color={inv.hub.color}
+              coverImageUrl={inv.hub.coverImageUrl}
+              coverBy={inv.hub.coverBy?.name ?? null}
+              invitedBy={inv.hub.createdBy.name ?? inv.hub.createdBy.email ?? "Someone"}
+              members={inv.hub.memberships.map((m) => m.user)}
+            />
           ))}
         </div>
       )}

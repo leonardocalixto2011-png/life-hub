@@ -266,7 +266,19 @@ export function listSharedDebts(tx: HubTx, hubId: string, viewerId: string) {
     where: {
       ownerId: { not: viewerId },
       owner: {
-        debtShares: { some: { hubId, visibility: "FULL" } },
+        debtShares: {
+          some: {
+            visibility: "FULL",
+            // Both halves of the rule, not just the owner's half. Before this,
+            // the query asked only "did the owner share FULL into `hubId`?"
+            // and trusted the caller to have passed a hub the viewer belongs
+            // to. That was true of the one call site, but it made the
+            // viewer's own membership something a future caller could forget
+            // to establish. Now the function cannot be misused.
+            hub: { memberships: { some: { userId: viewerId, status: "ACTIVE" } } },
+            hubId,
+          },
+        },
       },
       status: { not: "PAID_OFF" },
     },
@@ -275,8 +287,16 @@ export function listSharedDebts(tx: HubTx, hubId: string, viewerId: string) {
   });
 }
 
-export function getDebt(tx: HubTx, id: string) {
-  return tx.debt.findUnique({ where: { id }, include: debtInclude });
+/**
+ * Takes `viewerId` and resolves ownership itself rather than returning any row
+ * with this id and leaving the ownership test to the page. The detail page did
+ * check, correctly — but a lookup that returns other people's financial rows
+ * and relies on every caller remembering to compare `ownerId` is the shape
+ * IDOR bugs grow in, and RLS is inert on the local dev database, so a mistake
+ * would not show up until production.
+ */
+export function getDebt(tx: HubTx, viewerId: string, id: string) {
+  return tx.debt.findFirst({ where: { id, ownerId: viewerId }, include: debtInclude });
 }
 
 /** Rows whose owner the ownership migration guessed — the UI asks for confirmation. */

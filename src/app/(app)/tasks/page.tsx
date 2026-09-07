@@ -112,7 +112,8 @@ export default async function TasksPage({
             "No tasks assigned to you."
           ) : (
             <EmptyState
-              title="No tasks yet. The box up top takes plain sentences:"
+              headline="Nothing on your list."
+              title="The box up top takes plain sentences:"
               examples={QUICK_ADD_EXAMPLES}
             />
           )

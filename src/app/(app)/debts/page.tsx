@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Figure } from "@/components/Figure";
 
 import {
   hubChrome,
@@ -88,7 +89,14 @@ function Row({
               </span>
             )}
             {own ? (
-              <DebtStatusChip id={d.id} status={d.status} />
+              <DebtStatusChip
+                id={d.id}
+                status={d.status}
+                name={d.name}
+                balanceCents={d.balanceCents}
+                currency={currency}
+                locale={locale}
+              />
             ) : (
               d.status === "DEFAULT" && (
                 <span
@@ -192,18 +200,24 @@ export default async function DebtsPage() {
         </div>
       )}
 
+      {/* The balance is what this page is about — the only `lg` figure on it. */}
       <div className="card grid grid-cols-2 divide-x divide-[var(--color-border)] p-0">
-        <div className="p-3 text-center">
-          <div className="text-lg font-bold tabular-nums">{money(totalBalance, currency, locale)}</div>
-          <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
-            total balance
-          </div>
+        <div className="p-3">
+          <Figure
+            cents={totalBalance}
+            currency={currency}
+            locale={locale}
+            label="total balance"
+            size="lg"
+          />
         </div>
-        <div className="p-3 text-center">
-          <div className="text-lg font-bold tabular-nums">{money(totalMonthly, currency, locale)}</div>
-          <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
-            per month · {current.length} current
-          </div>
+        <div className="p-3">
+          <Figure
+            cents={totalMonthly}
+            currency={currency}
+            locale={locale}
+            label={`per month · ${current.length} current`}
+          />
         </div>
       </div>
 

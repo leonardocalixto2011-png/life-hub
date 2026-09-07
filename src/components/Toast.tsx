@@ -36,7 +36,10 @@ export function ToastHost() {
 
   return (
     <div className="safe-b pointer-events-none fixed inset-x-0 bottom-16 z-30 flex justify-center px-4">
-      <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-[var(--color-text)] px-4 py-2 text-sm text-[var(--color-bg)] shadow-lg">
+      {/* Rises from the bottom nav rather than appearing — it comes *from*
+          the thing you just did. Bottom rung of the ladder, so it's the
+          `--base` duration and nothing more. */}
+      <div className="toast-in pointer-events-auto flex items-center gap-3 rounded-full bg-[var(--color-text)] px-4 py-2 text-sm text-[var(--color-bg)] shadow-lg">
         <span>{toast.message}</span>
         {toast.onAction && (
           <button

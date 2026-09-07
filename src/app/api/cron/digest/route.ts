@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { bearerMatches } from "@/lib/bearer";
 
 import { reportError } from "@/lib/observability";
 
@@ -19,10 +20,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function authorized(req: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const header = req.headers.get("authorization");
-  return header === `Bearer ${secret}`;
+  return bearerMatches(req, process.env.CRON_SECRET);
 }
 
 export async function GET(req: Request) {
