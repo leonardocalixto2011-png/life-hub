@@ -6,7 +6,7 @@ import { requestMagicLink, type LoginState } from "./actions";
 
 const initial: LoginState = { sent: false };
 
-export function LoginForm() {
+export function LoginForm({ open }: { open: boolean }) {
   const [state, formAction, pending] = useActionState(requestMagicLink, initial);
 
   if (state.sent) {
@@ -14,7 +14,9 @@ export function LoginForm() {
       <div className="card p-5 text-sm">
         <p className="font-semibold">Check your email</p>
         <p className="mt-1 text-[var(--color-text-dim)]">
-          If that address has access, a sign-in link is on its way. It expires in 24 hours.
+          {open
+            ? "A sign-in link is on its way. It expires in 24 hours — clicking it both verifies your address and signs you in, so there is no password to set."
+            : "If that address has access, a sign-in link is on its way. It expires in 24 hours."}
         </p>
         <p className="mt-3 text-xs text-[var(--color-text-dim)]">
           Running locally with no email key? The link is printed in the dev server console.
@@ -45,7 +47,9 @@ export function LoginForm() {
         {pending ? "Sending…" : "Send sign-in link"}
       </button>
       <p className="mt-3 text-xs text-[var(--color-text-dim)]">
-        Invite-only. Ask an admin to add your address.
+        {open
+          ? "New here? Enter your email — the same link creates your account."
+          : "Invite-only. Ask an admin to add your address."}
       </p>
     </form>
   );

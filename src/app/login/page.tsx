@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { LoginForm } from "./LoginForm";
+import { signupsOpen } from "@/lib/signup";
 
 export default async function LoginPage() {
   const session = await auth();
@@ -15,7 +16,7 @@ export default async function LoginPage() {
           Tasks, deadlines, subscriptions and budget for the crew — in one place.
         </p>
       </div>
-      <LoginForm />
+      <LoginForm open={signupsOpen()} />
     </main>
   );
 }
