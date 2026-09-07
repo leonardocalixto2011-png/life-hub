@@ -14,6 +14,7 @@ import {
   connectImapAccount,
   disconnectMailAccount,
   removeTrustedSender,
+  unmuteThisSender,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,7 @@ export default async function MailPage({
   const sp = await searchParams;
   const { user, hub } = await requireHub();
 
-  const [accounts, trustedSenders] = await withHub(user.id, (tx) =>
+  const [accounts, trustedSenders, mutedSenders] = await withHub(user.id, (tx) =>
     Promise.all([
       tx.mailAccount.findMany({
         where: { hubId: hub.id },
@@ -43,6 +44,7 @@ export default async function MailPage({
         where: { hubId: hub.id },
         orderBy: { createdAt: "desc" },
       }),
+      tx.mutedSender.findMany({ where: { hubId: hub.id }, orderBy: { createdAt: "desc" } }),
     ]),
   );
 
@@ -208,6 +210,33 @@ export default async function MailPage({
           </form>
         </div>
       </details>
+
+      {mutedSenders.length > 0 && (
+        <section>
+          <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+            Muted senders
+          </h2>
+          <p className="mb-1.5 text-[0.65rem] text-[var(--color-text-dim)]">
+            Mail from these never reaches the assistant, so it costs nothing and
+            never appears in the review inbox.
+          </p>
+          <div className="card divide-y divide-[var(--color-border)]">
+            {mutedSenders.map((m) => (
+              <div key={m.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                <span className="truncate text-sm">{m.fromAddress}</span>
+                <form action={unmuteThisSender.bind(null, m.fromAddress)}>
+                  <button
+                    type="submit"
+                    className="shrink-0 text-[0.68rem] font-semibold text-[var(--color-text-dim)] underline"
+                  >
+                    unmute
+                  </button>
+                </form>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {trustedSenders.length > 0 && (
         <section>

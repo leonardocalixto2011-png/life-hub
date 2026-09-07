@@ -17,6 +17,7 @@ import { OAUTH_STATE_COOKIE } from "@/lib/mail/constants";
 import { encrypt } from "@/lib/mail/crypto";
 import { testImapLogin } from "@/lib/mail/imap";
 import { ensureInboundAddress, rotateInboundAddress } from "@/lib/inbound-address";
+import { unmuteSender } from "@/lib/mail/trust";
 
 /**
  * Starts the Gmail connect flow. The state value is stashed in a short-lived
@@ -172,4 +173,12 @@ export async function rotateInbound(): Promise<string | null> {
   const next = await rotateInboundAddress(hub.id);
   revalidatePath("/mail");
   return next;
+}
+
+/** Start classifying this sender again. */
+export async function unmuteThisSender(fromAddress: string) {
+  const { user, hub } = await requireHub();
+  const address = z.string().min(1).max(320).parse(fromAddress).toLowerCase();
+  await withHub(user.id, (tx) => unmuteSender(tx, hub.id, address));
+  revalidatePath("/mail");
 }

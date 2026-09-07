@@ -7,7 +7,7 @@ import { formatDistanceToNow } from "date-fns";
 import type { Draft } from "@/lib/parse";
 import { DraftCard } from "@/components/DraftCard";
 import { showToast } from "@/components/Toast";
-import { acceptReview, discardReview, trustThisSender } from "./actions";
+import { acceptReview, discardReview, trustThisSender, muteThisSender } from "./actions";
 
 export type ReviewCardData = {
   id: string;
@@ -29,6 +29,17 @@ export function ReviewCard({
   const router = useRouter();
   const [draft, setDraft] = useState<Draft>(item.draft);
   const [pending, start] = useTransition();
+
+  /** Stops future classification calls for this sender AND clears whatever of
+   *  theirs is already pending — muting something you are looking at should
+   *  make it go away, not leave it sitting there. */
+  function mute() {
+    if (!item.fromAddress) return;
+    start(async () => {
+      const r = await muteThisSender(item.fromAddress!);
+      if (r.ok) router.refresh();
+    });
+  }
   const [gone, setGone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -108,6 +119,16 @@ export function ReviewCard({
           Discard
         </button>
       </div>
+
+      {item.fromAddress && (
+        <button
+          onClick={mute}
+          disabled={pending}
+          className="text-[0.65rem] font-semibold text-[var(--color-text-dim)] underline disabled:opacity-60"
+        >
+          Never show mail from {item.fromAddress} again
+        </button>
+      )}
     </div>
   );
 }

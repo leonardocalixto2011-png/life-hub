@@ -30,8 +30,9 @@ export default async function InboxPage() {
 
       {items.length === 0 ? (
         <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
-          Nothing to review. Forward a bill, renewal notice or booking to{" "}
-          <span className="font-semibold">hub@hub.cmacservices.ca</span> and it lands here.
+          Nothing to review. Forward a bill, renewal notice or booking to this
+          hub&apos;s address — find it on{" "}
+          <Link href="/mail" className="underline">Connected mailboxes</Link> — and it lands here.
         </p>
       ) : (
         <div className="space-y-3">

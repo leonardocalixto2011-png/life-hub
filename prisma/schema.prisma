@@ -101,6 +101,7 @@ model Hub {
   events         Event[]
   mailAccounts   MailAccount[]
   trustedSenders TrustedSender[]
+  mutedSenders   MutedSender[]
   reviewItems    ReviewItem[]
 }
 
@@ -569,6 +570,22 @@ model TrustedSender {
   createdAt   DateTime        @default(now())
 
   @@unique([hubId, fromAddress, category])
+}
+
+/// The inverse of TrustedSender: never spend a classification call on mail from
+/// this address. The header prefilter (lib/mail/prefilter.ts) catches obvious
+/// bulk, but a sender who is never actionable still costs a call every time
+/// they mention a price — a job board quoting a salary, a food app advertising
+/// a discount. Muting is exact and permanent where the heuristic cannot be.
+model MutedSender {
+  id          String   @id @default(cuid())
+  hubId       String
+  hub         Hub      @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  fromAddress String
+  createdAt   DateTime @default(now())
+
+  @@unique([hubId, fromAddress])
+  @@index([hubId])
 }
 
 /// Fixed-window rate-limit counters (src/lib/rate-limit.ts). Not hub-scoped and

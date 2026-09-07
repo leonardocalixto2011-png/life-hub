@@ -7,7 +7,7 @@ import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { commitDrafts } from "@/app/(app)/quick-actions";
 import { commitDraftsCore } from "@/lib/commit-drafts";
-import { shouldOfferTrust, trustSender } from "@/lib/mail/trust";
+import { muteSender, shouldOfferTrust, trustSender } from "@/lib/mail/trust";
 import type { ActionableCategory } from "@/lib/mail/classify";
 import type { Draft } from "@/lib/parse";
 import { revalidateContent } from "@/lib/revalidate";
@@ -80,4 +80,26 @@ export async function trustThisSender(hubId: string, fromAddress: string, catego
   const { user } = await requireHub();
   await withHub(user.id, (tx) => trustSender(tx, hubId, fromAddress, category));
   revalidateContent("/mail");
+}
+
+/**
+ * Never classify this sender again in this hub. Also discards everything
+ * currently pending from them — muting a newsletter you're staring at should
+ * clear it, not leave the thing you just rejected sitting in the list.
+ */
+export async function muteThisSender(fromAddress: string): Promise<{ ok: boolean; cleared: number }> {
+  const { user, hub } = await requireHub();
+  const address = z.string().min(1).max(320).parse(fromAddress).toLowerCase();
+
+  const cleared = await withHub(user.id, async (tx) => {
+    await muteSender(tx, hub.id, address);
+    const { count } = await tx.reviewItem.updateMany({
+      where: { hubId: hub.id, fromAddress: address, status: "PENDING" },
+      data: { status: "DISCARDED", reviewedAt: new Date() },
+    });
+    return count;
+  });
+
+  revalidateContent("/mail");
+  return { ok: true, cleared };
 }

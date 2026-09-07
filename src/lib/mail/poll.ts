@@ -7,7 +7,7 @@ import { prefilter } from "./prefilter";
 import { fetchGoogleBatch } from "./google";
 import { fetchImapBatch } from "./imap";
 import { fetchMicrosoftBatch } from "./microsoft";
-import { isTrusted } from "./trust";
+import { isMuted, isTrusted } from "./trust";
 import { RUN_TIME_BUDGET_MS, type MailBatchItem } from "./types";
 
 const MIN_AUTO_FILE_CONFIDENCE = 0.6;
@@ -68,11 +68,16 @@ async function pollMailAccount(account: MailAccount, runStartedAt: number): Prom
         select: { id: true },
       });
 
-      const verdict = prefilter(message);
+      // Muting is checked before the header heuristic — an explicit "never
+      // this address" outranks any guess about the content — but after the
+      // already-reviewed check, so a re-walked message costs no extra query.
+      const skip =
+        !alreadyReviewed &&
+        ((await isMuted(prisma, account.hubId, fromAddress)) || !prefilter(message).classify);
 
       if (alreadyReviewed) {
         // skip re-processing, but still advance the checkpoint below
-      } else if (!verdict.classify) {
+      } else if (skip) {
         // Bulk mail with no money or date signal. Nothing is stored: a
         // newsletter is not something to review later, and keeping it would
         // make the review inbox the thing users stop opening. The checkpoint

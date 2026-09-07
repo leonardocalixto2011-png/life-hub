@@ -57,3 +57,37 @@ export async function trustSender(
   if (existing) return;
   await db.trustedSender.create({ data: { hubId, fromAddress, category } });
 }
+
+// ---------------------------------------------------------------------------
+// Muting — the inverse of trust
+// ---------------------------------------------------------------------------
+
+type MuteDb = Pick<PrismaClient, "mutedSender">;
+
+/**
+ * Checked before classifying, so a muted sender never reaches the AI at all.
+ * Distinct from the header prefilter: that one guesses from bulk markers and
+ * deliberately lets anything money-shaped through, which is right for safety
+ * but means a job board quoting a salary still costs a call. This is the
+ * user saying "never this address", and it is absolute.
+ */
+export async function isMuted(db: MuteDb, hubId: string, fromAddress: string): Promise<boolean> {
+  if (!fromAddress) return false;
+  const found = await db.mutedSender.findFirst({
+    where: { hubId, fromAddress },
+    select: { id: true },
+  });
+  return found !== null;
+}
+
+export async function muteSender(db: MuteDb, hubId: string, fromAddress: string): Promise<void> {
+  await db.mutedSender.upsert({
+    where: { hubId_fromAddress: { hubId, fromAddress } },
+    update: {},
+    create: { hubId, fromAddress },
+  });
+}
+
+export async function unmuteSender(db: MuteDb, hubId: string, fromAddress: string): Promise<void> {
+  await db.mutedSender.deleteMany({ where: { hubId, fromAddress } });
+}
