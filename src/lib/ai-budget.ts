@@ -32,12 +32,20 @@ import { logWarn } from "@/lib/observability";
 const WINDOW_SECONDS = 60 * 60 * 24 * 30;
 
 /**
- * Tokens per user per 30 days. Roughly 2M, which at Opus pricing is a few
- * dollars — generous for the heaviest realistic personal use, and a hard stop
- * long before a runaway loop or an open signup page becomes an invoice.
- * Override with AI_TOKEN_BUDGET once there is real usage data to set it from.
+ * Tokens per subject per 30 days.
+ *
+ * This was 2_000_000, described in an earlier version of this comment as "a
+ * few dollars". That was wrong and worth recording: AI_MODEL defaults to
+ * claude-opus-5, the premium tier, where 2M tokens is on the order of $50-60
+ * — so the "hard stop" would have let a real bill through.
+ *
+ * 400k is roughly 2-4x realistic personal use (a quick-add parse costs ~1-2k
+ * tokens, a weekly briefing ~3-5k, an email classification ~1-2k), which is
+ * what a runaway-protection ceiling should be: comfortably above normal, well
+ * below painful. Raise it with AI_TOKEN_BUDGET once real usage data exists —
+ * the number to check is the Anthropic console, not this comment.
  */
-const DEFAULT_BUDGET = 2_000_000;
+const DEFAULT_BUDGET = 400_000;
 
 function budget(): number {
   const raw = Number(process.env.AI_TOKEN_BUDGET);
