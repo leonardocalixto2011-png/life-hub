@@ -54,6 +54,7 @@ model User {
   createdHubs        Hub[]                   @relation("HubCreatedBy")
   hubMemberships     HubMembership[]
   mailAccounts       MailAccount[]
+  remindersSent      ReminderSent[]
 }
 
 // ---------------------------------------------------------------------------
@@ -221,7 +222,7 @@ model Task {
   amountCents      Int? // set when this task is a bill to pay (from mail classify or manual)
   status           TaskStatus @default(OPEN)
   completedAt      DateTime?
-  remindDaysBefore Int[]      @default([]) // e.g. [3, 1] — read by the Phase 2 cron
+  remindDaysBefore Int[]      @default([]) // e.g. [3, 1] — dispatched by lib/reminders.ts
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
@@ -606,4 +607,23 @@ model RateLimit {
 
   @@unique([key, windowStart])
   @@index([expiresAt])
+}
+
+/// One row per reminder actually delivered, so the daily cron fires each one
+/// once instead of re-sending every day the item stays inside its window.
+/// Keyed per user, not per item: two members of a hub each get their own
+/// reminder for a shared deadline, and one receiving it must not suppress the
+/// other's.
+model ReminderSent {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "deadline" today; the dispatcher is written to take more kinds later.
+  entityType String
+  entityId   String
+  daysBefore Int
+  sentAt     DateTime @default(now())
+
+  @@unique([userId, entityType, entityId, daysBefore])
+  @@index([entityType, entityId])
 }

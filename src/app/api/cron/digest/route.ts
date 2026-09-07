@@ -5,6 +5,7 @@ import { reportError } from "@/lib/observability";
 import { prisma } from "@/lib/prisma";
 import { mapLimit } from "@/lib/async";
 import { pruneRateLimits } from "@/lib/rate-limit";
+import { dispatchReminders } from "@/lib/reminders";
 import { sendEmail } from "@/lib/email";
 import { sendPushToUser } from "@/lib/push";
 import {
@@ -44,6 +45,7 @@ export async function GET(req: Request) {
   let pushed = 0;
   let emailed = 0;
   let failed = 0;
+  let reminded = 0;
   let totalCount = 0;
 
   // Bounded fan-out: each user's collect opens its own withHub transaction
@@ -51,6 +53,11 @@ export async function GET(req: Request) {
   // roster grows.
   await mapLimit(users, 4, async (u) => {
     try {
+    // Dated reminders ride this cron because Vercel Hobby caps us at two
+    // schedules and both are spent. Runs before the digest early-return: a
+    // reminder is due on its own terms whether or not anything else is.
+    reminded += await dispatchReminders(u.id);
+
     const digest = await collectDigestForUser(u.id, 48);
     totalCount += digest.count;
     if (digest.count === 0) return;
@@ -88,6 +95,7 @@ export async function GET(req: Request) {
     ok: true,
     count: totalCount,
     prunedRateLimits,
+    reminded,
     failed,
     pushed,
     emailed,
