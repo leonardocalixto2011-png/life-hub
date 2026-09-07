@@ -3,6 +3,7 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 import { ai, aiEnabled, AI_MODEL } from "@/lib/ai";
+import { reportError } from "@/lib/observability";
 import { listVentures } from "@/lib/data";
 import type { HubTx } from "@/lib/hub-context";
 
@@ -44,6 +45,20 @@ const AiSchema = z.object({
   ),
 });
 
+/**
+ * Upstream AI failures mapped to something a person can act on. Anything the
+ * operator needs to fix — no credit, bad key, model gone — reads the same to
+ * the user, because none of it is theirs to resolve and the specifics leak
+ * account state.
+ */
+function friendlyAiError(err: unknown): string {
+  const status = (err as { status?: number })?.status;
+  if (status === 429) return "The assistant is busy right now — try again in a moment.";
+  if (status === 401 || status === 403) return "The assistant isn't set up correctly. An admin needs to check the server config.";
+  if (typeof status === "number" && status >= 500) return "The assistant is having trouble. Try again shortly.";
+  return "The assistant is temporarily unavailable.";
+}
+
 export type ParseOutcome =
   | { ok: true; drafts: Draft[]; truncated?: boolean }
   | { ok: false; error: string };
@@ -53,10 +68,11 @@ export type ParseOutcome =
  * drafts. No auth — callers gate. Returns an error string when AI is off or the
  * text yields nothing actionable.
  *
- * `hub` is omitted on the inbound-email path (src/app/api/inbound/route.ts),
- * which runs before any user/hub is known — ReviewItem has no hub concept yet
- * (see plan §5, known gap), so venture-name matching is simply skipped there
- * and drafts come back with ventureId: null for the user to fill in on Accept.
+ * `hub` is omitted on the inbound-email path (src/app/api/inbound/route.ts).
+ * That route now resolves a hub from the recipient address, but does so
+ * outside a withHub transaction, so there is no tx to look ventures up with —
+ * venture matching is skipped there and drafts come back with ventureId: null
+ * for the user to fill in on Accept.
  */
 export async function parseText(
   text: string,
@@ -103,7 +119,13 @@ export async function parseText(
     parsed = res.parsed_output;
     truncated = res.stop_reason === "max_tokens";
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Assistant error." };
+    // Never surface the upstream message. It gets written into a ReviewItem
+    // note and rendered in the review inbox, and Anthropic's error bodies
+    // carry operator detail — billing state, request ids — that is not the
+    // user's problem and not theirs to see. The real error goes to the logs
+    // and the alert webhook instead.
+    await reportError("ai.parse_failed", err, { model: AI_MODEL });
+    return { ok: false, error: friendlyAiError(err) };
   }
   if (!parsed || parsed.items.length === 0) {
     return { ok: false, error: "Nothing actionable found." };

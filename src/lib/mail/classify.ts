@@ -2,6 +2,7 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 import { ai, aiEnabled, AI_MODEL } from "@/lib/ai";
+import { reportError } from "@/lib/observability";
 import type { Draft } from "@/lib/parse";
 
 export const ACTIONABLE_CATEGORIES = [
@@ -123,7 +124,11 @@ export async function classifyEmail(input: ClassifyInput): Promise<ClassifyResul
       confidence: parsed.confidence,
       draft: toDraft(parsed, parsed.category, input),
     };
-  } catch {
+  } catch (err) {
+    // Returning null keeps the poll running — one unclassifiable message must
+    // not stall the batch — but swallowing it silently meant an outage looked
+    // identical to "nothing interesting arrived". Report, then degrade.
+    await reportError("mail.classify_failed", err, { from: input.from ? "present" : "absent" });
     return null;
   }
 }
