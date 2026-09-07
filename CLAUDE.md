@@ -935,8 +935,18 @@ Remaining, in order:
    with no money/date signal, but a sender you never want classified still
    costs a call whenever they mention a price. A per-sender mute — the mirror
    of `TrustedSender` — would be exact and permanent.
-5. **i18n.** `"CAD"` hardcoded at ~10 render sites, `en-CA` in `money()`,
-   `America/Toronto` default timezone, all UI strings inline English.
+5. **i18n.** ✅ *Formatting done* — `Hub.currency` (owner-set) and
+   `User.locale` (per-user), `money(cents, currency, locale)`. This also fixed
+   a real bug: /budget and /subscriptions summed across currencies then
+   labelled the total with row[0]. **Still open: translating the interface.**
+   Every string is inline English; real i18n needs next-intl or similar plus
+   extraction, which is its own project. `NotificationPreference.timezone`
+   already exists per-user and is editable.
+
+   ⚠️ Locale validation must NOT use try/catch —
+   `new Intl.NumberFormat("not-a-locale")` silently resolves to the *system*
+   locale instead of throwing. Use `supportedLocalesOf()` (see
+   `safeLocale` in `lib/format.ts`).
 6. **Monetization.** Analysis in `MONETIZATION.md` — recommended $4.99/mo or
    $39/yr **per hub**, gating the AI features and mailbox connectors (the
    things with a real marginal cost) rather than removing ads. **The brief's
