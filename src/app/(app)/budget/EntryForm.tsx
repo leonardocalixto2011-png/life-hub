@@ -6,14 +6,21 @@ import { useRouter } from "next/navigation";
 import { createEntry, updateEntry } from "./actions";
 import { toDateInput } from "@/lib/format";
 import { centsToInput } from "@/lib/money";
+import { BUDGET_CATEGORIES, SPLIT_OPTIONS } from "@/lib/couple";
 import type { BudgetEntryWithRefs } from "@/lib/data";
+
+type Member = { id: string; name: string | null; email: string | null };
 
 export function EntryForm({
   ventures,
+  members,
+  currentUserId,
   entry,
   onCancel,
 }: {
   ventures: { id: string; name: string }[];
+  members: Member[];
+  currentUserId: string;
   /** When set, the form opens pre-filled in edit mode and calls updateEntry instead of createEntry. */
   entry?: BudgetEntryWithRefs;
   /** Only relevant in edit mode — lets the caller collapse back to the display row. */
@@ -24,6 +31,8 @@ export function EntryForm({
   const [open, setOpen] = useState(Boolean(entry));
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Sharing only means something with someone to share with.
+  const shared = members.length > 1;
 
   if (!open) {
     return (
@@ -97,17 +106,12 @@ export function EntryForm({
             list="budget-categories"
             defaultValue={entry?.category ?? ""}
             className="field mt-1"
-            placeholder="Supplies, Ads, Tuition…"
+            placeholder="Groceries, Outings…"
           />
           <datalist id="budget-categories">
-            <option value="Supplies" />
-            <option value="Ads" />
-            <option value="Software" />
-            <option value="Salary" />
-            <option value="Rent" />
-            <option value="Tuition" />
-            <option value="Sales" />
-            <option value="Fees" />
+            {BUDGET_CATEGORIES.map((c) => (
+              <option key={c} value={c} />
+            ))}
           </datalist>
         </label>
         <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
@@ -122,6 +126,39 @@ export function EntryForm({
           </select>
         </label>
       </div>
+
+      {shared && (
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+            Paid by
+            <select
+              name="paidById"
+              defaultValue={entry?.paidById ?? currentUserId}
+              className="field mt-1"
+            >
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name ?? m.email}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+            Split
+            <select
+              name="split"
+              defaultValue={entry?.payerSharePct == null ? "none" : String(entry.payerSharePct)}
+              className="field mt-1"
+            >
+              {SPLIT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block text-xs font-semibold text-[var(--color-text-dim)]">

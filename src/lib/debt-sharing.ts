@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { perMonth } from "@/lib/money";
 
 /**
  * Summary-only debt sharing.
@@ -63,7 +64,13 @@ export async function sharedDebtSummaries(
     // and must not — only these aggregates leave this function.
     const debts = await prisma.debt.findMany({
       where: { ownerId: s.ownerId, status: { not: "PAID_OFF" } },
-      select: { balanceCents: true, actualPaymentCents: true, minimumPaymentCents: true, status: true },
+      select: {
+        balanceCents: true,
+        actualPaymentCents: true,
+        minimumPaymentCents: true,
+        paymentFrequency: true,
+        status: true,
+      },
     });
     if (debts.length === 0) continue;
 
@@ -72,7 +79,7 @@ export async function sharedDebtSummaries(
       ownerName: s.owner.name ?? s.owner.email ?? "A member",
       totalBalanceCents: debts.reduce((n, d) => n + d.balanceCents, 0),
       monthlyPaymentCents: debts.reduce(
-        (n, d) => n + (d.actualPaymentCents ?? d.minimumPaymentCents ?? 0),
+        (n, d) => n + perMonth(d.actualPaymentCents ?? d.minimumPaymentCents ?? 0, d.paymentFrequency),
         0,
       ),
       debtCount: debts.length,

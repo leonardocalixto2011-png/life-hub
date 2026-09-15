@@ -5,6 +5,8 @@ import { withHub } from "@/lib/hub-context";
 import { listMyHubs } from "@/lib/session";
 import { sendPushToUser } from "@/lib/push";
 import { dueLabel } from "@/lib/format";
+import { isPlanAhead, occasionsBetween } from "@/lib/occasions";
+import { nextOccurrence } from "@/lib/plans";
 import { logInfo, reportError } from "@/lib/observability";
 
 /**
@@ -19,9 +21,17 @@ import { logInfo, reportError } from "@/lib/observability";
  * Dedupe is a ledger row, not a flag on the item, because a deadline shared
  * by a hub owes each member their own reminder. A flag would let whoever the
  * loop reached first silence everyone else.
+ *
+ * Yearly things (special dates, holidays) key the ledger by occurrence —
+ * `<id>:<year>` — so next year's reminder isn't suppressed by this year's.
  */
 
 const ENTITY_DEADLINE = "deadline";
+const ENTITY_SPECIAL = "specialDate";
+const ENTITY_OCCASION = "occasion";
+
+/** A week's notice for the days that need a gift or a reservation. */
+const OCCASION_NOTICE_DAYS = 7;
 
 type DueReminder = {
   entityType: string;
@@ -30,13 +40,14 @@ type DueReminder = {
   title: string;
   dueDate: Date;
   hubName: string;
+  url: string;
 };
 
 /**
- * Deadlines this user can see whose due date lands exactly on one of their
- * configured thresholds today, minus anything already sent.
+ * Items this user can see whose date lands exactly on one of their configured
+ * thresholds today, minus anything already sent.
  *
- * `differenceInCalendarDays` rather than a millisecond window: a deadline due
+ * `differenceInCalendarDays` rather than a millisecond window: something due
  * "in 3 days" must match the 3-day threshold regardless of the time of day it
  * was created or the hour the cron happens to run.
  */
@@ -51,20 +62,22 @@ export async function collectDueReminders(
   const perHub = await withHub(userId, (tx) =>
     Promise.all(
       hubs.map(async (hub) => {
-        const deadlines = await tx.deadline.findMany({
-          where: {
-            hubId: hub.id,
-            doneAt: null,
-            dueDate: { gte: today },
-            // Mirrors the RLS privacy clause, as everywhere else in this
-            // codebase — a private deadline must not generate a push to
-            // someone who can't open it.
-            OR: [{ visibility: "SHARED" }, { createdById: userId }],
-          },
-          select: { id: true, title: true, dueDate: true, remindDaysBefore: true },
-        });
+        // Mirrors the RLS privacy clause, as everywhere else in this codebase
+        // — a private item must not generate a push to someone who can't open it.
+        const privacy = { OR: [{ visibility: "SHARED" as const }, { createdById: userId }] };
 
-        return deadlines.flatMap((d) => {
+        const [deadlines, specials] = await Promise.all([
+          tx.deadline.findMany({
+            where: { hubId: hub.id, doneAt: null, dueDate: { gte: today }, ...privacy },
+            select: { id: true, title: true, dueDate: true, remindDaysBefore: true },
+          }),
+          tx.specialDate.findMany({
+            where: { hubId: hub.id, ...privacy },
+            select: { id: true, title: true, month: true, day: true, remindDaysBefore: true },
+          }),
+        ]);
+
+        const fromDeadlines = deadlines.flatMap((d) => {
           const away = differenceInCalendarDays(startOfDay(d.dueDate), today);
           return d.remindDaysBefore
             .filter((n) => n === away)
@@ -75,28 +88,67 @@ export async function collectDueReminders(
               title: d.title,
               dueDate: d.dueDate,
               hubName: hub.name,
+              url: "/deadlines",
             }));
         });
+
+        const fromSpecials = specials.flatMap((s) => {
+          const next = nextOccurrence(s.month, s.day, today);
+          const away = differenceInCalendarDays(next, today);
+          return s.remindDaysBefore
+            .filter((n) => n === away)
+            .map((daysBefore) => ({
+              entityType: ENTITY_SPECIAL,
+              entityId: `${s.id}:${next.getFullYear()}`,
+              daysBefore,
+              title: s.title,
+              dueDate: next,
+              hubName: hub.name,
+              url: "/calendar/dates",
+            }));
+        });
+
+        return [...fromDeadlines, ...fromSpecials];
       }),
     ),
   );
 
+  // Holidays are the same for every hub, so one heads-up per user no matter
+  // how many hubs have them switched on.
+  const occasionHub = hubs.find((h) => h.showOccasions);
+  const target = new Date(today.getTime() + OCCASION_NOTICE_DAYS * 864e5);
+  const fromOccasions = occasionHub
+    ? occasionsBetween(target, target)
+        .filter((o) => isPlanAhead(o.kind))
+        .map((o) => ({
+          entityType: ENTITY_OCCASION,
+          entityId: o.key,
+          daysBefore: OCCASION_NOTICE_DAYS,
+          title: `${o.emoji} ${o.title}`,
+          dueDate: o.date,
+          hubName: occasionHub.name,
+          url: "/calendar",
+        }))
+    : [];
+
   const multiHub = hubs.length > 1;
-  const candidates = perHub.flat();
+  const candidates = [...perHub.flat(), ...fromOccasions];
   if (candidates.length === 0) return { due: [], multiHub };
 
   const alreadySent = await prisma.reminderSent.findMany({
     where: {
       userId,
-      entityType: ENTITY_DEADLINE,
+      entityType: { in: [ENTITY_DEADLINE, ENTITY_SPECIAL, ENTITY_OCCASION] },
       entityId: { in: candidates.map((c) => c.entityId) },
     },
-    select: { entityId: true, daysBefore: true },
+    select: { entityType: true, entityId: true, daysBefore: true },
   });
-  const sent = new Set(alreadySent.map((r) => `${r.entityId}:${r.daysBefore}`));
+  const key = (r: { entityType: string; entityId: string; daysBefore: number }) =>
+    `${r.entityType}:${r.entityId}:${r.daysBefore}`;
+  const sent = new Set(alreadySent.map(key));
 
   return {
-    due: candidates.filter((c) => !sent.has(`${c.entityId}:${c.daysBefore}`)),
+    due: candidates.filter((c) => !sent.has(key(c))),
     multiHub,
   };
 }
@@ -122,11 +174,16 @@ export async function dispatchReminders(userId: string): Promise<number> {
 
   for (const r of due) {
     try {
+      const when =
+        r.daysBefore === 0 ? "Today" : `In ${r.daysBefore} day${r.daysBefore === 1 ? "" : "s"}`;
       const result = await sendPushToUser(userId, {
-        title: r.daysBefore === 0 ? "Due today" : `Due in ${r.daysBefore} day${r.daysBefore === 1 ? "" : "s"}`,
-        body: multiHub ? `${r.title} — ${dueLabel(r.dueDate)} [${r.hubName}]` : `${r.title} — ${dueLabel(r.dueDate)}`,
-        url: "/deadlines",
-        tag: `reminder-${r.entityId}-${r.daysBefore}`,
+        title: r.entityType === ENTITY_DEADLINE ? (r.daysBefore === 0 ? "Due today" : `Due ${when.toLowerCase()}`) : when,
+        body:
+          multiHub && r.entityType !== ENTITY_OCCASION
+            ? `${r.title} — ${dueLabel(r.dueDate)} [${r.hubName}]`
+            : `${r.title} — ${dueLabel(r.dueDate)}`,
+        url: r.url,
+        tag: `reminder-${r.entityType}-${r.entityId}-${r.daysBefore}`,
       });
 
       // No push subscriptions on any device is not a failure to retry

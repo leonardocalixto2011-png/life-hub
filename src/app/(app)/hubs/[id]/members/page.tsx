@@ -7,7 +7,13 @@ import { CoverUpload } from "./CoverUpload";
 import { HubCover } from "@/components/HubCover";
 import { prisma } from "@/lib/prisma";
 import { Avatar } from "@/components/Avatar";
-import { inviteMember, removeMember, leaveHub } from "../../actions";
+import {
+  addKnownMember,
+  inviteMember,
+  leaveHub,
+  removeMember,
+  setShowOccasions,
+} from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +37,9 @@ export default async function HubMembersPage({
   });
   if (!membership || membership.status !== "ACTIVE") notFound();
 
-  const [hub, members] = await Promise.all([
+  const isOwner = membership.role === "OWNER";
+
+  const [hub, members, known] = await Promise.all([
     prisma.hub.findUniqueOrThrow({
       where: { id: hubId },
       include: { coverBy: { select: { name: true, email: true } } },
@@ -41,9 +49,27 @@ export default async function HubMembersPage({
       include: { user: { select: { id: true, name: true, email: true } } },
       orderBy: [{ status: "asc" }, { role: "asc" }, { joinedAt: "asc" }],
     }),
+    // People the owner already shares another hub with, who aren't in this
+    // one yet. The same rule addKnownMember enforces server-side — the list
+    // is a convenience, the action is the boundary.
+    isOwner
+      ? prisma.user.findMany({
+          where: {
+            id: { not: user.id },
+            hubMemberships: {
+              some: {
+                status: "ACTIVE",
+                hub: { memberships: { some: { userId: user.id, status: "ACTIVE" } } },
+              },
+              none: { hubId, status: "ACTIVE" },
+            },
+          },
+          select: { id: true, name: true, email: true },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
   ]);
 
-  const isOwner = membership.role === "OWNER";
   // First name only — the credit is a friendly touch, not a directory entry.
   const coverBy = hub.coverBy?.name?.split(" ")[0] ?? null;
 
@@ -76,15 +102,55 @@ export default async function HubMembersPage({
       </div>
 
       {isOwner && (
-        <div className="card p-4">
+        <div className="card space-y-3 p-4">
           <CurrencyPicker hubId={hubId} current={hub.currency} />
+          <form
+            action={setShowOccasions.bind(null, hubId, !hub.showOccasions)}
+            className="flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-3"
+          >
+            <div className="text-xs">
+              <div className="font-semibold">Holidays on the calendar</div>
+              <div className="text-[var(--color-text-dim)]">
+                Saint-Valentin, Fête des Mères, Noël, the seasons… with a week&apos;s notice.
+              </div>
+            </div>
+            <button type="submit" className={`btn shrink-0 px-3 py-1.5 text-xs ${hub.showOccasions ? "btn-primary" : ""}`}>
+              {hub.showOccasions ? "On" : "Off"}
+            </button>
+          </form>
         </div>
+      )}
+
+      {isOwner && known.length > 0 && (
+        <form action={addKnownMember.bind(null, hubId)} className="card space-y-2 p-4">
+          <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+            Add someone you already know on Life Hub
+          </label>
+          <div className="flex gap-2">
+            <select name="userId" required className="field flex-1" defaultValue="">
+              <option value="" disabled>
+                Pick a person…
+              </option>
+              {known.map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.name ? `${k.name} (${k.email})` : k.email}
+                </option>
+              ))}
+            </select>
+            <button type="submit" className="btn btn-primary shrink-0">
+              Add
+            </button>
+          </div>
+          <p className="text-[0.68rem] text-[var(--color-text-dim)]">
+            People you share another hub with. They&apos;re added right away and get a notification.
+          </p>
+        </form>
       )}
 
       {isOwner && (
         <form action={inviteMember.bind(null, hubId)} className="card space-y-2 p-4">
           <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-            Invite by email
+            Invite someone new by email
           </label>
           <div className="flex gap-2">
             <input
@@ -99,7 +165,7 @@ export default async function HubMembersPage({
             </button>
           </div>
           <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-            They'll get an email to sign in and accept — works even if they've never used
+            They&apos;ll get an email to sign in and accept — works even if they&apos;ve never used
             Life Hub before.
           </p>
         </form>

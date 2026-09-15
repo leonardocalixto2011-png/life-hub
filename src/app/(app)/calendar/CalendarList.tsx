@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { format, isSameDay } from "date-fns";
 
 import { eventTimeRange, initials } from "@/lib/format";
 import { VentureChip } from "@/components/VentureChip";
@@ -11,6 +10,11 @@ import type { EventWithRefs } from "@/lib/data";
 import { deleteEvents } from "./actions";
 
 type Member = { id: string; name: string | null; email: string | null };
+
+/** A holiday, special date or trip on that day — labels are built on the server. */
+type PlanChip = { key: string; label: string; href: string | null; planAhead: boolean };
+
+type Day = { key: string; label: string; items: EventWithRefs[]; plans: PlanChip[] };
 
 function AttendeeDots({ ids, members }: { ids: string[]; members: Member[] }) {
   if (ids.length === 0) return null;
@@ -58,15 +62,29 @@ function EventBody({ e, members }: { e: EventWithRefs; members: Member[] }) {
   );
 }
 
-export function CalendarList({
-  days,
-  members,
-  now,
-}: {
-  days: { date: Date; items: EventWithRefs[] }[];
-  members: Member[];
-  now: Date;
-}) {
+function Plans({ plans, spaced }: { plans: PlanChip[]; spaced: boolean }) {
+  if (plans.length === 0) return null;
+  return (
+    <div className={`flex flex-wrap gap-1.5 ${spaced ? "mb-2" : ""}`}>
+      {plans.map((p) =>
+        p.href ? (
+          <Link key={p.key} href={p.href} className="chip">
+            {p.label}
+            {p.planAhead && (
+              <span className="font-semibold text-[var(--color-primary)]"> · plan</span>
+            )}
+          </Link>
+        ) : (
+          <span key={p.key} className="chip">
+            {p.label}
+          </span>
+        ),
+      )}
+    </div>
+  );
+}
+
+export function CalendarList({ days, members }: { days: Day[]; members: Member[] }) {
   const router = useRouter();
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -96,62 +114,60 @@ export function CalendarList({
   }
 
   if (days.length === 0) return null;
+  const hasEvents = days.some((d) => d.items.length > 0);
 
   return (
     <>
-      <div className="flex justify-end">
-        {selecting ? (
-          <button
-            onClick={exitSelect}
-            className="text-xs font-semibold text-[var(--color-text-dim)]"
-          >
-            Cancel
-          </button>
-        ) : (
-          <button
-            onClick={() => setSelecting(true)}
-            className="text-xs font-semibold text-[var(--color-primary)]"
-          >
-            Select
-          </button>
-        )}
-      </div>
+      {hasEvents && (
+        <div className="flex justify-end">
+          {selecting ? (
+            <button onClick={exitSelect} className="text-xs font-semibold text-[var(--color-text-dim)]">
+              Cancel
+            </button>
+          ) : (
+            <button
+              onClick={() => setSelecting(true)}
+              className="text-xs font-semibold text-[var(--color-primary)]"
+            >
+              Select
+            </button>
+          )}
+        </div>
+      )}
 
-      {days.map(({ date, items }) => (
-        <section key={date.toISOString()}>
+      {days.map(({ key, label, items, plans }) => (
+        <section key={key}>
           <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-            {isSameDay(date, now) ? "Today" : format(date, "EEEE, MMM d")}
+            {label}
           </h2>
-          <div className="space-y-2">
-            {items.map((e) =>
-              selecting ? (
-                <button
-                  key={e.id}
-                  onClick={() => toggle(e.id)}
-                  className="card flex w-full items-start gap-3 p-3 text-left"
-                  style={
-                    selected.has(e.id)
-                      ? { borderColor: "var(--color-primary)", background: "var(--color-surface-2)" }
-                      : undefined
-                  }
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.has(e.id)}
-                    readOnly
-                    className="mt-0.5 shrink-0"
-                  />
-                  <div className="min-w-0 flex-1">
+          <Plans plans={plans} spaced={items.length > 0} />
+          {items.length > 0 && (
+            <div className="space-y-2">
+              {items.map((e) =>
+                selecting ? (
+                  <button
+                    key={e.id}
+                    onClick={() => toggle(e.id)}
+                    className="card flex w-full items-start gap-3 p-3 text-left"
+                    style={
+                      selected.has(e.id)
+                        ? { borderColor: "var(--color-primary)", background: "var(--color-surface-2)" }
+                        : undefined
+                    }
+                  >
+                    <input type="checkbox" checked={selected.has(e.id)} readOnly className="mt-0.5 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <EventBody e={e} members={members} />
+                    </div>
+                  </button>
+                ) : (
+                  <Link key={e.id} href={`/calendar/${e.id}`} className="card block p-3">
                     <EventBody e={e} members={members} />
-                  </div>
-                </button>
-              ) : (
-                <Link key={e.id} href={`/calendar/${e.id}`} className="card block p-3">
-                  <EventBody e={e} members={members} />
-                </Link>
-              ),
-            )}
-          </div>
+                  </Link>
+                ),
+              )}
+            </div>
+          )}
         </section>
       ))}
 

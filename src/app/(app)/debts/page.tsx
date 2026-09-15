@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Figure } from "@/components/Figure";
 
 import {
+  countMyDebtsElsewhere,
   hubChrome,
   listDebtsNeedingOwnerReview,
   listMyDebts,
@@ -17,6 +18,8 @@ import { Avatar } from "@/components/Avatar";
 import { DebtForm } from "./DebtForm";
 import { DebtStatusChip } from "./DebtStatusChip";
 import { LogPaymentButton } from "./LogPaymentButton";
+import { moveMyDebtsHere } from "./actions";
+import { perMonth } from "@/lib/money";
 import { ShareControls } from "./ShareControls";
 
 export const dynamic = "force-dynamic";
@@ -153,13 +156,14 @@ function Row({
 export default async function DebtsPage() {
   const { user, hub } = await requireHub();
 
-  const [{ ventures, members }, [mine, shared, needsReview], shares, summaries] = await Promise.all([
+  const [{ ventures, members }, [mine, shared, needsReview, elsewhere], shares, summaries] = await Promise.all([
     hubChrome(user.id, hub.id),
     withHub(user.id, (tx) =>
       Promise.all([
-        listMyDebts(tx, user.id, { includeOther: true }),
+        listMyDebts(tx, user.id, hub.id, { includeOther: true }),
         listSharedDebts(tx, hub.id, user.id),
         listDebtsNeedingOwnerReview(tx, user.id),
+        countMyDebtsElsewhere(tx, user.id, hub.id),
       ]),
     ),
     myShares(user.id),
@@ -173,7 +177,7 @@ export default async function DebtsPage() {
   const paidOff = mine.filter((d) => d.status === "PAID_OFF");
   const totalBalance = current.reduce((n, d) => n + d.balanceCents, 0);
   const totalMonthly = current.reduce(
-    (n, d) => n + (d.actualPaymentCents ?? d.minimumPaymentCents ?? 0),
+    (n, d) => n + perMonth(d.actualPaymentCents ?? d.minimumPaymentCents ?? 0, d.paymentFrequency),
     0,
   );
 
@@ -182,9 +186,24 @@ export default async function DebtsPage() {
       <div>
         <h1 className="text-lg font-bold">Debts</h1>
         <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-          Yours alone unless you share them below.
+          Yours alone, and only in {hub.name} — unless you share them below.
         </p>
       </div>
+
+      {elsewhere > 0 && (
+        <form
+          action={moveMyDebtsHere}
+          className="card flex items-center justify-between gap-3 p-3 text-xs"
+        >
+          <span className="text-[var(--color-text-dim)]">
+            {elsewhere} of your debts {elsewhere === 1 ? "lives" : "live"} in another hub, so{" "}
+            {elsewhere === 1 ? "it isn't" : "they aren't"} shown here.
+          </span>
+          <button type="submit" className="btn btn-primary shrink-0 px-3 py-1.5 text-xs">
+            Move here
+          </button>
+        </form>
+      )}
 
       {needsReview.length > 0 && (
         <div className="card border-[var(--color-danger)] p-3 text-xs">

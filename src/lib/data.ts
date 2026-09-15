@@ -14,7 +14,7 @@ import { cache } from "react";
 import type { HubTx } from "@/lib/hub-context";
 import { withHub } from "@/lib/hub-context";
 import { money } from "@/lib/format";
-import { monthlyCents } from "@/lib/money";
+import { monthlyCents, perMonth } from "@/lib/money";
 
 /**
  * Rolls any ACTIVE subscription whose `renewalDate` has already passed
@@ -247,10 +247,24 @@ const debtInclude = {
   owner: { select: { id: true, name: true, email: true } },
 } as const;
 
-/** The viewer's own debts. Never anyone else's, in any hub. */
-export function listMyDebts(tx: HubTx, userId: string, opts: { includeOther?: boolean } = {}) {
+/**
+ * The viewer's own debts **in one hub**. Debts used to follow their owner into
+ * every hub; the owner wanted them only where they were put (a personal hub),
+ * so the hub is now part of the owner's own view. Access is still ownerId +
+ * DebtShare at the RLS layer — this is organisation, not a security boundary.
+ */
+export function listMyDebts(
+  tx: HubTx,
+  userId: string,
+  hubId: string,
+  opts: { includeOther?: boolean } = {},
+) {
   return tx.debt.findMany({
-    where: { ownerId: userId, ...(opts.includeOther ? {} : { status: { not: "PAID_OFF" } }) },
+    where: {
+      ownerId: userId,
+      hubId,
+      ...(opts.includeOther ? {} : { status: { not: "PAID_OFF" } }),
+    },
     include: debtInclude,
     orderBy: [{ status: "asc" }, { dueDate: "asc" }],
   });
@@ -307,6 +321,11 @@ export function listDebtsNeedingOwnerReview(tx: HubTx, userId: string) {
   });
 }
 
+/** How many of the user's debts live in other hubs — /debts offers to gather them. */
+export function countMyDebtsElsewhere(tx: HubTx, userId: string, hubId: string) {
+  return tx.debt.count({ where: { ownerId: userId, hubId: { not: hubId } } });
+}
+
 export type DebtWithRefs = Awaited<ReturnType<typeof listMyDebts>>[number];
 
 // --------------------------------------------------------------------------
@@ -335,6 +354,9 @@ export async function budgetMonth(tx: HubTx, hubId: string, month: Date, venture
   const byCategory = new Map<string, number>();
 
   for (const e of entries) {
+    // A pay-back between members moves money inside the household; counting
+    // it as spending would inflate "out" by every settle-up.
+    if (e.isSettlement) continue;
     if (e.type === "INCOME") income += e.amountCents;
     else {
       expense += e.amountCents;
@@ -370,8 +392,8 @@ export async function upcomingSummary(tx: HubTx, hubId: string, userId: string) 
       // Own debts only. A debt shared into this hub belongs to someone else —
       // folding it into *your* forecast would make the number meaningless.
       // DEFAULT still counts: it is owed, usually on a negotiated payment.
-      where: { ownerId: userId, status: { not: "PAID_OFF" } },
-      select: { minimumPaymentCents: true, actualPaymentCents: true },
+      where: { ownerId: userId, hubId, status: { not: "PAID_OFF" } },
+      select: { minimumPaymentCents: true, actualPaymentCents: true, paymentFrequency: true },
     }),
     tx.task.findMany({
       where: {
@@ -380,7 +402,7 @@ export async function upcomingSummary(tx: HubTx, hubId: string, userId: string) 
         amountCents: { not: null },
         ...visibilityFilter(userId),
       },
-      select: { amountCents: true },
+      select: { amountCents: true, isRecurring: true, recurrence: true, dueDate: true },
     }),
     tx.reviewItem.count({ where: { hubId, status: "PENDING", category: "BILL_PAYMENT" } }),
   ]);
@@ -390,10 +412,19 @@ export async function upcomingSummary(tx: HubTx, hubId: string, userId: string) 
     0,
   );
   const debtsCents = debts.reduce(
-    (sum, d) => sum + (d.actualPaymentCents ?? d.minimumPaymentCents ?? 0),
+    (sum, d) => sum + perMonth(d.actualPaymentCents ?? d.minimumPaymentCents ?? 0, d.paymentFrequency),
     0,
   );
-  const billsCents = bills.reduce((sum, t) => sum + (t.amountCents ?? 0), 0);
+  // A one-off bill is not a monthly commitment: five one-off payments spread
+  // over two months used to all land in "per month". Recurring bills are
+  // normalised to a month; a one-off counts only if it's due by month's end.
+  const monthEnd = endOfMonth(new Date());
+  const billsCents = bills.reduce((sum, t) => {
+    const cents = t.amountCents ?? 0;
+    if (t.isRecurring && t.recurrence === "weekly") return sum + Math.round((cents * 52) / 12);
+    if (t.isRecurring) return sum + cents;
+    return !t.dueDate || t.dueDate <= monthEnd ? sum + cents : sum;
+  }, 0);
 
   return { subscriptionsCents, debtsCents, billsCents, pendingBills };
 }
@@ -415,7 +446,7 @@ export function listEvents(
   tx: HubTx,
   hubId: string,
   userId: string,
-  opts: { from?: Date; to?: Date } = {},
+  opts: { from?: Date; to?: Date; kind?: "EVENT" | "SHIFT" } = {},
 ) {
   const range =
     opts.from || opts.to
@@ -427,7 +458,7 @@ export function listEvents(
         }
       : {};
   return tx.event.findMany({
-    where: { hubId, ...eventVisibility(userId), ...range },
+    where: { hubId, kind: opts.kind ?? "EVENT", ...eventVisibility(userId), ...range },
     include: eventInclude,
     orderBy: { startAt: "asc" },
   });
@@ -522,7 +553,7 @@ export async function agendaItems(tx: HubTx, hubId: string, userId: string, days
       orderBy: { dueDate: "asc" },
     }),
     tx.event.findMany({
-      where: { hubId, endAt: { gte: from }, startAt: { lte: to }, ...eventVisibility(userId) },
+      where: { hubId, kind: "EVENT", endAt: { gte: from }, startAt: { lte: to }, ...eventVisibility(userId) },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { startAt: "asc" },
     }),
@@ -533,7 +564,7 @@ export async function agendaItems(tx: HubTx, hubId: string, userId: string, days
     }),
     tx.debt.findMany({
       // Own debts only — the agenda is your timeline, not the hub's.
-      where: { ownerId: userId, status: { not: "PAID_OFF" }, dueDate: { gte: from, lte: to } },
+      where: { ownerId: userId, hubId, status: { not: "PAID_OFF" }, dueDate: { gte: from, lte: to } },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { dueDate: "asc" },
     }),
@@ -698,14 +729,14 @@ export async function dashboard(tx: HubTx, hubId: string, userId: string) {
       orderBy: { cancelByDate: "asc" },
     }),
     tx.event.findMany({
-      where: { hubId, endAt: { gte: todayStart }, startAt: { lte: weekEnd }, ...eventVisibility(userId) },
+      where: { hubId, kind: "EVENT", endAt: { gte: todayStart }, startAt: { lte: weekEnd }, ...eventVisibility(userId) },
       include: eventInclude,
       orderBy: { startAt: "asc" },
     }),
     tx.debt.findMany({
       // Own debts only, same reasoning as upcomingSummary. DEFAULT still
       // counts — it has a payment due and arguably needs the reminder more.
-      where: { ownerId: userId, status: { not: "PAID_OFF" }, dueDate: { gte: todayStart, lte: soon } },
+      where: { ownerId: userId, hubId, status: { not: "PAID_OFF" }, dueDate: { gte: todayStart, lte: soon } },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { dueDate: "asc" },
     }),

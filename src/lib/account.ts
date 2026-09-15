@@ -8,12 +8,12 @@ import { prisma } from "@/lib/prisma";
  * saying what you collect and why, a lawful basis, a retention schedule) is
  * not code and is not written yet; see CLAUDE.md.
  *
- * Erasure here is deliberately NOT `prisma.user.delete()`. Five relations use
- * `onDelete: Restrict` — Hub, Task, Deadline, Event and BudgetEntry all point
- * at their author — so deleting any user who ever created anything fails at
- * the database. And cascading those away would be wrong anyway: a task you
- * wrote in a shared hub is other members' data too, and erasing your account
- * shouldn't silently delete their board.
+ * Erasure here is deliberately NOT `prisma.user.delete()`. Seven relations use
+ * `onDelete: Restrict` — Hub, Task, Deadline, Event, BudgetEntry, SpecialDate
+ * and Trip all point at their author — so deleting any user who ever created
+ * anything fails at the database. And cascading those away would be wrong
+ * anyway: a task you wrote in a shared hub is other members' data too, and
+ * erasing your account shouldn't silently delete their board.
  *
  * So: rows that are *only* about you are destroyed, and rows that are shared
  * have their link to you severed by repointing authorship at a tombstone
@@ -49,6 +49,8 @@ export async function exportUserData(userId: string) {
     deadlines,
     events,
     budgetEntries,
+    specialDates,
+    trips,
     subscriptions,
     debts,
     debtShares,
@@ -70,8 +72,11 @@ export async function exportUserData(userId: string) {
     prisma.task.findMany({ where: { createdById: userId } }),
     prisma.task.findMany({ where: { assignedToId: userId }, select: { id: true, title: true, dueDate: true } }),
     prisma.deadline.findMany({ where: { createdById: userId } }),
-    prisma.event.findMany({ where: { createdById: userId } }),
-    prisma.budgetEntry.findMany({ where: { createdById: userId } }),
+    // Includes work shifts recorded *for* this person by someone else.
+    prisma.event.findMany({ where: { OR: [{ createdById: userId }, { personId: userId }] } }),
+    prisma.budgetEntry.findMany({ where: { OR: [{ createdById: userId }, { paidById: userId }] } }),
+    prisma.specialDate.findMany({ where: { createdById: userId } }),
+    prisma.trip.findMany({ where: { createdById: userId }, include: { items: true } }),
     prisma.subscription.findMany({ where: { ownerId: userId } }),
     prisma.debt.findMany({ where: { ownerId: userId } }),
     prisma.debtShare.findMany({
@@ -104,6 +109,8 @@ export async function exportUserData(userId: string) {
     deadlines,
     events,
     budgetEntries,
+    specialDates,
+    trips,
     subscriptions,
     debts,
     debtShares,
@@ -170,15 +177,24 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
   }
 
   // Repoint the Restrict'd authorship links. Hub.createdById is included
-  // because a hub handed to someone else still records who made it.
-  const [t, d, e, b, h] = await prisma.$transaction([
+  // because a hub handed to someone else still records who made it. The
+  // plain member-id columns (who paid, whose shift, who's on a trip task) have
+  // no FK to cascade, so they're severed explicitly in the same transaction.
+  const [t, d, e, b, sd, tr, h, paid, shifts, tripTasks] = await prisma.$transaction([
     prisma.task.updateMany({ where: { createdById: userId }, data: { createdById: ghostId } }),
     prisma.deadline.updateMany({ where: { createdById: userId }, data: { createdById: ghostId } }),
     prisma.event.updateMany({ where: { createdById: userId }, data: { createdById: ghostId } }),
     prisma.budgetEntry.updateMany({ where: { createdById: userId }, data: { createdById: ghostId } }),
+    prisma.specialDate.updateMany({ where: { createdById: userId }, data: { createdById: ghostId } }),
+    prisma.trip.updateMany({ where: { createdById: userId }, data: { createdById: ghostId } }),
     prisma.hub.updateMany({ where: { createdById: userId }, data: { createdById: ghostId } }),
+    prisma.budgetEntry.updateMany({ where: { paidById: userId }, data: { paidById: ghostId } }),
+    prisma.event.updateMany({ where: { personId: userId }, data: { personId: ghostId } }),
+    prisma.tripItem.updateMany({ where: { assignedToId: userId }, data: { assignedToId: null } }),
   ]);
-  report.authorshipAnonymised = t.count + d.count + e.count + b.count + h.count;
+  report.authorshipAnonymised =
+    t.count + d.count + e.count + b.count + sd.count + tr.count + h.count +
+    paid.count + shifts.count + tripTasks.count;
 
   // Everything else — memberships, debts, debt shares, mail accounts, push
   // subscriptions, notification prefs, sessions, auth accounts — is

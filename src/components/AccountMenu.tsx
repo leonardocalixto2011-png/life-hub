@@ -14,6 +14,8 @@ import { signOutAction } from "@/app/(app)/auth-actions";
 const LINKS = [
   { href: "/agenda", label: "Agenda", icon: "📋" },
   { href: "/calendar", label: "Calendar", icon: "📅" },
+  { href: "/schedule", label: "Schedules", icon: "🕐" },
+  { href: "/trips", label: "Trips", icon: "✈️" },
   { href: "/assistant", label: "Assistant", icon: "✨" },
   { href: "/notifications", label: "Notifications", icon: "🔔" },
   { href: "/appearance", label: "Appearance", icon: "🖼️" },

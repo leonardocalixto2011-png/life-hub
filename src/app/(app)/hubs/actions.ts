@@ -13,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { withHub } from "@/lib/hub-context";
 import { CURRENT_HUB_COOKIE, listMyHubs, requireHub, requireUser } from "@/lib/session";
 import { sendEmail } from "@/lib/email";
+import { sendPushToUser } from "@/lib/push";
 
 /**
  * Hub creation itself runs on the owner-role client (bypasses RLS), same as
@@ -168,6 +169,12 @@ async function cleanupDepartingMember(actorId: string, hubId: string, subjectUse
     await tx.deadline.deleteMany({ where: { hubId, createdById: subjectUserId, visibility: "PRIVATE" } });
     await tx.task.deleteMany({ where: { hubId, createdById: subjectUserId, visibility: "PRIVATE" } });
     await tx.event.deleteMany({ where: { hubId, createdById: subjectUserId, visibility: "PRIVATE" } });
+    await tx.specialDate.deleteMany({ where: { hubId, createdById: subjectUserId, visibility: "PRIVATE" } });
+    await tx.trip.deleteMany({ where: { hubId, createdById: subjectUserId, visibility: "PRIVATE" } });
+    await tx.tripItem.updateMany({
+      where: { hubId, assignedToId: subjectUserId },
+      data: { assignedToId: null },
+    });
   });
 }
 
@@ -251,6 +258,65 @@ export async function removeHubCover(hubId: string) {
     data: { coverImageUrl: null, coverById: null },
   });
   revalidateContent(`/hubs/${hubId}/members`, "/hubs/invites");
+}
+
+/**
+ * Owner-only. Adds someone the owner **already shares another hub with**,
+ * picked by name — no email round-trip. Inviting by email is how a person
+ * first arrives in the app, and it can only happen from inside some hub, so
+ * everyone landed in Main Hub and there was no way to then bring them into a
+ * second one without a fresh email invite.
+ *
+ * Active immediately rather than INVITED: both people are already in a hub
+ * together, and the person is told by push. The "already share a hub" check is
+ * the entire privacy boundary here — without it, any user id copied from
+ * anywhere would be a way to pull a stranger into a hub.
+ */
+export async function addKnownMember(hubId: string, formData: FormData) {
+  const user = await requireUser();
+  z.string().cuid().parse(hubId);
+  const targetId = z.string().cuid("Pick someone to add").parse(formData.get("userId"));
+
+  await requireHubOwner(hubId, user.id, "add people");
+
+  const known = await prisma.hubMembership.findFirst({
+    where: {
+      userId: targetId,
+      status: "ACTIVE",
+      hub: { memberships: { some: { userId: user.id, status: "ACTIVE" } } },
+    },
+    select: { id: true },
+  });
+  if (!known) throw new Error("You can only add people you already share a hub with.");
+
+  const hub = await prisma.hub.findUniqueOrThrow({ where: { id: hubId }, select: { name: true } });
+  await prisma.hubMembership.upsert({
+    where: { hubId_userId: { hubId, userId: targetId } },
+    update: { status: "ACTIVE", joinedAt: new Date() },
+    create: { hubId, userId: targetId, role: "MEMBER", status: "ACTIVE", joinedAt: new Date() },
+  });
+
+  try {
+    await sendPushToUser(targetId, {
+      title: `You're in "${hub.name}"`,
+      body: `${user.name ?? user.email} added you. Switch hubs from the top of Life Hub.`,
+      url: "/today",
+      tag: `hub-added-${hubId}`,
+    });
+  } catch {
+    // A missing push setup must not undo the membership that was just created.
+  }
+
+  revalidatePath(`/hubs/${hubId}/members`);
+}
+
+/** Owner-only: holidays and special days on this hub's calendar, on or off. */
+export async function setShowOccasions(hubId: string, show: boolean) {
+  const user = await requireUser();
+  z.string().cuid().parse(hubId);
+  await requireHubOwner(hubId, user.id, "change the calendar settings");
+  await prisma.hub.update({ where: { id: hubId }, data: { showOccasions: Boolean(show) } });
+  revalidateContent(`/hubs/${hubId}/members`, "/calendar/dates");
 }
 
 /** One cover blob per hub, so changing the photo doesn't orphan the old file. */

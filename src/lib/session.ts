@@ -21,6 +21,7 @@ export type SessionHub = {
   color: string;
   currency: string;
   role: "OWNER" | "MEMBER";
+  showOccasions: boolean;
 };
 
 export const CURRENT_HUB_COOKIE = "current_hub";
@@ -75,7 +76,9 @@ export const requireUser = cache(async (): Promise<SessionUser> => {
 export const listMyHubs = cache(async (userId: string): Promise<SessionHub[]> => {
   const memberships = await prisma.hubMembership.findMany({
     where: { userId, status: "ACTIVE" },
-    include: { hub: { select: { id: true, name: true, color: true, currency: true } } },
+    include: {
+      hub: { select: { id: true, name: true, color: true, currency: true, showOccasions: true } },
+    },
     orderBy: { joinedAt: "asc" },
   });
   return memberships.map((m) => ({
@@ -84,6 +87,7 @@ export const listMyHubs = cache(async (userId: string): Promise<SessionHub[]> =>
     color: m.hub.color,
     currency: m.hub.currency,
     role: m.role,
+    showOccasions: m.hub.showOccasions,
   }));
 });
 

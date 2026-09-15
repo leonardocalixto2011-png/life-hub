@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { addMonths } from "date-fns";
+import { addMonths, addWeeks } from "date-fns";
 import { z } from "zod";
 
 import { withHub } from "@/lib/hub-context";
@@ -115,6 +115,30 @@ export async function deleteDebt(fd: FormData) {
   redirect("/debts");
 }
 
+/** One payment period later — a biweekly debt used to jump a whole month. */
+function nextDue(d: Date, frequency: "WEEKLY" | "BIWEEKLY" | "MONTHLY"): Date {
+  if (frequency === "WEEKLY") return addWeeks(d, 1);
+  if (frequency === "BIWEEKLY") return addWeeks(d, 2);
+  return addMonths(d, 1);
+}
+
+/**
+ * Debts show only in the hub they live in. This gathers every debt the user
+ * owns in other hubs into the current one in a single tap — the way to turn a
+ * personal hub into *the* place the tracker lives. Ventures are per hub, so
+ * the link is cleared rather than left pointing into another hub.
+ */
+export async function moveMyDebtsHere() {
+  const { user, hub } = await requireHub();
+  await withHub(user.id, (tx) =>
+    tx.debt.updateMany({
+      where: { ownerId: user.id, hubId: { not: hub.id } },
+      data: { hubId: hub.id, ventureId: null },
+    }),
+  );
+  revalidateContent();
+}
+
 /**
  * Records a payment against a debt: logs a matching Budget expense, drops
  * the balance, and rolls the due date forward a month. `amount` is dollars
@@ -142,7 +166,14 @@ export async function logDebtPayment(fd: FormData) {
   await withHub(user.id, async (tx) => {
     const debt = await tx.debt.findUnique({
       where: { id },
-      select: { name: true, ventureId: true, dueDate: true, ownerId: true },
+      select: {
+        name: true,
+        ventureId: true,
+        dueDate: true,
+        ownerId: true,
+        hubId: true,
+        paymentFrequency: true,
+      },
     });
     if (!debt) throw new Error("Debt not found");
     if (debt.ownerId !== user.id) throw new Error("That debt isn't yours to change.");
@@ -151,7 +182,8 @@ export async function logDebtPayment(fd: FormData) {
       data: {
         type: "EXPENSE",
         amountCents,
-        hubId: hub.id,
+        // The debt's own hub, not whichever hub happens to be open.
+        hubId: debt.hubId,
         currency: hub.currency,
         category: debt.name,
         description: "Debt payment",
@@ -165,7 +197,7 @@ export async function logDebtPayment(fd: FormData) {
       where: { id },
       data: {
         balanceCents: { decrement: amountCents },
-        dueDate: debt.dueDate ? addMonths(debt.dueDate, 1) : null,
+        dueDate: debt.dueDate ? nextDue(debt.dueDate, debt.paymentFrequency) : null,
       },
     });
   });

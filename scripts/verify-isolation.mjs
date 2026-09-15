@@ -190,6 +190,55 @@ async function main() {
       "A1's debt survives A2's blocked write attempts, unchanged",
       debtIntact !== null && debtIntact.balanceCents === 100000,
     );
+
+    // --- planning tables: trips, their checklists, special dates -------------
+    // Created here, torn down by the hub delete below (both cascade from Hub).
+    const privateTrip = await db.trip.create({
+      data: {
+        title: "A1 surprise trip",
+        hubId: hubA.id,
+        createdById: userA1.id,
+        visibility: "PRIVATE",
+        startDate: new Date(),
+        endDate: new Date(),
+      },
+    });
+    const privateTripItem = await db.tripItem.create({
+      data: { tripId: privateTrip.id, hubId: hubA.id, title: "book the hotel" },
+    });
+    const sharedDateA = await db.specialDate.create({
+      data: { title: "shared birthday", hubId: hubA.id, createdById: userA1.id, month: 1, day: 1 },
+    });
+
+    const a2Trips = await asAppUser(userA2.id, (tx) => tx.trip.findMany({ where: { hubId: hubA.id } }));
+    check("A2 cannot see A1's private trip", !a2Trips.some((t) => t.id === privateTrip.id));
+
+    const a2Items = await asAppUser(userA2.id, (tx) => tx.tripItem.findMany({ where: { hubId: hubA.id } }));
+    check(
+      "A2 cannot see the checklist of A1's private trip (TripItem follows its trip)",
+      !a2Items.some((i) => i.id === privateTripItem.id),
+    );
+
+    const a1Items = await asAppUser(userA1.id, (tx) =>
+      tx.tripItem.findMany({ where: { tripId: privateTrip.id } }),
+    );
+    check("A1 sees their own private trip's checklist", a1Items.length === 1);
+
+    const a2Dates = await asAppUser(userA2.id, (tx) => tx.specialDate.findMany({ where: { hubId: hubA.id } }));
+    check("A2 sees Hub A's shared special date", a2Dates.some((d) => d.id === sharedDateA.id));
+
+    const b1Dates = await asAppUser(userB1.id, (tx) => tx.specialDate.findMany());
+    check("B1 (other hub) sees none of Hub A's special dates", !b1Dates.some((d) => d.id === sharedDateA.id));
+
+    let crossItemInsertBlocked = false;
+    try {
+      await asAppUser(userB1.id, (tx) =>
+        tx.tripItem.create({ data: { tripId: privateTrip.id, hubId: hubA.id, title: "injected" } }),
+      );
+    } catch {
+      crossItemInsertBlocked = true;
+    }
+    check("B1 cannot add an item to a Hub A trip", crossItemInsertBlocked);
   } finally {
     // --- teardown (owner role) ------------------------------------------------
     await db.debtShare.deleteMany({ where: { ownerId: { in: [userA1.id, userA2.id, userB1.id] } } });

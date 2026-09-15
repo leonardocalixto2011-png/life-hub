@@ -22,6 +22,9 @@ type Existing = {
   recurrenceGroupId: string | null;
 };
 
+/** From a "plan something" link on a holiday or special date. */
+type Prefill = { title: string; startAt: string };
+
 const WEEKDAYS = [
   { value: 1, label: "Mon" },
   { value: 2, label: "Tue" },
@@ -36,10 +39,12 @@ function Fields({
   ventures,
   members,
   existing,
+  prefill,
 }: {
   ventures: Venture[];
   members: Member[];
   existing?: Existing;
+  prefill?: Prefill;
 }) {
   const attending = new Set(existing?.attendeeIds ?? []);
   return (
@@ -48,10 +53,10 @@ function Fields({
         Title
         <input
           name="title"
-          defaultValue={existing?.title}
+          defaultValue={existing?.title ?? prefill?.title}
           required
           className="field mt-1"
-          placeholder="Supplier call, photoshoot, class…"
+          placeholder="Dinner, supplier call, photoshoot…"
         />
       </label>
 
@@ -61,7 +66,7 @@ function Fields({
           <input
             type="datetime-local"
             name="startAt"
-            defaultValue={existing?.startAt}
+            defaultValue={existing?.startAt ?? prefill?.startAt}
             required
             className="field mt-1"
           />
@@ -78,8 +83,8 @@ function Fields({
       </div>
       {!existing && (
         <p className="-mt-2 text-[0.65rem] text-[var(--color-text-dim)]">
-          For a schedule that repeats on multiple days, leave "Ends" as the
-          same day's end time and use Repeat below instead.
+          For a schedule that repeats on multiple days, leave &quot;Ends&quot; as the
+          same day&apos;s end time and use Repeat below instead.
         </p>
       )}
 
@@ -150,14 +155,16 @@ export function EventForm({
   ventures,
   members,
   existing,
+  prefill,
 }: {
   ventures: Venture[];
   members: Member[];
   existing?: Existing;
+  prefill?: Prefill;
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(prefill));
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -207,6 +214,8 @@ export function EventForm({
         await createEvent(fd);
         formRef.current?.reset();
         setOpen(false);
+        // Drop ?title=&date= so a refresh doesn't reopen the pre-filled form.
+        if (prefill) router.replace("/calendar");
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not save");
@@ -216,7 +225,7 @@ export function EventForm({
 
   return (
     <form ref={formRef} onSubmit={onSubmit} className="card space-y-3 p-4">
-      <Fields ventures={ventures} members={members} />
+      <Fields ventures={ventures} members={members} prefill={prefill} />
       {error && <p className="text-xs text-[var(--color-danger)]">{error}</p>}
       <div className="flex gap-2">
         <button type="submit" disabled={pending} className="btn btn-primary flex-1">

@@ -56,6 +56,8 @@ model User {
   hubMemberships     HubMembership[]
   mailAccounts       MailAccount[]
   remindersSent      ReminderSent[]
+  specialDates       SpecialDate[]
+  trips              Trip[]
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +110,11 @@ model Hub {
   coverById     String?
   coverBy       User?   @relation("HubCoverBy", fields: [coverById], references: [id], onDelete: SetNull)
 
+  /// Holidays and special days (Saint-Valentin, Fête des Mères, Noël…) on the
+  /// calendar, computed by src/lib/occasions.ts. Owner toggle: a couple's hub
+  /// wants them, a business hub may not.
+  showOccasions Boolean @default(true)
+
   memberships    HubMembership[]
   ventures       Venture[]
   tasks          Task[]
@@ -121,6 +128,10 @@ model Hub {
   trustedSenders TrustedSender[]
   mutedSenders   MutedSender[]
   reviewItems    ReviewItem[]
+  specialDates   SpecialDate[]
+  trips          Trip[]
+  tripItems      TripItem[]
+  budgetTargets  BudgetTarget[]
 }
 
 model HubMembership {
@@ -417,6 +428,16 @@ model BudgetEntry {
   createdBy   User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime  @default(now())
 
+  /// Shared expenses between members. `paidById` is a member id with no FK,
+  /// the same convention as Event.attendeeIds. `payerSharePct` is the part the
+  /// payer keeps: null = not shared, 50 = split evenly, 0 = paid entirely for
+  /// the others. See src/lib/couple.ts.
+  paidById      String?
+  payerSharePct Int?
+  /// A pay-back between members. Moves money inside the household, so it is
+  /// excluded from in/out totals and only affects who-owes-whom.
+  isSettlement  Boolean @default(false)
+
   @@index([hubId, date])
   @@index([hubId, type, date])
 }
@@ -425,6 +446,11 @@ model BudgetEntry {
 // Events — shared calendar (Phase 4 UI). Attendees kept as a plain id array
 // to start; promote to a join table if RSVP state is ever needed.
 // ---------------------------------------------------------------------------
+
+enum EventKind {
+  EVENT
+  SHIFT
+}
 
 model Event {
   id          String     @id @default(cuid())
@@ -447,8 +473,14 @@ model Event {
   // until this date" setup (src/app/(app)/calendar/actions.ts) — real rows,
   // not a live recurrence engine. Null for a normal one-off event.
   recurrenceGroupId String?
+  /// EVENT = a calendar entry. SHIFT = someone's work schedule, shown on
+  /// /schedule (and "free together" windows) instead of cluttering the calendar.
+  kind              EventKind  @default(EVENT)
+  /// SHIFT only — whose schedule this is. A member id, no FK, like attendeeIds.
+  personId          String?
 
   @@index([hubId, startAt])
+  @@index([hubId, kind, startAt])
   @@index([hubId, recurrenceGroupId])
 }
 
@@ -638,4 +670,99 @@ model ReminderSent {
 
   @@unique([userId, entityType, entityId, daysBefore])
   @@index([entityType, entityId])
+}
+
+// ---------------------------------------------------------------------------
+// Planning — what a household plans together that isn't a task: dates that
+// come back every year, trips, and a monthly spending target per category.
+// ---------------------------------------------------------------------------
+
+enum SpecialDateKind {
+  BIRTHDAY
+  ANNIVERSARY
+  OTHER
+}
+
+/// A date that returns every year (birthday, anniversary, "the day we met").
+/// Month/day rather than a DateTime, so the next occurrence is a pure
+/// computation that never needs rolling forward. `year` is optional and only
+/// feeds "30 ans" / "5 ans ensemble".
+model SpecialDate {
+  id               String          @id @default(cuid())
+  hubId            String
+  hub              Hub             @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  visibility       Visibility      @default(SHARED)
+  title            String
+  kind             SpecialDateKind @default(OTHER)
+  month            Int
+  day              Int
+  year             Int?
+  remindDaysBefore Int[]           @default([7, 1])
+  notes            String?
+  createdById      String
+  createdBy        User            @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([hubId, month, day])
+}
+
+model Trip {
+  id          String     @id @default(cuid())
+  hubId       String
+  hub         Hub        @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  visibility  Visibility @default(SHARED)
+  title       String
+  destination String?
+  startDate   DateTime
+  endDate     DateTime
+  budgetCents Int?
+  notes       String?
+  createdById String
+  createdBy   User       @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  items TripItem[]
+
+  @@index([hubId, startDate])
+}
+
+enum TripItemKind {
+  BOOK
+  TODO
+  PACK
+}
+
+/// Carries its own `hubId` so the policy can check membership without a join;
+/// it also requires the parent trip to be visible, so a private trip's
+/// checklist is exactly as private as the trip.
+model TripItem {
+  id           String       @id @default(cuid())
+  tripId       String
+  trip         Trip         @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  hubId        String
+  hub          Hub          @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  kind         TripItemKind @default(TODO)
+  title        String
+  costCents    Int?
+  done         Boolean      @default(false)
+  assignedToId String?
+  createdAt    DateTime     @default(now())
+
+  @@index([tripId, kind])
+}
+
+/// A monthly spending target per category ("Épicerie 600 $"), compared with
+/// what was actually logged that month.
+model BudgetTarget {
+  id           String   @id @default(cuid())
+  hubId        String
+  hub          Hub      @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  category     String
+  monthlyCents Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([hubId, category])
 }

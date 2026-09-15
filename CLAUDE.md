@@ -1034,6 +1034,64 @@ the 2M default. Check before the call, record after, because cost is unknown
 until the response returns; a single call can overshoot and the next is
 refused. Fails open on a DB error, like the rate limiter.
 
+### Phase 13 — Hub-scoped debts, couple planning, money fixes (2026-09-15)
+
+Branch `couple-hub-and-scoping`. Owner asked: debts only in *his* hub (Lucky
+Thirteen), add an existing user to a hub by name, and a couple's hub (Dan et
+Chantelle) that manages "everything": schedules, trips, couple budget, every
+upcoming event including holidays.
+
+- **Debts are shown only in the hub they live in.** `listMyDebts(tx, userId,
+  hubId)`, and `upcomingSummary` / `agendaItems` / `dashboard` filter `hubId` too.
+  ⚠️ This **supersedes** Phase 12's "`Debt.hubId` is vestigial" note: it is now
+  the owner's organising key. Access is unchanged (ownerId + DebtShare at RLS) —
+  this is organisation, not a security boundary. `/debts` shows "N of your debts
+  live in another hub → Move here" (`moveMyDebtsHere`, clears ventureId because
+  ventures are per hub). Digests still list all of the owner's debts (their own
+  email). DebtShare still exposes the whole tracker.
+- **Money bugs fixed.** Biweekly payments were summed as monthly everywhere
+  (`perMonth` in `lib/money.ts`: ×26/12); `logDebtPayment` rolled a biweekly
+  debt's due date a month (now by frequency) and booked the Budget entry in the
+  open hub instead of the debt's. `upcomingSummary` counted every one-off bill
+  task as "/mo" — now recurring tasks normalise, one-offs count only if due by
+  month end.
+- **Add a known person** (`addKnownMember`): owner picks from users who already
+  share an ACTIVE hub with them; added ACTIVE + push. That "already share a hub"
+  check is the whole privacy boundary — keep it server-side.
+- **Occasions** (`lib/occasions.ts`): computed, never stored — Québec/Canada
+  holidays, Saint-Valentin, Fête des Mères/Pères (nth-weekday), Easter
+  (Gregorian algorithm, verified 2025–2028), seasons, Girlfriend/Boyfriend Day,
+  Haitian national days. `Hub.showOccasions` owner toggle on the members page.
+- **Special dates** (`SpecialDate`, month/day/year?) at `/calendar/dates`;
+  **trips** (`Trip` + `TripItem` BOOK/TODO/PACK) at `/trips`; **work schedules**
+  are `Event.kind = SHIFT` + `personId` at `/schedule` with "free together"
+  windows (`freeWindows`, 7:00–23:00, ≥60 min). Shifts are excluded from
+  calendar/agenda/dashboard event queries (`kind: "EVENT"`). All three merged
+  into `/calendar`, `/agenda`, `/today` through `planItemsBetween` (`lib/plans.ts`).
+- **Couple budget**: `BudgetEntry.paidById` / `payerSharePct` (null = not
+  shared) / `isSettlement`; `sharedBalances` in `lib/couple.ts` (all-time, not
+  per month); settle-up rows are excluded from in/out. `BudgetTarget` = monthly
+  limit per category, compared against the month's spend.
+- **Reminders** now also fire for special dates (ledger key `<id>:<year>`) and a
+  7-day heads-up for love/family occasions (once per user across hubs).
+- **RLS**: migration `20260915120000_couple_planning` — SpecialDate/Trip use the
+  Event policy body; TripItem additionally requires `EXISTS` on its Trip, which
+  runs under Trip's own policy, so a private trip's checklist is private;
+  BudgetTarget hub-only. `verify:isolation` 22/22 (6 new checks). `paidById`,
+  `personId`, `TripItem.assignedToId` are plain member ids (no FK, like
+  `attendeeIds`) — actions validate membership with the trusted client, and
+  `deleteAccount` severs them explicitly.
+- **Perf**: prod Neon is **us-east-2**; Vercel functions defaulted to iad1
+  (us-east-1). `vercel.json` `"regions": ["cle1"]` colocates them — every page
+  makes ~10 DB round-trips, so this was a per-request tax on top of cold start.
+- ⚠️ **Gotcha hit**: a constant exported from a `"use client"` file and imported
+  by a server component arrives as a client reference — `.map is not a function`
+  at runtime, with a clean `tsc` and a clean build. Shared constants live in
+  plain modules (`BUDGET_CATEGORIES` → `lib/couple.ts`).
+- Dev-only: `document.querySelector('main').innerText` reads the loading
+  skeleton ("Loading") while the real page is parked in the streamed hidden div —
+  screenshot instead (same root cause as the Phase 12 `S:0` note).
+
 ### Ordered queue (as of 2026-09-07)
 
 Supersedes the 2026-09-06 list below, which is kept for its detail.

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { Figure } from "@/components/Figure";
-import { format } from "date-fns";
+import { addDays, format, startOfDay } from "date-fns";
 
 import { dashboard, hubChrome } from "@/lib/data";
+import { listShifts, planHref, planItemsBetween } from "@/lib/plans";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { countdownLabel, eventTimeRange, money } from "@/lib/format";
@@ -11,6 +12,14 @@ import { VentureChip } from "@/components/VentureChip";
 import { EmptyState, QUICK_ADD_EXAMPLES } from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
+
+const SHORTCUTS = [
+  { href: "/calendar", label: "Calendar", icon: "📅" },
+  { href: "/schedule", label: "Schedules", icon: "🕐" },
+  { href: "/trips", label: "Trips", icon: "✈️" },
+  { href: "/calendar/dates", label: "Dates", icon: "🎂" },
+  { href: "/agenda", label: "Agenda", icon: "📋" },
+];
 
 function SectionHead({ title, href, cta }: { title: string; href: string; cta: string }) {
   return (
@@ -27,12 +36,23 @@ function SectionHead({ title, href, cta }: { title: string; href: string; cta: s
 
 export default async function DashboardPage() {
   const { user, hub } = await requireHub();
-  const [d, { ventures, members: membersRaw }] = await Promise.all([
-    withHub(user.id, (tx) => dashboard(tx, hub.id, user.id)),
+  const now = new Date();
+  const todayStart = startOfDay(now);
+
+  const [[d, plans, shifts], { ventures, members: membersRaw }] = await Promise.all([
+    withHub(user.id, (tx) =>
+      Promise.all([
+        dashboard(tx, hub.id, user.id),
+        planItemsBetween(tx, hub, user.id, now, addDays(todayStart, 21)),
+        listShifts(tx, hub.id, user.id, todayStart, addDays(todayStart, 1)),
+      ]),
+    ),
     hubChrome(user.id, hub.id),
   ]);
   const first = user.name?.split(" ")[0];
   const vOpts = ventures.map((v) => ({ id: v.id, name: v.name }));
+  const memberName = new Map(membersRaw.map((m) => [m.id, (m.name ?? m.email ?? "").split(/[\s@]/)[0]]));
+  const comingUp = plans.slice(0, 6);
 
   const nothing =
     d.overdue.length +
@@ -41,7 +61,9 @@ export default async function DashboardPage() {
       d.renewals.length +
       d.cancelBys.length +
       d.events.length +
-      d.debts.length ===
+      d.debts.length +
+      comingUp.length +
+      shifts.length ===
     0;
 
   return (
@@ -55,12 +77,38 @@ export default async function DashboardPage() {
         <p className="text-xs text-[var(--color-text-dim)]">{format(d.now, "EEEE, MMMM d")}</p>
       </div>
 
+      <nav className="-mx-3 flex gap-1.5 overflow-x-auto px-3" aria-label="Plan">
+        {SHORTCUTS.map((s) => (
+          <Link key={s.href} href={s.href} className="chip shrink-0">
+            {s.icon} {s.label}
+          </Link>
+        ))}
+      </nav>
+
       {nothing && (
         <EmptyState
           headline="All clear this week."
           title="Capture something — the box up top understands plain sentences:"
           examples={QUICK_ADD_EXAMPLES}
         />
+      )}
+
+      {shifts.length > 0 && (
+        <section>
+          <SectionHead title="Schedules today" href="/schedule" cta="Week" />
+          <div className="card divide-y divide-[var(--color-border)]">
+            {shifts.map((s) => (
+              <div key={s.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                <span className="truncate">
+                  {(s.personId && memberName.get(s.personId)) || s.title}
+                </span>
+                <span className="shrink-0 text-xs font-semibold tabular-nums text-[var(--color-text-dim)]">
+                  {format(s.startAt, "H:mm")}–{format(s.endAt, "H:mm")}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {d.overdue.length > 0 && (
@@ -96,6 +144,38 @@ export default async function DashboardPage() {
                 )}
               </Link>
             ))}
+          </div>
+        </section>
+      )}
+
+      {comingUp.length > 0 && (
+        <section>
+          <SectionHead title="Coming up" href="/calendar" cta="Calendar" />
+          <div className="card divide-y divide-[var(--color-border)]">
+            {comingUp.map((p) => {
+              const target = planHref(p);
+              const body = (
+                <>
+                  <span className="min-w-0 truncate">
+                    {p.emoji} {p.title}
+                    {p.meta ? <span className="text-[var(--color-text-dim)]"> · {p.meta}</span> : null}
+                  </span>
+                  <span className="shrink-0 text-xs font-semibold text-[var(--color-text-dim)]">
+                    {countdownLabel(p.date)}
+                    {p.planAhead ? <span className="text-[var(--color-primary)]"> · plan</span> : null}
+                  </span>
+                </>
+              );
+              return target ? (
+                <Link key={p.key} href={target} className="flex items-center justify-between gap-2 px-3 py-2.5">
+                  {body}
+                </Link>
+              ) : (
+                <div key={p.key} className="flex items-center justify-between gap-2 px-3 py-2.5">
+                  {body}
+                </div>
+              );
+            })}
           </div>
         </section>
       )}

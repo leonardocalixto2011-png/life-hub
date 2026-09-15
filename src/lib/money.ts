@@ -29,6 +29,17 @@ export const BILLING_LABEL: Record<BillingCycle, string> = {
 };
 
 /** "12.50" -> 1250. Returns null on unparseable input. */
+/**
+ * A payment normalised to a month. The owner's real debts are mostly biweekly:
+ * 26 payments a year, not 24, so $100 every two weeks is ~$217/mo — summing it
+ * as $100/mo understated every forecast that used it.
+ */
+export function perMonth(cents: number, frequency: "WEEKLY" | "BIWEEKLY" | "MONTHLY"): number {
+  if (frequency === "WEEKLY") return Math.round((cents * 52) / 12);
+  if (frequency === "BIWEEKLY") return Math.round((cents * 26) / 12);
+  return cents;
+}
+
 export function dollarsToCents(value: string | null | undefined): number | null {
   if (value == null || value === "") return null;
   const n = Number(String(value).replace(/[^0-9.-]/g, ""));
