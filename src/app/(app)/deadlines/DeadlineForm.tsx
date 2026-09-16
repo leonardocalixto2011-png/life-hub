@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 
 import { createDeadline, deleteDeadline, updateDeadline } from "./actions";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
+import { useT } from "@/components/I18nProvider";
+import type { T } from "@/lib/i18n";
 
 type Venture = { id: string; name: string };
 
@@ -18,33 +20,28 @@ type Existing = {
   visibility?: "PRIVATE" | "SHARED";
 };
 
-function Fields({ ventures, existing }: { ventures: Venture[]; existing?: Existing }) {
+function Fields({ ventures, existing, t }: { ventures: Venture[]; existing?: Existing; t: T }) {
+  const label = "block text-xs font-semibold text-[var(--color-text-dim)]";
   return (
     <>
-      <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-        Title
+      <label className={label}>
+        {t("Title")}
         <input
           name="title"
           defaultValue={existing?.title}
           required
           className="field mt-1"
-          placeholder="Tax filing, lease renewal, permit…"
+          placeholder={t("Tax filing, lease renewal, permit…")}
         />
       </label>
 
       <div className="grid grid-cols-2 gap-3">
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Due date
-          <input
-            type="date"
-            name="dueDate"
-            defaultValue={existing?.dueDate}
-            required
-            className="field mt-1"
-          />
+        <label className={label}>
+          {t("Due date")}
+          <input type="date" name="dueDate" defaultValue={existing?.dueDate} required className="field mt-1" />
         </label>
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Venture
+        <label className={label}>
+          {t("Venture")}
           <select name="ventureId" defaultValue={existing?.ventureId ?? ""} className="field mt-1">
             <option value="">—</option>
             {ventures.map((v) => (
@@ -56,21 +53,19 @@ function Fields({ ventures, existing }: { ventures: Venture[]; existing?: Existi
         </label>
       </div>
 
-      <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-        Remind days before
+      <label className={label}>
+        {t("Remind days before")}
         <input
           name="remindDaysBefore"
           defaultValue={(existing?.remindDaysBefore ?? [7, 3, 1]).join(", ")}
           className="field mt-1"
           placeholder="7, 3, 1"
         />
-        <span className="mt-1 block font-normal">
-          Comma-separated. Surfaced in the daily digest on those days.
-        </span>
+        <span className="mt-1 block font-normal">{t("Comma-separated. A notification on each of those days.")}</span>
       </label>
 
-      <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-        Notes
+      <label className={label}>
+        {t("Notes")}
         <textarea name="notes" defaultValue={existing?.notes ?? ""} rows={2} className="field mt-1" />
       </label>
 
@@ -87,6 +82,7 @@ export function DeadlineForm({
   existing?: Existing;
 }) {
   const router = useRouter();
+  const t = useT();
   const formRef = useRef<HTMLFormElement>(null);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,15 +94,15 @@ export function DeadlineForm({
       <div className="space-y-3">
         <form action={updateDeadline} className="card space-y-3 p-4">
           <input type="hidden" name="id" value={existing.id} />
-          <Fields ventures={ventures} existing={existing} />
+          <Fields ventures={ventures} existing={existing} t={t} />
           <button type="submit" className="btn btn-primary w-full">
-            Save
+            {t("Save")}
           </button>
         </form>
         <form action={deleteDeadline}>
           <input type="hidden" name="id" value={existing.id} />
           <button type="submit" className="btn w-full text-[var(--color-danger)]">
-            Delete deadline
+            {t("Delete deadline")}
           </button>
         </form>
       </div>
@@ -117,7 +113,7 @@ export function DeadlineForm({
   if (!open) {
     return (
       <button onClick={() => setOpen(true)} className="btn btn-primary w-full">
-        + New deadline
+        {t("+ New deadline")}
       </button>
     );
   }
@@ -133,21 +129,21 @@ export function DeadlineForm({
         setOpen(false);
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not save");
+        setError(err instanceof Error ? err.message : t("Could not save"));
       }
     });
   }
 
   return (
     <form ref={formRef} onSubmit={onSubmit} className="card space-y-3 p-4">
-      <Fields ventures={ventures} />
+      <Fields ventures={ventures} t={t} />
       {error && <p className="text-xs text-[var(--color-danger)]">{error}</p>}
       <div className="flex gap-2">
         <button type="submit" disabled={pending} className="btn btn-primary flex-1">
-          {pending ? "Saving…" : "Add deadline"}
+          {pending ? t("Saving…") : t("Add deadline")}
         </button>
         <button type="button" onClick={() => setOpen(false)} className="btn">
-          Cancel
+          {t("Cancel")}
         </button>
       </div>
     </form>

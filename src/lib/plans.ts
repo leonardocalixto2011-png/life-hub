@@ -2,6 +2,7 @@ import { addDays, differenceInMinutes, format, startOfDay } from "date-fns";
 
 import type { HubTx } from "@/lib/hub-context";
 import { isPlanAhead, occasionsBetween } from "@/lib/occasions";
+import { translate, type Lang } from "@/lib/i18n";
 
 /**
  * Everything dated that a household plans for but that isn't a task:
@@ -37,13 +38,17 @@ export function nextOccurrence(month: number, day: number, from = new Date()): D
 export const SPECIAL_EMOJI = { BIRTHDAY: "🎂", ANNIVERSARY: "💍", OTHER: "⭐" } as const;
 
 /** "30 ans" for a birthday, "5 ans" for an anniversary — only when the year is known. */
-export function specialMeta(s: { kind: string; year: number | null }, on: Date): string | null {
+export function specialMeta(
+  s: { kind: string; year: number | null },
+  on: Date,
+  lang: Lang = "en",
+): string | null {
   if (!s.year) return null;
   const n = on.getFullYear() - s.year;
   if (n <= 0) return null;
-  if (s.kind === "BIRTHDAY") return `${n} ans`;
-  if (s.kind === "ANNIVERSARY") return `${n} an${n > 1 ? "s" : ""} ensemble`;
-  return `${n} an${n > 1 ? "s" : ""}`;
+  if (s.kind === "BIRTHDAY") return translate(lang, "turns {n}", { n });
+  if (s.kind === "ANNIVERSARY") return translate(lang, n === 1 ? "1 year together" : "{n} years together", { n });
+  return translate(lang, n === 1 ? "1 year" : "{n} years", { n });
 }
 
 export function listSpecialDates(tx: HubTx, hubId: string, userId: string) {
@@ -78,6 +83,7 @@ export async function planItemsBetween(
   userId: string,
   from: Date,
   to: Date,
+  lang: Lang = "en",
 ): Promise<PlanItem[]> {
   const start = startOfDay(from);
 
@@ -97,7 +103,7 @@ export async function planItemsBetween(
   const items: PlanItem[] = [];
 
   if (hub.showOccasions) {
-    for (const o of occasionsBetween(start, to)) {
+    for (const o of occasionsBetween(start, to, lang)) {
       items.push({
         kind: "occasion",
         key: o.key,
@@ -121,7 +127,7 @@ export async function planItemsBetween(
       date,
       emoji: SPECIAL_EMOJI[s.kind],
       href: "/calendar/dates",
-      meta: specialMeta(s, date),
+      meta: specialMeta(s, date, lang),
       planAhead: true,
     });
   }
@@ -135,7 +141,7 @@ export async function planItemsBetween(
       date: ongoing ? start : t.startDate,
       emoji: "✈️",
       href: `/trips/${t.id}`,
-      meta: ongoing ? "in progress" : t.destination,
+      meta: ongoing ? translate(lang, "in progress") : t.destination,
       planAhead: false,
     });
   }

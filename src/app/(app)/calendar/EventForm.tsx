@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 
 import { createEvent, deleteEvent, deleteEventSeries, updateEvent } from "./actions";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
+import { useT } from "@/components/I18nProvider";
+import type { T } from "@/lib/i18n";
 
 type Member = { id: string; name: string | null; email: string | null };
 type Venture = { id: string; name: string };
@@ -40,29 +42,32 @@ function Fields({
   members,
   existing,
   prefill,
+  t,
 }: {
   ventures: Venture[];
   members: Member[];
   existing?: Existing;
   prefill?: Prefill;
+  t: T;
 }) {
   const attending = new Set(existing?.attendeeIds ?? []);
+  const label = "block text-xs font-semibold text-[var(--color-text-dim)]";
   return (
     <>
-      <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-        Title
+      <label className={label}>
+        {t("Title")}
         <input
           name="title"
           defaultValue={existing?.title ?? prefill?.title}
           required
           className="field mt-1"
-          placeholder="Dinner, supplier call, photoshoot…"
+          placeholder={t("Dinner, supplier call, photoshoot…")}
         />
       </label>
 
       <div className="grid grid-cols-2 gap-3">
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Starts
+        <label className={label}>
+          {t("Starts")}
           <input
             type="datetime-local"
             name="startAt"
@@ -71,48 +76,42 @@ function Fields({
             className="field mt-1"
           />
         </label>
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Ends (same day)
-          <input
-            type="datetime-local"
-            name="endAt"
-            defaultValue={existing?.endAt}
-            className="field mt-1"
-          />
+        <label className={label}>
+          {t("Ends (same day)")}
+          <input type="datetime-local" name="endAt" defaultValue={existing?.endAt} className="field mt-1" />
         </label>
       </div>
       {!existing && (
         <p className="-mt-2 text-[0.65rem] text-[var(--color-text-dim)]">
-          For a schedule that repeats on multiple days, leave &quot;Ends&quot; as the
-          same day&apos;s end time and use Repeat below instead.
+          {t("For something that repeats on several days, keep “Ends” on the same day and use Repeat below.")}
         </p>
       )}
 
       {!existing && (
         <fieldset className="rounded-lg border border-[var(--color-border)] p-2.5 text-xs font-semibold text-[var(--color-text-dim)]">
-          Repeat (optional)
+          {t("Repeat (optional)")}
           <div className="mt-1 flex flex-wrap gap-2">
             {WEEKDAYS.map((w) => (
               <label key={w.value} className="flex items-center gap-1 font-normal">
                 <input type="checkbox" name="repeatDays" value={w.value} />
-                {w.label}
+                {t(w.label)}
               </label>
             ))}
           </div>
           <label className="mt-2 block font-normal">
-            Repeat until
+            {t("Repeat until")}
             <input type="date" name="repeatUntil" className="field mt-1" />
           </label>
         </fieldset>
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Location
+        <label className={label}>
+          {t("Location")}
           <input name="location" defaultValue={existing?.location ?? ""} className="field mt-1" />
         </label>
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Venture
+        <label className={label}>
+          {t("Venture")}
           <select name="ventureId" defaultValue={existing?.ventureId ?? ""} className="field mt-1">
             <option value="">—</option>
             {ventures.map((v) => (
@@ -125,24 +124,19 @@ function Fields({
       </div>
 
       <fieldset className="text-xs font-semibold text-[var(--color-text-dim)]">
-        Attendees
+        {t("Attendees")}
         <div className="mt-1 flex flex-wrap gap-3">
           {members.map((m) => (
             <label key={m.id} className="flex items-center gap-1.5 font-normal">
-              <input
-                type="checkbox"
-                name="attendeeIds"
-                value={m.id}
-                defaultChecked={attending.has(m.id)}
-              />
+              <input type="checkbox" name="attendeeIds" value={m.id} defaultChecked={attending.has(m.id)} />
               {m.name ?? m.email}
             </label>
           ))}
         </div>
       </fieldset>
 
-      <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-        Notes
+      <label className={label}>
+        {t("Notes")}
         <textarea name="notes" defaultValue={existing?.notes ?? ""} rows={2} className="field mt-1" />
       </label>
 
@@ -163,6 +157,7 @@ export function EventForm({
   prefill?: Prefill;
 }) {
   const router = useRouter();
+  const t = useT();
   const formRef = useRef<HTMLFormElement>(null);
   const [open, setOpen] = useState(Boolean(prefill));
   const [error, setError] = useState<string | null>(null);
@@ -173,15 +168,15 @@ export function EventForm({
       <div className="space-y-3">
         <form action={updateEvent} className="card space-y-3 p-4">
           <input type="hidden" name="id" value={existing.id} />
-          <Fields ventures={ventures} members={members} existing={existing} />
+          <Fields ventures={ventures} members={members} existing={existing} t={t} />
           <button type="submit" className="btn btn-primary w-full">
-            Save
+            {t("Save")}
           </button>
         </form>
         <form action={deleteEvent}>
           <input type="hidden" name="id" value={existing.id} />
           <button type="submit" className="btn w-full text-[var(--color-danger)]">
-            {existing.recurrenceGroupId ? "Delete just this one" : "Delete event"}
+            {existing.recurrenceGroupId ? t("Delete just this one") : t("Delete event")}
           </button>
         </form>
         {existing.recurrenceGroupId && (
@@ -189,7 +184,7 @@ export function EventForm({
             <input type="hidden" name="recurrenceGroupId" value={existing.recurrenceGroupId} />
             <input type="hidden" name="fromDate" value={existing.startAt} />
             <button type="submit" className="btn w-full text-[var(--color-danger)]">
-              Delete this and future
+              {t("Delete this and future")}
             </button>
           </form>
         )}
@@ -200,7 +195,7 @@ export function EventForm({
   if (!open) {
     return (
       <button onClick={() => setOpen(true)} className="btn btn-primary w-full">
-        + New event
+        {t("+ New event")}
       </button>
     );
   }
@@ -218,21 +213,21 @@ export function EventForm({
         if (prefill) router.replace("/calendar");
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not save");
+        setError(err instanceof Error ? err.message : t("Could not save"));
       }
     });
   }
 
   return (
     <form ref={formRef} onSubmit={onSubmit} className="card space-y-3 p-4">
-      <Fields ventures={ventures} members={members} prefill={prefill} />
+      <Fields ventures={ventures} members={members} prefill={prefill} t={t} />
       {error && <p className="text-xs text-[var(--color-danger)]">{error}</p>}
       <div className="flex gap-2">
         <button type="submit" disabled={pending} className="btn btn-primary flex-1">
-          {pending ? "Saving…" : "Add event"}
+          {pending ? t("Saving…") : t("Add event")}
         </button>
         <button type="button" onClick={() => setOpen(false)} className="btn">
-          Cancel
+          {t("Cancel")}
         </button>
       </div>
     </form>

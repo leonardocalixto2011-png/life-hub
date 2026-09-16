@@ -1,6 +1,7 @@
 "use client";
 
 import type { Draft, DraftKind } from "@/app/(app)/quick-actions";
+import { useT } from "@/components/I18nProvider";
 
 const KIND_LABEL: Record<DraftKind, string> = {
   task: "Task",
@@ -31,6 +32,7 @@ export function DraftCard({
   onChange: (patch: Partial<Draft>) => void;
   onRemove: () => void;
 }) {
+  const t = useT();
   const showAmount =
     draft.kind === "budget" || draft.kind === "subscription" || draft.kind === "task";
   const isNeedsReply = draft.kind === "needs_reply";
@@ -47,7 +49,7 @@ export function DraftCard({
         >
           {(Object.keys(KIND_LABEL) as DraftKind[]).map((k) => (
             <option key={k} value={k}>
-              {KIND_LABEL[k]}
+              {t(KIND_LABEL[k])}
             </option>
           ))}
         </select>
@@ -55,13 +57,13 @@ export function DraftCard({
           value={draft.title}
           onChange={(e) => onChange({ title: e.target.value })}
           className="field flex-1"
-          aria-label="Title"
+          aria-label={t("Title")}
           disabled={isNeedsReply}
         />
         <button
           type="button"
           onClick={onRemove}
-          aria-label="Discard"
+          aria-label={t("Discard")}
           className="text-[var(--color-text-dim)]"
         >
           ✕
@@ -76,13 +78,13 @@ export function DraftCard({
             </p>
           )}
           <label className="block text-[0.7rem] font-semibold text-[var(--color-text-dim)]">
-            Suggested reply — edit before sending it yourself, Life Hub never sends on your behalf
+            {t("Suggested reply — edit before sending it yourself, Life Hub never sends on your behalf")}
             <textarea
               value={draft.suggestedReply ?? ""}
               onChange={(e) => onChange({ suggestedReply: e.target.value })}
               rows={4}
               className="field mt-1"
-              placeholder="No suggested reply — write your own."
+              placeholder={t("No suggested reply — write your own.")}
             />
           </label>
         </>
@@ -90,7 +92,7 @@ export function DraftCard({
       <div className="grid grid-cols-2 gap-2">
         {draft.kind === "event" ? (
           <label className="text-[0.7rem] font-semibold text-[var(--color-text-dim)]">
-            {DATE_LABEL.event}
+            {t(DATE_LABEL.event)}
             <input
               type="datetime-local"
               value={draft.time ?? ""}
@@ -100,7 +102,7 @@ export function DraftCard({
           </label>
         ) : (
           <label className="text-[0.7rem] font-semibold text-[var(--color-text-dim)]">
-            {DATE_LABEL[draft.kind]}
+            {t(DATE_LABEL[draft.kind])}
             <input
               type="date"
               value={draft.date ?? ""}
@@ -112,7 +114,7 @@ export function DraftCard({
 
         {showAmount && (
           <label className="text-[0.7rem] font-semibold text-[var(--color-text-dim)]">
-            Amount
+            {t("Amount")}
             <input
               type="number"
               step="0.01"
@@ -127,52 +129,52 @@ export function DraftCard({
 
         {draft.kind === "budget" && (
           <label className="text-[0.7rem] font-semibold text-[var(--color-text-dim)]">
-            Direction
+            {t("Direction")}
             <select
               value={draft.entryType}
               onChange={(e) => onChange({ entryType: e.target.value as "INCOME" | "EXPENSE" })}
               className="field mt-1"
             >
-              <option value="EXPENSE">Expense</option>
-              <option value="INCOME">Income</option>
+              <option value="EXPENSE">{t("Expense")}</option>
+              <option value="INCOME">{t("Income")}</option>
             </select>
           </label>
         )}
 
         {draft.kind === "subscription" && (
           <label className="text-[0.7rem] font-semibold text-[var(--color-text-dim)]">
-            Cycle
+            {t("Cycle")}
             <select
               value={draft.billingCycle}
               onChange={(e) => onChange({ billingCycle: e.target.value as Draft["billingCycle"] })}
               className="field mt-1"
             >
-              <option value="WEEKLY">Weekly</option>
-              <option value="MONTHLY">Monthly</option>
-              <option value="QUARTERLY">Quarterly</option>
-              <option value="YEARLY">Yearly</option>
-              <option value="CUSTOM">Custom</option>
+              <option value="WEEKLY">{t("Weekly")}</option>
+              <option value="MONTHLY">{t("Monthly")}</option>
+              <option value="QUARTERLY">{t("Quarterly")}</option>
+              <option value="YEARLY">{t("Yearly")}</option>
+              <option value="CUSTOM">{t("Custom")}</option>
             </select>
           </label>
         )}
 
         {draft.kind === "task" && (
           <label className="text-[0.7rem] font-semibold text-[var(--color-text-dim)]">
-            Priority
+            {t("Priority")}
             <select
               value={draft.priority}
               onChange={(e) => onChange({ priority: e.target.value as Draft["priority"] })}
               className="field mt-1"
             >
-              <option value="LOW">Low</option>
-              <option value="MED">Medium</option>
-              <option value="HIGH">High</option>
+              <option value="LOW">{t("Low")}</option>
+              <option value="MED">{t("Medium")}</option>
+              <option value="HIGH">{t("High")}</option>
             </select>
           </label>
         )}
 
         <label className="text-[0.7rem] font-semibold text-[var(--color-text-dim)]">
-          Venture
+          {t("Venture")}
           <select
             value={draft.ventureId ?? ""}
             onChange={(e) => onChange({ ventureId: e.target.value || null })}
@@ -196,7 +198,7 @@ export function DraftCard({
             checked={draft.visibility === "PRIVATE"}
             onChange={(e) => onChange({ visibility: e.target.checked ? "PRIVATE" : "SHARED" })}
           />
-          Private (only you see this)
+          {t("Private (only you see this)")}
         </label>
       )}
     </div>

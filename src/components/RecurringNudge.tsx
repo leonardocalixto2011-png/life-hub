@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { makeRecurring } from "@/app/(app)/tasks/actions";
 import { showToast } from "@/components/Toast";
+import { useT } from "@/components/I18nProvider";
 
 type Suggestion = { title: string; count: number; latestId: string };
 
@@ -20,6 +21,7 @@ function readDismissed(): string[] {
 
 export function RecurringNudge({ suggestions }: { suggestions: Suggestion[] }) {
   const router = useRouter();
+  const t = useT();
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [pending, start] = useTransition();
 
@@ -45,7 +47,7 @@ export function RecurringNudge({ suggestions }: { suggestions: Suggestion[] }) {
     start(async () => {
       await makeRecurring(s.latestId, cycle);
       dismiss();
-      showToast({ message: `"${s.title}" is now ${cycle}` });
+      showToast({ message: t(cycle === "weekly" ? "“{title}” now repeats weekly" : "“{title}” now repeats monthly", { title: s.title }) });
       router.refresh();
     });
   }
@@ -53,18 +55,18 @@ export function RecurringNudge({ suggestions }: { suggestions: Suggestion[] }) {
   return (
     <div className="card p-3">
       <p className="text-xs text-[var(--color-text-dim)]">
-        You&apos;ve added <span className="font-semibold text-[var(--color-text)]">“{s.title}”</span>{" "}
-        {s.count} times. Make it recurring?
+        {t("You've added")} <span className="font-semibold text-[var(--color-text)]">“{s.title}”</span>{" "}
+        {t("{n} times. Make it recurring?", { n: s.count })}
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
         <button onClick={() => apply("monthly")} disabled={pending} className="btn btn-primary">
-          Monthly
+          {t("Monthly")}
         </button>
         <button onClick={() => apply("weekly")} disabled={pending} className="btn">
-          Weekly
+          {t("Weekly")}
         </button>
         <button onClick={dismiss} disabled={pending} className="btn btn-ghost">
-          Not now
+          {t("Not now")}
         </button>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getTask, hubChrome } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getT } from "@/lib/i18n-server";
 import { toDateInput } from "@/lib/format";
 import { centsToInput } from "@/lib/money";
 import { TaskEditForm } from "./TaskEditForm";
@@ -16,6 +17,7 @@ export default async function TaskDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { user, hub } = await requireHub();
+  const t = await getT();
   const { id } = await params;
   const [task, { ventures, members }] = await Promise.all([
     withHub(user.id, (tx) => getTask(tx, hub.id, user.id, id)),
@@ -27,7 +29,7 @@ export default async function TaskDetailPage({
   return (
     <div className="space-y-3 p-3">
       <Link href="/tasks" className="text-xs font-semibold text-[var(--color-text-dim)]">
-        ← Tasks
+        ← {t("Tasks")}
       </Link>
       <TaskEditForm
         task={{
@@ -47,7 +49,7 @@ export default async function TaskDetailPage({
         members={members}
       />
       <p className="px-1 text-[0.7rem] text-[var(--color-text-dim)]">
-        Added by {task.createdBy.name ?? task.createdBy.email}
+        {t("Added by {name}", { name: task.createdBy.name ?? task.createdBy.email ?? "" })}
       </p>
     </div>
   );

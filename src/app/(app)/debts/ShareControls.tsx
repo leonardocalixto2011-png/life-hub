@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import type { MyShare } from "@/lib/debt-sharing";
 import { setDebtShare } from "./actions";
+import { useT } from "@/components/I18nProvider";
 
 type Level = "SUMMARY" | "FULL" | null;
 
@@ -21,6 +22,7 @@ const LEVELS: { value: Level; label: string; hint: string }[] = [
  */
 export function ShareControls({ shares }: { shares: MyShare[] }) {
   const router = useRouter();
+  const t = useT();
   const [pending, startTransition] = useTransition();
   const [local, setLocal] = useState<Record<string, Level>>(
     Object.fromEntries(shares.map((s) => [s.hubId, s.visibility])),
@@ -40,10 +42,9 @@ export function ShareControls({ shares }: { shares: MyShare[] }) {
   return (
     <div className="card space-y-3 p-3">
       <div>
-        <div className="text-xs font-semibold">Who can see your debts</div>
+        <div className="text-xs font-semibold">{t("Who can see your debts")}</div>
         <p className="mt-0.5 text-[0.68rem] text-[var(--color-text-dim)]">
-          Private by default. Being in a hub doesn&apos;t reveal your tracker — you
-          choose per hub, and you can change it any time.
+          {t("Private by default. Being in a hub doesn't reveal your tracker — you choose per hub, and you can change it any time.")}
         </p>
       </div>
 
@@ -55,7 +56,7 @@ export function ShareControls({ shares }: { shares: MyShare[] }) {
             <div
               className="grid grid-cols-3 gap-1"
               role="radiogroup"
-              aria-label={`Debt visibility in ${s.hubName}`}
+              aria-label={t("Debt visibility in {hub}", { hub: s.hubName })}
             >
               {LEVELS.map((l) => {
                 const active = current === l.value;
@@ -78,13 +79,13 @@ export function ShareControls({ shares }: { shares: MyShare[] }) {
                         : { borderColor: "var(--color-border)" }
                     }
                   >
-                    {l.label}
+                    {t(l.label)}
                   </button>
                 );
               })}
             </div>
             <p className="text-[0.65rem] text-[var(--color-text-dim)]">
-              {LEVELS.find((l) => l.value === current)?.hint}
+              {t(LEVELS.find((l) => l.value === current)?.hint ?? "")}
             </p>
           </div>
         );

@@ -8,6 +8,7 @@ import {
 } from "date-fns";
 
 import { DEFAULT_LOCALE } from "@/lib/locales";
+import { fmt, fmtShort, fmtTime, translate, type Lang } from "@/lib/i18n";
 
 /**
  * Formats an amount. `locale` controls grouping and symbol placement — the
@@ -39,16 +40,18 @@ export function money(cents: number, currency = "CAD", locale: string = DEFAULT_
 }
 
 /** Short, human due-date label relative to now. */
-export function dueLabel(date: Date | null | undefined): string {
+export function dueLabel(date: Date | null | undefined, lang: Lang = "en"): string {
   if (!date) return "";
-  if (isToday(date)) return "Today";
-  if (isTomorrow(date)) return "Tomorrow";
-  if (isYesterday(date)) return "Yesterday";
+  if (isToday(date)) return translate(lang, "Today");
+  if (isTomorrow(date)) return translate(lang, "Tomorrow");
+  if (isYesterday(date)) return translate(lang, "Yesterday");
 
   const days = differenceInCalendarDays(date, new Date());
-  if (days > 1 && days < 7) return format(date, "EEEE"); // Thursday
-  if (days < 0 && days > -7) return `${Math.abs(days)}d ago`;
-  return format(date, isThisYear(date) ? "MMM d" : "MMM d, yyyy");
+  if (days > 1 && days < 7) return fmt(date, "EEEE", lang); // Thursday
+  if (days < 0 && days > -7) return translate(lang, "{n}d ago", { n: Math.abs(days) });
+  return isThisYear(date)
+    ? fmtShort(date, lang)
+    : fmt(date, lang === "fr" ? "d MMM yyyy" : "MMM d, yyyy", lang);
 }
 
 export function isOverdue(date: Date | null | undefined): boolean {
@@ -62,13 +65,13 @@ export function daysUntil(date: Date): number {
 }
 
 /** "Today" / "in 5 days" / "3 days ago" */
-export function countdownLabel(date: Date): string {
+export function countdownLabel(date: Date, lang: Lang = "en"): string {
   const d = daysUntil(date);
-  if (d === 0) return "Today";
-  if (d === 1) return "Tomorrow";
-  if (d === -1) return "Yesterday";
-  if (d < 0) return `${Math.abs(d)} days ago`;
-  return `in ${d} days`;
+  if (d === 0) return translate(lang, "Today");
+  if (d === 1) return translate(lang, "Tomorrow");
+  if (d === -1) return translate(lang, "Yesterday");
+  if (d < 0) return translate(lang, "{n} days ago", { n: Math.abs(d) });
+  return translate(lang, "in {n} days", { n: d });
 }
 
 /** `<input type="date">` value (local calendar day). */
@@ -98,13 +101,13 @@ export function fromDateTimeInput(value: string | null | undefined): Date | null
 }
 
 /** "2:30 PM" or "2:30 PM – 4:00 PM" (same day) or with a date when multi-day. */
-export function eventTimeRange(startAt: Date, endAt: Date): string {
+export function eventTimeRange(startAt: Date, endAt: Date, lang: Lang = "en"): string {
   const sameDay =
     startAt.getFullYear() === endAt.getFullYear() &&
     startAt.getMonth() === endAt.getMonth() &&
     startAt.getDate() === endAt.getDate();
-  if (sameDay) return `${format(startAt, "h:mm a")} – ${format(endAt, "h:mm a")}`;
-  return `${format(startAt, "MMM d, h:mm a")} – ${format(endAt, "MMM d, h:mm a")}`;
+  if (sameDay) return `${fmtTime(startAt, lang)} – ${fmtTime(endAt, lang)}`;
+  return `${fmtShort(startAt, lang)}, ${fmtTime(startAt, lang)} – ${fmtShort(endAt, lang)}, ${fmtTime(endAt, lang)}`;
 }
 
 export function initials(name: string | null | undefined, email?: string | null): string {

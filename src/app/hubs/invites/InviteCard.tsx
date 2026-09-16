@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { Celebrate } from "@/components/Celebrate";
 import { HubCover } from "@/components/HubCover";
 import { acceptInvite, declineInvite } from "@/app/(app)/hubs/actions";
+import { useT } from "@/components/I18nProvider";
 
 type Member = { id: string; name: string | null; email: string | null };
 
@@ -40,6 +41,7 @@ export function InviteCard({
   invitedBy: string;
   members: Member[];
 }) {
+  const t = useT();
   const [pending, start] = useTransition();
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +57,7 @@ export function InviteCard({
         // failure, and put the card back so the invite is still actionable.
         if (e && typeof e === "object" && "digest" in e) throw e;
         setJoining(false);
-        setError(e instanceof Error ? e.message : "Could not join — try again.");
+        setError(e instanceof Error ? e.message : t("Could not join — try again."));
       }
     });
   }
@@ -64,8 +66,8 @@ export function InviteCard({
     <>
       {joining && (
         <Celebrate
-          headline="You're in."
-          detail={`${name} is yours to use — your own theme and background stay private.`}
+          headline={t("You're in.")}
+          detail={t("{name} is yours to use — your own theme and background stay private.", { name })}
           onDone={() => {
             /* The redirect from acceptInvite takes over from here. */
           }}
@@ -77,10 +79,9 @@ export function InviteCard({
 
         <div className="space-y-3 p-4">
           <div>
-            <div className="text-sm font-semibold">{invitedBy} invited you</div>
+            <div className="text-sm font-semibold">{t("{name} invited you", { name: invitedBy })}</div>
             <p className="text-xs text-[var(--color-text-dim)]">
-              {members.length} {members.length === 1 ? "person" : "people"} · shared bills,
-              deadlines and calendar
+              {members.length === 1 ? t("1 person") : t("{n} people", { n: members.length })} · {t("shared bills, deadlines and calendar")}
             </p>
           </div>
 
@@ -113,11 +114,11 @@ export function InviteCard({
               disabled={pending}
               className="btn btn-primary flex-1"
             >
-              {pending ? "Joining…" : "Join hub"}
+              {pending ? t("Joining…") : t("Join hub")}
             </button>
             <form action={declineInvite.bind(null, hubId)} className="flex-1">
               <button type="submit" disabled={pending} className="btn btn-ghost w-full">
-                Decline
+                {t("Decline")}
               </button>
             </form>
           </div>

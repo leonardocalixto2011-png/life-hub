@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { addDays, differenceInCalendarDays, eachDayOfInterval, startOfDay } from "date-fns";
 import { z } from "zod";
 
+import { prisma } from "@/lib/prisma";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput, fromDateTimeInput } from "@/lib/format";
@@ -130,6 +131,40 @@ export async function deleteEvents(ids: string[]) {
   const parsed = z.array(z.string().cuid()).min(1).max(100).parse(ids);
   await withHub(user.id, (tx) => tx.event.deleteMany({ where: { id: { in: parsed } } }));
   revalidateContent();
+}
+
+/**
+ * Turns a calendar event — and its whole repeat series — into someone's work
+ * schedule (`kind: SHIFT`). Same rows, so nothing is lost; they just stop
+ * showing on the calendar and start showing on /schedule.
+ */
+export async function moveEventToSchedule(fd: FormData) {
+  const { user, hub } = await requireHub();
+  const { id, personId } = z
+    .object({ id: z.string().cuid(), personId: z.string().cuid() })
+    .parse({ id: fd.get("id"), personId: fd.get("personId") });
+
+  const member = await prisma.hubMembership.findFirst({
+    where: { hubId: hub.id, userId: personId, status: "ACTIVE" },
+    select: { id: true },
+  });
+  if (!member) throw new Error("That person isn't a member of this hub.");
+
+  await withHub(user.id, async (tx) => {
+    const ev = await tx.event.findFirst({
+      where: { id, hubId: hub.id },
+      select: { recurrenceGroupId: true },
+    });
+    if (!ev) throw new Error("Event not found");
+    await tx.event.updateMany({
+      where: ev.recurrenceGroupId
+        ? { hubId: hub.id, recurrenceGroupId: ev.recurrenceGroupId }
+        : { id },
+      data: { kind: "SHIFT", personId, attendeeIds: [personId] },
+    });
+  });
+  revalidateContent("/schedule");
+  redirect("/schedule");
 }
 
 /** Deletes this occurrence and every later one in the same series. */

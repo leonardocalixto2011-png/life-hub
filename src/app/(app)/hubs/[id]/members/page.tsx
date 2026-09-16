@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { requireHub } from "@/lib/session";
+import { getT } from "@/lib/i18n-server";
 import { CurrencyPicker } from "./CurrencyPicker";
 import { CoverUpload } from "./CoverUpload";
 import { HubCover } from "@/components/HubCover";
@@ -23,6 +24,7 @@ export default async function HubMembersPage({
   params: Promise<{ id: string }>;
 }) {
   const { user } = await requireHub();
+  const t = await getT();
   const { id: hubId } = await params;
 
   // `status: ACTIVE`, not merely "a row exists". An INVITED row is created the
@@ -79,28 +81,22 @@ export default async function HubMembersPage({
 
   // First name only — the credit is a friendly touch, not a directory entry.
   const coverBy = hub.coverBy?.name?.split(" ")[0] ?? null;
+  const activeCount = members.filter((m) => m.status === "ACTIVE").length;
 
   return (
     <div className="space-y-4 p-3">
       <div>
         <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
-          ← Today
+          ← {t("Today")}
         </Link>
         <p className="mt-2 text-xs text-[var(--color-text-dim)]">
-          {members.filter((m) => m.status === "ACTIVE").length} member
-          {members.filter((m) => m.status === "ACTIVE").length === 1 ? "" : "s"}
+          {activeCount === 1 ? t("1 member") : t("{n} members", { n: activeCount })}
         </p>
       </div>
 
       {/* The hub's own face, at the top of its own page. */}
       <div className="card overflow-hidden p-0">
-        <HubCover
-          name={hub.name}
-          color={hub.color}
-          imageUrl={hub.coverImageUrl}
-          by={coverBy}
-          height="h-32"
-        />
+        <HubCover name={hub.name} color={hub.color} imageUrl={hub.coverImageUrl} by={coverBy} height="h-32" />
         {isOwner && (
           <div className="border-t border-[var(--color-border)] p-3">
             <CoverUpload hubId={hubId} hasCover={Boolean(hub.coverImageUrl)} />
@@ -116,13 +112,13 @@ export default async function HubMembersPage({
             className="flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-3"
           >
             <div className="text-xs">
-              <div className="font-semibold">Holidays on the calendar</div>
+              <div className="font-semibold">{t("Holidays on the calendar")}</div>
               <div className="text-[var(--color-text-dim)]">
-                Saint-Valentin, Fête des Mères, Noël, the seasons… with a week&apos;s notice.
+                {t("Valentine's Day, Mother's Day, Christmas, the seasons… with a week's notice.")}
               </div>
             </div>
             <button type="submit" className={`btn shrink-0 px-3 py-1.5 text-xs ${hub.showOccasions ? "btn-primary" : ""}`}>
-              {hub.showOccasions ? "On" : "Off"}
+              {hub.showOccasions ? t("On") : t("Off")}
             </button>
           </form>
         </div>
@@ -131,12 +127,12 @@ export default async function HubMembersPage({
       {isOwner && known.length > 0 && (
         <form action={addKnownMember.bind(null, hubId)} className="card space-y-2 p-4">
           <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-            Add someone you already know on Life Hub
+            {t("Add someone already on Life Hub")}
           </label>
           <div className="flex gap-2">
             <select name="userId" required className="field flex-1" defaultValue="">
               <option value="" disabled>
-                Pick a person…
+                {t("Pick a person…")}
               </option>
               {known.map((k) => (
                 <option key={k.id} value={k.id}>
@@ -145,11 +141,11 @@ export default async function HubMembersPage({
               ))}
             </select>
             <button type="submit" className="btn btn-primary shrink-0">
-              Add
+              {t("Add")}
             </button>
           </div>
           <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-            People you share another hub with. They&apos;re added right away and get a notification.
+            {t("They're added right away and get a notification.")}
           </p>
         </form>
       )}
@@ -157,23 +153,16 @@ export default async function HubMembersPage({
       {isOwner && (
         <form action={inviteMember.bind(null, hubId)} className="card space-y-2 p-4">
           <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-            Invite someone new by email
+            {t("Invite someone new by email")}
           </label>
           <div className="flex gap-2">
-            <input
-              name="email"
-              type="email"
-              required
-              placeholder="someone@example.com"
-              className="input flex-1"
-            />
+            <input name="email" type="email" required placeholder="someone@example.com" className="input flex-1" />
             <button type="submit" className="btn btn-primary shrink-0">
-              Invite
+              {t("Invite")}
             </button>
           </div>
           <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-            They&apos;ll get an email to sign in and accept — works even if they&apos;ve never used
-            Life Hub before.
+            {t("They'll get an email to sign in and accept — works even if they've never used Life Hub before.")}
           </p>
         </form>
       )}
@@ -184,22 +173,17 @@ export default async function HubMembersPage({
             <div className="flex min-w-0 items-center gap-2.5">
               <Avatar name={m.user.name} email={m.user.email} size={28} />
               <div className="min-w-0">
-                <div className="truncate text-sm font-medium">
-                  {m.user.name ?? m.user.email}
-                </div>
+                <div className="truncate text-sm font-medium">{m.user.name ?? m.user.email}</div>
                 <div className="text-[0.68rem] text-[var(--color-text-dim)]">
-                  {m.role === "OWNER" ? "Owner" : "Member"}
-                  {m.status === "INVITED" ? " · invited" : ""}
+                  {m.role === "OWNER" ? t("Owner") : t("Member")}
+                  {m.status === "INVITED" ? ` · ${t("invited")}` : ""}
                 </div>
               </div>
             </div>
             {isOwner && m.user.id !== user.id && (
               <form action={removeMember.bind(null, hubId, m.user.id)}>
-                <button
-                  type="submit"
-                  className="shrink-0 text-[0.68rem] font-semibold text-[var(--color-text-dim)] underline"
-                >
-                  remove
+                <button type="submit" className="shrink-0 text-[0.68rem] font-semibold text-[var(--color-text-dim)] underline">
+                  {t("remove")}
                 </button>
               </form>
             )}
@@ -209,11 +193,8 @@ export default async function HubMembersPage({
 
       {!isOwner && (
         <form action={leaveHub.bind(null, hubId)}>
-          <button
-            type="submit"
-            className="text-xs font-semibold text-[var(--color-danger)] underline"
-          >
-            Leave this hub
+          <button type="submit" className="text-xs font-semibold text-[var(--color-danger)] underline">
+            {t("Leave this hub")}
           </button>
         </form>
       )}

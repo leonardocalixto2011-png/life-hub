@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Celebrate } from "@/components/Celebrate";
 import { money } from "@/lib/format";
 import { setDebtStatus } from "./actions";
+import { useT } from "@/components/I18nProvider";
 
 type Status = "CURRENT" | "DEFAULT" | "PAID_OFF";
 
@@ -32,6 +33,7 @@ export function DebtStatusChip({
   locale?: string;
 }) {
   const router = useRouter();
+  const t = useT();
   const [, startTransition] = useTransition();
   const [cleared, setCleared] = useState(false);
   // Without this the select visibly snapped back to the old value and sat
@@ -63,8 +65,8 @@ export function DebtStatusChip({
     <>
       {cleared && (
         <Celebrate
-          headline="Cleared."
-          detail={name ? `${name} is paid off.` : undefined}
+          headline={t("Cleared.")}
+          detail={name ? t("{name} is paid off.", { name }) : undefined}
           countFrom={balanceCents}
           format={(c) => money(c, currency, locale)}
           onDone={() => setCleared(false)}
@@ -73,7 +75,7 @@ export function DebtStatusChip({
       <select
         value={shown}
         onChange={(e) => change(e.target.value)}
-        aria-label={name ? `Status for ${name}` : `Status for ${id}`}
+        aria-label={t("Status for {name}", { name: name ?? id })}
         className="chip"
         style={
           danger
@@ -87,9 +89,9 @@ export function DebtStatusChip({
               : undefined
         }
       >
-        <option value="CURRENT">current</option>
-        <option value="DEFAULT">in default</option>
-        <option value="PAID_OFF">paid off</option>
+        <option value="CURRENT">{t("current")}</option>
+        <option value="DEFAULT">{t("in default")}</option>
+        <option value="PAID_OFF">{t("paid off")}</option>
       </select>
     </>
   );

@@ -1,15 +1,17 @@
 import Link from "next/link";
 import { Figure } from "@/components/Figure";
-import { addDays, format, startOfDay } from "date-fns";
+import { addDays, startOfDay } from "date-fns";
 
 import { dashboard, hubChrome } from "@/lib/data";
 import { listShifts, planHref, planItemsBetween } from "@/lib/plans";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getLang, getT } from "@/lib/i18n-server";
+import { fmt, fmtDay, fmtTime } from "@/lib/i18n";
 import { countdownLabel, eventTimeRange, money } from "@/lib/format";
 import { TaskListCard } from "@/components/TaskListCard";
 import { VentureChip } from "@/components/VentureChip";
-import { EmptyState, QUICK_ADD_EXAMPLES } from "@/components/EmptyState";
+import { EmptyState, quickAddExamples } from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +38,7 @@ function SectionHead({ title, href, cta }: { title: string; href: string; cta: s
 
 export default async function DashboardPage() {
   const { user, hub } = await requireHub();
+  const [t, lang] = await Promise.all([getT(), getLang()]);
   const now = new Date();
   const todayStart = startOfDay(now);
 
@@ -43,7 +46,7 @@ export default async function DashboardPage() {
     withHub(user.id, (tx) =>
       Promise.all([
         dashboard(tx, hub.id, user.id),
-        planItemsBetween(tx, hub, user.id, now, addDays(todayStart, 21)),
+        planItemsBetween(tx, hub, user.id, now, addDays(todayStart, 21), lang),
         listShifts(tx, hub.id, user.id, todayStart, addDays(todayStart, 1)),
       ]),
     ),
@@ -53,6 +56,8 @@ export default async function DashboardPage() {
   const vOpts = ventures.map((v) => ({ id: v.id, name: v.name }));
   const memberName = new Map(membersRaw.map((m) => [m.id, (m.name ?? m.email ?? "").split(/[\s@]/)[0]]));
   const comingUp = plans.slice(0, 6);
+  const currency = hub.currency;
+  const locale = user.locale ?? "en-CA";
 
   const nothing =
     d.overdue.length +
@@ -72,30 +77,32 @@ export default async function DashboardPage() {
         {/* The greeting is the app addressing a person by name — the clearest
             case for the display serif, and the first thing seen each morning. */}
         <h1 className="display text-2xl">
-          {first ? `Hi, ${first}` : "Today"}
+          {first ? t("Hi, {name}", { name: first }) : t("Today")}
         </h1>
-        <p className="text-xs text-[var(--color-text-dim)]">{format(d.now, "EEEE, MMMM d")}</p>
+        <p className="text-xs text-[var(--color-text-dim)]">
+          {fmt(d.now, lang === "fr" ? "EEEE d MMMM" : "EEEE, MMMM d", lang)}
+        </p>
       </div>
 
-      <nav className="-mx-3 flex gap-1.5 overflow-x-auto px-3" aria-label="Plan">
+      <nav className="-mx-3 flex gap-1.5 overflow-x-auto px-3" aria-label={t("Plan")}>
         {SHORTCUTS.map((s) => (
           <Link key={s.href} href={s.href} className="chip shrink-0">
-            {s.icon} {s.label}
+            {s.icon} {t(s.label)}
           </Link>
         ))}
       </nav>
 
       {nothing && (
         <EmptyState
-          headline="All clear this week."
-          title="Capture something — the box up top understands plain sentences:"
-          examples={QUICK_ADD_EXAMPLES}
+          headline={t("All clear this week.")}
+          title={t("Capture something — the box up top understands plain sentences:")}
+          examples={quickAddExamples(lang)}
         />
       )}
 
       {shifts.length > 0 && (
         <section>
-          <SectionHead title="Schedules today" href="/schedule" cta="Week" />
+          <SectionHead title={t("Schedules today")} href="/schedule" cta={t("Week")} />
           <div className="card divide-y divide-[var(--color-border)]">
             {shifts.map((s) => (
               <div key={s.id} className="flex items-center justify-between px-3 py-2 text-sm">
@@ -103,7 +110,7 @@ export default async function DashboardPage() {
                   {(s.personId && memberName.get(s.personId)) || s.title}
                 </span>
                 <span className="shrink-0 text-xs font-semibold tabular-nums text-[var(--color-text-dim)]">
-                  {format(s.startAt, "H:mm")}–{format(s.endAt, "H:mm")}
+                  {fmtTime(s.startAt, lang)}–{fmtTime(s.endAt, lang)}
                 </span>
               </div>
             ))}
@@ -113,28 +120,28 @@ export default async function DashboardPage() {
 
       {d.overdue.length > 0 && (
         <section>
-          <SectionHead title={`Overdue · ${d.overdue.length}`} href="/tasks" cta="All tasks" />
+          <SectionHead title={`${t("Overdue")} · ${d.overdue.length}`} href="/tasks" cta={t("All tasks")} />
           <TaskListCard tasks={d.overdue} ventures={vOpts} members={membersRaw} />
         </section>
       )}
 
       {d.dueSoon.length > 0 && (
         <section>
-          <SectionHead title="Tasks this week" href="/tasks" cta="All tasks" />
+          <SectionHead title={t("Tasks this week")} href="/tasks" cta={t("All tasks")} />
           <TaskListCard tasks={d.dueSoon} ventures={vOpts} members={membersRaw} />
         </section>
       )}
 
       {d.events.length > 0 && (
         <section>
-          <SectionHead title="This week" href="/calendar" cta="Calendar" />
+          <SectionHead title={t("This week")} href="/calendar" cta={t("Calendar")} />
           <div className="card divide-y divide-[var(--color-border)]">
             {d.events.map((e) => (
               <Link key={e.id} href={`/calendar/${e.id}`} className="block px-3 py-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate font-medium">{e.title}</span>
                   <span className="shrink-0 text-xs text-[var(--color-text-dim)]">
-                    {format(e.startAt, "EEE")} · {eventTimeRange(e.startAt, e.endAt)}
+                    {fmt(e.startAt, "EEE", lang)} · {eventTimeRange(e.startAt, e.endAt, lang)}
                   </span>
                 </div>
                 {e.venture && (
@@ -150,7 +157,7 @@ export default async function DashboardPage() {
 
       {comingUp.length > 0 && (
         <section>
-          <SectionHead title="Coming up" href="/calendar" cta="Calendar" />
+          <SectionHead title={t("Coming up")} href="/calendar" cta={t("Calendar")} />
           <div className="card divide-y divide-[var(--color-border)]">
             {comingUp.map((p) => {
               const target = planHref(p);
@@ -161,8 +168,8 @@ export default async function DashboardPage() {
                     {p.meta ? <span className="text-[var(--color-text-dim)]"> · {p.meta}</span> : null}
                   </span>
                   <span className="shrink-0 text-xs font-semibold text-[var(--color-text-dim)]">
-                    {countdownLabel(p.date)}
-                    {p.planAhead ? <span className="text-[var(--color-primary)]"> · plan</span> : null}
+                    {countdownLabel(p.date, lang)}
+                    {p.planAhead ? <span className="text-[var(--color-primary)]"> · {t("plan")}</span> : null}
                   </span>
                 </>
               );
@@ -182,13 +189,13 @@ export default async function DashboardPage() {
 
       {d.deadlines.length > 0 && (
         <section>
-          <SectionHead title="Upcoming deadlines" href="/deadlines" cta="All" />
+          <SectionHead title={t("Upcoming deadlines")} href="/deadlines" cta={t("All")} />
           <div className="card divide-y divide-[var(--color-border)]">
             {d.deadlines.map((x) => (
               <Link key={x.id} href={`/deadlines/${x.id}`} className="flex items-center justify-between px-3 py-2.5">
                 <span className="truncate">{x.title}</span>
                 <span className="shrink-0 text-xs font-semibold text-[var(--color-text-dim)]">
-                  {countdownLabel(x.dueDate)}
+                  {countdownLabel(x.dueDate, lang)}
                 </span>
               </Link>
             ))}
@@ -198,13 +205,13 @@ export default async function DashboardPage() {
 
       {(d.renewals.length > 0 || d.cancelBys.length > 0) && (
         <section>
-          <SectionHead title="Subscriptions" href="/subscriptions" cta="All" />
+          <SectionHead title={t("Subscriptions")} href="/subscriptions" cta={t("All")} />
           <div className="card divide-y divide-[var(--color-border)]">
             {d.cancelBys.map((s) => (
               <Link key={`c${s.id}`} href={`/subscriptions/${s.id}`} className="flex items-center justify-between px-3 py-2.5">
                 <span className="truncate">{s.name}</span>
                 <span className="shrink-0 text-xs font-semibold text-[var(--color-danger)]">
-                  cancel by {countdownLabel(s.cancelByDate!)}
+                  {t("cancel by")} {countdownLabel(s.cancelByDate!, lang)}
                 </span>
               </Link>
             ))}
@@ -212,7 +219,7 @@ export default async function DashboardPage() {
               <Link key={`r${s.id}`} href={`/subscriptions/${s.id}`} className="flex items-center justify-between px-3 py-2.5">
                 <span className="truncate">{s.name}</span>
                 <span className="shrink-0 text-xs text-[var(--color-text-dim)]">
-                  renews {countdownLabel(s.renewalDate)}
+                  {t("renews")} {countdownLabel(s.renewalDate, lang)}
                 </span>
               </Link>
             ))}
@@ -222,7 +229,7 @@ export default async function DashboardPage() {
 
       {d.debts.length > 0 && (
         <section>
-          <SectionHead title="Payments due" href="/debts" cta="All debts" />
+          <SectionHead title={t("Payments due")} href="/debts" cta={t("All debts")} />
           <div className="card divide-y divide-[var(--color-border)]">
             {d.debts.map((x) => (
               <Link
@@ -233,9 +240,9 @@ export default async function DashboardPage() {
                 <span className="truncate">{x.name}</span>
                 <span className="shrink-0 text-xs font-semibold text-[var(--color-text-dim)]">
                   {x.actualPaymentCents ?? x.minimumPaymentCents
-                    ? `${money(x.actualPaymentCents ?? x.minimumPaymentCents!)} · `
+                    ? `${money(x.actualPaymentCents ?? x.minimumPaymentCents!, currency, locale)} · `
                     : ""}
-                  {countdownLabel(x.dueDate!)}
+                  {countdownLabel(x.dueDate!, lang)}
                 </span>
               </Link>
             ))}
@@ -244,18 +251,24 @@ export default async function DashboardPage() {
       )}
 
       <section>
-        <SectionHead title={`Budget · ${format(d.now, "MMMM")}`} href="/budget" cta="Details" />
+        <SectionHead
+          title={`${t("Budget")} · ${fmt(d.now, "MMMM", lang)}`}
+          href="/budget"
+          cta={t("Details")}
+        />
         <div className="card grid grid-cols-3 divide-x divide-[var(--color-border)] p-0">
           <div className="p-3">
-            <Figure cents={d.budget.income} label="in" tone="ok" />
+            <Figure cents={d.budget.income} currency={currency} locale={locale} label={t("in")} tone="ok" />
           </div>
           <div className="p-3">
-            <Figure cents={d.budget.expense} label="out" />
+            <Figure cents={d.budget.expense} currency={currency} locale={locale} label={t("out")} />
           </div>
           <div className="p-3">
             <Figure
               cents={d.budget.net}
-              label="net"
+              currency={currency}
+              locale={locale}
+              label={t("net")}
               tone={d.budget.net < 0 ? "danger" : "ok"}
             />
           </div>

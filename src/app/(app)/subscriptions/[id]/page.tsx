@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getSubscription, hubChrome } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getT } from "@/lib/i18n-server";
 import { toDateInput } from "@/lib/format";
 import { centsToInput } from "@/lib/money";
 import { SubscriptionForm } from "../SubscriptionForm";
@@ -16,6 +17,7 @@ export default async function SubscriptionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { user, hub } = await requireHub();
+  const t = await getT();
   const { id } = await params;
   const [sub, { ventures, members }] = await Promise.all([
     withHub(user.id, (tx) => getSubscription(tx, hub.id, id)),
@@ -26,7 +28,7 @@ export default async function SubscriptionDetailPage({
   return (
     <div className="space-y-3 p-3">
       <Link href="/subscriptions" className="text-xs font-semibold text-[var(--color-text-dim)]">
-        ← Subscriptions
+        ← {t("Subscriptions")}
       </Link>
       <SubscriptionForm
         ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}

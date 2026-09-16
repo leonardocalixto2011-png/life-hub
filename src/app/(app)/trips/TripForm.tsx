@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 
 import { createTrip, updateTrip } from "./actions";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
+import { useT } from "@/components/I18nProvider";
+import type { T } from "@/lib/i18n";
 
 type Existing = {
   id: string;
@@ -16,37 +18,38 @@ type Existing = {
   visibility: "PRIVATE" | "SHARED";
 };
 
-function Fields({ existing }: { existing?: Existing }) {
+function Fields({ existing, t }: { existing?: Existing; t: T }) {
+  const label = "block text-xs font-semibold text-[var(--color-text-dim)]";
   return (
     <>
       <div className="grid grid-cols-2 gap-3">
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Trip
+        <label className={label}>
+          {t("Trip")}
           <input
             name="title"
             required
             defaultValue={existing?.title}
             className="field mt-1"
-            placeholder="Punta Cana, weekend in Québec…"
+            placeholder={t("Punta Cana, weekend in Québec…")}
           />
         </label>
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Destination
+        <label className={label}>
+          {t("Destination")}
           <input name="destination" defaultValue={existing?.destination ?? ""} className="field mt-1" />
         </label>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Leaving
+        <label className={label}>
+          {t("Leaving")}
           <input type="date" name="startDate" required defaultValue={existing?.startDate} className="field mt-1" />
         </label>
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Back
+        <label className={label}>
+          {t("Back")}
           <input type="date" name="endDate" required defaultValue={existing?.endDate} className="field mt-1" />
         </label>
       </div>
-      <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-        Budget (optional)
+      <label className={label}>
+        {t("Budget (optional)")}
         <input
           name="budget"
           type="number"
@@ -57,8 +60,8 @@ function Fields({ existing }: { existing?: Existing }) {
           className="field mt-1"
         />
       </label>
-      <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-        Notes
+      <label className={label}>
+        {t("Notes")}
         <textarea name="notes" rows={2} defaultValue={existing?.notes ?? ""} className="field mt-1" />
       </label>
       <PrivacyToggle defaultValue={existing?.visibility} />
@@ -67,6 +70,7 @@ function Fields({ existing }: { existing?: Existing }) {
 }
 
 export function TripForm({ existing }: { existing?: Existing }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -75,9 +79,9 @@ export function TripForm({ existing }: { existing?: Existing }) {
     return (
       <form action={updateTrip} className="card space-y-3 p-4">
         <input type="hidden" name="id" value={existing.id} />
-        <Fields existing={existing} />
+        <Fields existing={existing} t={t} />
         <button type="submit" className="btn btn-primary w-full">
-          Save trip
+          {t("Save trip")}
         </button>
       </form>
     );
@@ -86,7 +90,7 @@ export function TripForm({ existing }: { existing?: Existing }) {
   if (!open) {
     return (
       <button onClick={() => setOpen(true)} className="btn btn-primary w-full">
-        + Plan a trip
+        {t("+ Plan a trip")}
       </button>
     );
   }
@@ -108,14 +112,14 @@ export function TripForm({ existing }: { existing?: Existing }) {
 
   return (
     <form onSubmit={onSubmit} className="card space-y-3 p-4">
-      <Fields />
+      <Fields t={t} />
       {error && <p className="text-xs text-[var(--color-danger)]">{error}</p>}
       <div className="flex gap-2">
         <button type="submit" disabled={pending} className="btn btn-primary flex-1">
-          {pending ? "Saving…" : "Create trip"}
+          {pending ? t("Saving…") : t("Create trip")}
         </button>
         <button type="button" onClick={() => setOpen(false)} className="btn">
-          Cancel
+          {t("Cancel")}
         </button>
       </div>
     </form>

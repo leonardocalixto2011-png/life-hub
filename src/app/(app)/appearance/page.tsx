@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { requireHub } from "@/lib/session";
+import { getT } from "@/lib/i18n-server";
 import { resolveThemeId } from "@/lib/themes";
 import { resolveLocale } from "@/lib/locales";
 import { BackgroundUploadForm } from "./BackgroundUploadForm";
@@ -13,55 +14,54 @@ export const dynamic = "force-dynamic";
 
 export default async function AppearancePage() {
   const { user, hub } = await requireHub();
+  const t = await getT();
 
   return (
     <div className="space-y-4 p-3">
       <div>
         <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
-          ← Today
+          ← {t("Today")}
         </Link>
-        <h1 className="mt-1 text-lg font-bold">Appearance</h1>
+        <h1 className="mt-1 text-lg font-bold">{t("Appearance")}</h1>
         <p className="text-xs text-[var(--color-text-dim)]">
-          Your theme and background are yours alone — everyone else in the hub
-          keeps their own.
+          {t("Your theme and background are yours alone — everyone else in the hub keeps their own.")}
         </p>
       </div>
 
       <section className="space-y-2">
         <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-          Theme
+          {t("Theme")}
         </h2>
         <ThemePicker current={resolveThemeId(user.themeId)} />
         <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-          Each theme has a light and a dark version — it follows whatever your
-          phone is set to.
+          {t("Each theme has a light and a dark version — it follows whatever your phone is set to.")}
         </p>
       </section>
 
       <section className="space-y-2">
         <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-          Motion
+          {t("Motion")}
         </h2>
         <MotionToggle />
       </section>
 
       <section className="space-y-2">
         <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-          Number &amp; date format
+          {t("Language & format")}
         </h2>
         <LocalePicker current={resolveLocale(user.locale)} currency={hub.currency} />
       </section>
 
       <section className="space-y-2">
         <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-          Background photo
+          {t("Background photo")}
         </h2>
 
         {user.backgroundImageUrl && (
           <div className="card overflow-hidden p-0">
             <img
               src={user.backgroundImageUrl}
-              alt="Current background"
+              alt={t("Current background")}
               className="h-32 w-full object-cover"
             />
           </div>
@@ -69,7 +69,7 @@ export default async function AppearancePage() {
 
         <div className="card space-y-2 p-3">
           <div className="text-xs font-semibold">
-            {user.backgroundImageUrl ? "Change background" : "Set a background"}
+            {user.backgroundImageUrl ? t("Change background") : t("Set a background")}
           </div>
           <BackgroundUploadForm />
         </div>
@@ -80,7 +80,7 @@ export default async function AppearancePage() {
               type="submit"
               className="w-full text-xs font-semibold text-[var(--color-danger)] underline"
             >
-              Remove background
+              {t("Remove background")}
             </button>
           </form>
         )}

@@ -3,6 +3,8 @@ import Link from "next/link";
 import { hubChrome, listSubscriptions, type SubscriptionWithRefs } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getLang, getT } from "@/lib/i18n-server";
+import type { Lang, T } from "@/lib/i18n";
 import { countdownLabel, daysUntil, money } from "@/lib/format";
 import { BILLING_LABEL, monthlyCents, yearlyCents } from "@/lib/money";
 import { VentureChip } from "@/components/VentureChip";
@@ -12,7 +14,7 @@ import { setSubscriptionStatus } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-function Row({ s }: { s: SubscriptionWithRefs }) {
+function Row({ s, t, lang, locale }: { s: SubscriptionWithRefs; t: T; lang: Lang; locale: string }) {
   const cancelled = s.status === "CANCELLED";
   const cancelDays = s.cancelByDate ? daysUntil(s.cancelByDate) : null;
   const cancelUrgent = cancelDays !== null && cancelDays <= 14;
@@ -35,7 +37,7 @@ function Row({ s }: { s: SubscriptionWithRefs }) {
           {s.owner && <Avatar name={s.owner.name} email={s.owner.email} size={18} />}
           {!cancelled && (
             <span className="text-[0.68rem] text-[var(--color-text-dim)]">
-              renews {countdownLabel(s.renewalDate)}
+              {t("renews")} {countdownLabel(s.renewalDate, lang)}
             </span>
           )}
           {s.cancelByDate && !cancelled && (
@@ -47,22 +49,22 @@ function Row({ s }: { s: SubscriptionWithRefs }) {
                   : undefined
               }
             >
-              cancel by {countdownLabel(s.cancelByDate)}
+              {t("cancel by")} {countdownLabel(s.cancelByDate, lang)}
             </span>
           )}
         </div>
       </div>
 
       <div className="text-right">
-        <div className="font-semibold tabular-nums">{money(s.costCents, s.currency)}</div>
+        <div className="font-semibold tabular-nums">{money(s.costCents, s.currency, locale)}</div>
         <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
-          {BILLING_LABEL[s.billingCycle]}
+          {t(BILLING_LABEL[s.billingCycle])}
         </div>
         <form action={setSubscriptionStatus} className="mt-1">
           <input type="hidden" name="id" value={s.id} />
           <input type="hidden" name="status" value={cancelled ? "ACTIVE" : "CANCELLED"} />
           <button type="submit" className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline">
-            {cancelled ? "reactivate" : "mark cancelled"}
+            {cancelled ? t("reactivate") : t("mark cancelled")}
           </button>
         </form>
       </div>
@@ -72,6 +74,7 @@ function Row({ s }: { s: SubscriptionWithRefs }) {
 
 export default async function SubscriptionsPage() {
   const { user, hub } = await requireHub();
+  const [t, lang] = await Promise.all([getT(), getLang()]);
   const [subs, { ventures, members }] = await Promise.all([
     withHub(user.id, (tx) => listSubscriptions(tx, hub.id, { includeCancelled: true })),
     hubChrome(user.id, hub.id),
@@ -101,39 +104,39 @@ export default async function SubscriptionsPage() {
   return (
     <div className="space-y-4 p-3">
       <div className="flex items-baseline justify-between">
-        <h1 className="text-lg font-bold">Subscriptions</h1>
+        <h1 className="text-lg font-bold">{t("Subscriptions")}</h1>
         <Link href="/debts" className="text-[0.7rem] font-semibold text-[var(--color-primary)]">
-          Debts →
+          {t("Debts")} →
         </Link>
       </div>
 
       <div className="card grid grid-cols-2 divide-x divide-[var(--color-border)] p-0">
         <div className="p-3 text-center">
-          <div className="text-lg font-bold tabular-nums">{money(monthTotal, currency)}</div>
+          <div className="text-lg font-bold tabular-nums">{money(monthTotal, currency, locale)}</div>
           <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
-            per month
+            {t("per month")}
           </div>
         </div>
         <div className="p-3 text-center">
-          <div className="text-lg font-bold tabular-nums">{money(yearTotal, currency)}</div>
+          <div className="text-lg font-bold tabular-nums">{money(yearTotal, currency, locale)}</div>
           <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
-            per year · {active.length} active
+            {t("per year")} · {t("{n} active", { n: active.length })}
           </div>
         </div>
       </div>
       {creep && (
         <div className="card border-[#b45309] p-3 text-xs">
           <span className="font-semibold" style={{ color: "#b45309" }}>
-            ↑ {money(creep.monthly, currency)}/mo added in the last 60 days
+            ↑ {t("{amount}/mo added in the last 60 days", { amount: money(creep.monthly, currency, locale) })}
           </span>{" "}
           <span className="text-[var(--color-text-dim)]">
-            ({creep.count} new subscriptions) — worth a review.
+            {t("({n} new subscriptions) — worth a review.", { n: creep.count })}
           </span>
         </div>
       )}
       {active.some((s) => s.currency !== currency) && (
         <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-          Totals assume {currency}; mixed currencies aren’t converted.
+          {t("Totals assume {currency}; mixed currencies aren't converted.", { currency })}
         </p>
       )}
 
@@ -144,18 +147,18 @@ export default async function SubscriptionsPage() {
 
       {subs.length === 0 && (
         <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
-          No subscriptions tracked. Add the recurring ones so renewals don’t surprise you.
+          {t("No subscriptions tracked. Add the recurring ones so renewals don't surprise you.")}
         </p>
       )}
 
       {active.length > 0 && (
         <section>
           <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Active · {active.length}
+            {t("Active")} · {active.length}
           </h2>
           <div className="card divide-y divide-[var(--color-border)]">
             {active.map((s) => (
-              <Row key={s.id} s={s} />
+              <Row key={s.id} s={s} t={t} lang={lang} locale={locale} />
             ))}
           </div>
         </section>
@@ -164,11 +167,11 @@ export default async function SubscriptionsPage() {
       {cancelled.length > 0 && (
         <section>
           <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Cancelled · {cancelled.length}
+            {t("Cancelled")} · {cancelled.length}
           </h2>
           <div className="card divide-y divide-[var(--color-border)]">
             {cancelled.map((s) => (
-              <Row key={s.id} s={s} />
+              <Row key={s.id} s={s} t={t} lang={lang} locale={locale} />
             ))}
           </div>
         </section>

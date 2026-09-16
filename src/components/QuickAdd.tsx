@@ -11,6 +11,7 @@ import {
 } from "@/app/(app)/quick-actions";
 import { DraftCard } from "@/components/DraftCard";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
+import { useT } from "@/components/I18nProvider";
 
 type Option = { id: string; name: string | null; email?: string | null };
 
@@ -39,6 +40,7 @@ export function QuickAdd({
   aiEnabled: boolean;
 }) {
   const router = useRouter();
+  const t = useT();
   const formRef = useRef<HTMLFormElement>(null);
   const [open, setOpen] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -66,11 +68,11 @@ export function QuickAdd({
           setDrafts(r.drafts);
           if (r.truncated) {
             setMsg(
-              `Only got through ${r.drafts.length} item${r.drafts.length === 1 ? "" : "s"} — the rest didn't fit. Review these, then paste the remainder separately.`,
+              t("Only got through {n} items — the rest didn't fit. Review these, then paste the remainder separately.", { n: r.drafts.length }),
             );
           }
         } else {
-          setMsg(`${r.error} — added as a plain task.`);
+          setMsg(`${r.error} — ${t("added as a plain task.")}`);
           await createTask(fd);
           reset();
           router.refresh();
@@ -85,7 +87,7 @@ export function QuickAdd({
         reset();
         router.refresh();
       } catch (err) {
-        setMsg(err instanceof Error ? err.message : "Could not add");
+        setMsg(err instanceof Error ? err.message : t("Could not add"));
       }
     });
   }
@@ -106,11 +108,11 @@ export function QuickAdd({
     startTransition(async () => {
       const r = await commitDrafts(drafts);
       if (r.ok) {
-        setMsg(`Added ${r.created.length}: ${r.created.join(" · ")}`);
+        setMsg(`${t("Added {n}", { n: r.created.length })}: ${r.created.join(" · ")}`);
         reset();
         router.refresh();
       } else {
-        setMsg(r.error ?? "Could not save");
+        setMsg(r.error ?? t("Could not save"));
       }
     });
   }
@@ -121,13 +123,13 @@ export function QuickAdd({
         <div className="flex gap-2">
           <input
             name="title"
-            placeholder={aiEnabled ? "Add anything — plain sentences work" : "Add a task…"}
+            placeholder={aiEnabled ? t("Add anything — plain sentences work") : t("Add a task…")}
             autoComplete="off"
             className="field"
-            aria-label="Quick add"
+            aria-label={t("Quick add")}
           />
           <button type="submit" className="btn btn-primary" disabled={pending}>
-            {pending ? "…" : "Add"}
+            {pending ? "…" : t("Add")}
           </button>
         </div>
 
@@ -136,25 +138,25 @@ export function QuickAdd({
           onClick={() => setOpen((v) => !v)}
           className="mt-2 text-xs font-semibold text-[var(--color-text-dim)]"
         >
-          {open ? "Hide details" : "+ Details"}
+          {open ? t("Hide details") : t("+ Details")}
         </button>
 
         {open && (
           <div className="mt-2 grid grid-cols-2 gap-2">
             <label className="text-xs font-semibold text-[var(--color-text-dim)]">
-              Due
+              {t("Due")}
               <input type="date" name="dueDate" className="field mt-1" />
             </label>
             <label className="text-xs font-semibold text-[var(--color-text-dim)]">
-              Priority
+              {t("Priority")}
               <select name="priority" defaultValue="MED" className="field mt-1">
-                <option value="LOW">Low</option>
-                <option value="MED">Medium</option>
-                <option value="HIGH">High</option>
+                <option value="LOW">{t("Low")}</option>
+                <option value="MED">{t("Medium")}</option>
+                <option value="HIGH">{t("High")}</option>
               </select>
             </label>
             <label className="text-xs font-semibold text-[var(--color-text-dim)]">
-              Venture
+              {t("Venture")}
               <select name="ventureId" defaultValue="" className="field mt-1">
                 <option value="">—</option>
                 {ventures.map((v) => (
@@ -165,13 +167,13 @@ export function QuickAdd({
               </select>
             </label>
             <label className="text-xs font-semibold text-[var(--color-text-dim)]">
-              Assignee
+              {t("Assignee")}
               <select
                 name="assignedToId"
                 defaultValue={defaultAssigneeId ?? ""}
                 className="field mt-1"
               >
-                <option value="">Shared / unassigned</option>
+                <option value="">{t("Shared / unassigned")}</option>
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name ?? m.email}
@@ -189,7 +191,7 @@ export function QuickAdd({
       {drafts && (
         <div className="mt-3 space-y-2">
           <p className="text-xs font-semibold text-[var(--color-text-dim)]">
-            Review before saving — edit anything:
+            {t("Review before saving — edit anything:")}
           </p>
           {drafts.map((d, i) => (
             <DraftCard
@@ -202,10 +204,10 @@ export function QuickAdd({
           ))}
           <div className="flex gap-2">
             <button onClick={saveDrafts} disabled={pending} className="btn btn-primary flex-1">
-              {pending ? "Saving…" : `Save ${drafts.length}`}
+              {pending ? t("Saving…") : t("Save {n}", { n: drafts.length })}
             </button>
             <button onClick={reset} disabled={pending} className="btn">
-              Cancel
+              {t("Cancel")}
             </button>
           </div>
         </div>

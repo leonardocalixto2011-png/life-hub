@@ -1,10 +1,13 @@
 "use client";
 
+import { useT } from "@/components/I18nProvider";
+
 export function PrivacyToggle({
   defaultValue = "SHARED",
 }: {
   defaultValue?: "PRIVATE" | "SHARED";
 }) {
+  const t = useT();
   return (
     <label className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text-dim)]">
       <input
@@ -15,7 +18,7 @@ export function PrivacyToggle({
         // A checked box submits "PRIVATE"; unchecked submits nothing, so the
         // server default (SHARED) applies — matches the confirmed default.
       />
-      Private (only you see this)
+      {t("Private (only you see this)")}
     </label>
   );
 }

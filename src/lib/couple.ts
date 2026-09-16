@@ -92,6 +92,6 @@ export const SPLIT_OPTIONS = [
 export function splitLabel(pct: number | null): string | null {
   if (pct == null) return null;
   if (pct === 50) return "50/50";
-  if (pct === 0) return "for the other(s)";
+  if (pct === 0) return "for the others";
   return `${pct}/${100 - pct}`;
 }

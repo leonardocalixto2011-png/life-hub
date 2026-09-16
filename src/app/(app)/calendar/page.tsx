@@ -5,6 +5,8 @@ import { hubChrome, listEvents, type EventWithRefs } from "@/lib/data";
 import { planHref, planItemsBetween, type PlanItem } from "@/lib/plans";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getLang, getT } from "@/lib/i18n-server";
+import { fmtDay } from "@/lib/i18n";
 import { EventForm } from "./EventForm";
 import { CalendarList } from "./CalendarList";
 
@@ -19,11 +21,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const to = endOfDay(new Date(now.getTime() + 44 * 864e5)); // ~6 weeks out
 
   const { user, hub } = await requireHub();
+  const [t, lang] = await Promise.all([getT(), getLang()]);
   const [[events, plans], { ventures, members }] = await Promise.all([
     withHub(user.id, (tx) =>
       Promise.all([
         listEvents(tx, hub.id, user.id, { from, to }),
-        planItemsBetween(tx, hub, user.id, from, to),
+        planItemsBetween(tx, hub, user.id, from, to, lang),
       ]),
     ),
     hubChrome(user.id, hub.id),
@@ -49,7 +52,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, s]) => ({
       key,
-      label: isSameDay(s.date, now) ? "Today" : format(s.date, "EEEE, MMM d"),
+      label: isSameDay(s.date, now) ? t("Today") : fmtDay(s.date, lang),
       items: s.items,
       plans: s.plans.map((p) => ({
         key: p.key,
@@ -71,13 +74,13 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   return (
     <div className="space-y-4 p-3">
       <div className="flex items-baseline justify-between">
-        <h1 className="text-lg font-bold">Calendar</h1>
+        <h1 className="text-lg font-bold">{t("Calendar")}</h1>
         <div className="flex gap-3 text-[0.7rem] font-semibold">
           <Link href="/calendar/dates" className="text-[var(--color-primary)]">
-            🎂 Special dates
+            🎂 {t("Special dates")}
           </Link>
           <Link href="/schedule" className="text-[var(--color-primary)]">
-            🕐 Schedules
+            🕐 {t("Schedules")}
           </Link>
         </div>
       </div>
@@ -91,7 +94,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
       {days.length === 0 && (
         <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
-          Nothing in the next six weeks. Add an event above.
+          {t("Nothing in the next six weeks. Add an event above.")}
         </p>
       )}
 

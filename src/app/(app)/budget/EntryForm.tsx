@@ -7,6 +7,7 @@ import { createEntry, updateEntry } from "./actions";
 import { toDateInput } from "@/lib/format";
 import { centsToInput } from "@/lib/money";
 import { BUDGET_CATEGORIES, SPLIT_OPTIONS } from "@/lib/couple";
+import { useT } from "@/components/I18nProvider";
 import type { BudgetEntryWithRefs } from "@/lib/data";
 
 type Member = { id: string; name: string | null; email: string | null };
@@ -27,17 +28,19 @@ export function EntryForm({
   onCancel?: () => void;
 }) {
   const router = useRouter();
+  const t = useT();
   const formRef = useRef<HTMLFormElement>(null);
   const [open, setOpen] = useState(Boolean(entry));
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   // Sharing only means something with someone to share with.
   const shared = members.length > 1;
+  const label = "block text-xs font-semibold text-[var(--color-text-dim)]";
 
   if (!open) {
     return (
       <button onClick={() => setOpen(true)} className="btn btn-primary w-full">
-        + Log income / expense
+        {t("+ Log income / expense")}
       </button>
     );
   }
@@ -63,7 +66,7 @@ export function EntryForm({
         }
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not save");
+        setError(err instanceof Error ? err.message : t("Could not save"));
       }
     });
   }
@@ -74,15 +77,15 @@ export function EntryForm({
       {/* No currency field: the schema defaults it to CAD and nothing in the
           app renders a second currency. */}
       <div className="grid grid-cols-2 gap-2">
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Type
+        <label className={label}>
+          {t("Type")}
           <select name="type" defaultValue={entry?.type ?? "EXPENSE"} className="field mt-1">
-            <option value="EXPENSE">Expense</option>
-            <option value="INCOME">Income</option>
+            <option value="EXPENSE">{t("Expense")}</option>
+            <option value="INCOME">{t("Income")}</option>
           </select>
         </label>
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Amount
+        <label className={label}>
+          {t("Amount")}
           <input
             name="amount"
             type="number"
@@ -98,24 +101,24 @@ export function EntryForm({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Category
+        <label className={label}>
+          {t("Category")}
           <input
             name="category"
             required
             list="budget-categories"
             defaultValue={entry?.category ?? ""}
             className="field mt-1"
-            placeholder="Groceries, Outings…"
+            placeholder={t("Groceries, Outings…")}
           />
           <datalist id="budget-categories">
             {BUDGET_CATEGORIES.map((c) => (
-              <option key={c} value={c} />
+              <option key={c} value={t(c)} />
             ))}
           </datalist>
         </label>
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Venture
+        <label className={label}>
+          {t("Venture")}
           <select name="ventureId" defaultValue={entry?.ventureId ?? ""} className="field mt-1">
             <option value="">—</option>
             {ventures.map((v) => (
@@ -129,13 +132,9 @@ export function EntryForm({
 
       {shared && (
         <div className="grid grid-cols-2 gap-3">
-          <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-            Paid by
-            <select
-              name="paidById"
-              defaultValue={entry?.paidById ?? currentUserId}
-              className="field mt-1"
-            >
+          <label className={label}>
+            {t("Paid by")}
+            <select name="paidById" defaultValue={entry?.paidById ?? currentUserId} className="field mt-1">
               {members.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name ?? m.email}
@@ -143,8 +142,8 @@ export function EntryForm({
               ))}
             </select>
           </label>
-          <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-            Split
+          <label className={label}>
+            {t("Split")}
             <select
               name="split"
               defaultValue={entry?.payerSharePct == null ? "none" : String(entry.payerSharePct)}
@@ -152,7 +151,7 @@ export function EntryForm({
             >
               {SPLIT_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
-                  {o.label}
+                  {t(o.label)}
                 </option>
               ))}
             </select>
@@ -161,17 +160,12 @@ export function EntryForm({
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Date
-          <input
-            type="date"
-            name="date"
-            defaultValue={toDateInput(entry?.date ?? new Date())}
-            className="field mt-1"
-          />
+        <label className={label}>
+          {t("Date")}
+          <input type="date" name="date" defaultValue={toDateInput(entry?.date ?? new Date())} className="field mt-1" />
         </label>
-        <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-          Note
+        <label className={label}>
+          {t("Note")}
           <input name="description" defaultValue={entry?.description ?? ""} className="field mt-1" />
         </label>
       </div>
@@ -180,10 +174,10 @@ export function EntryForm({
 
       <div className="flex gap-2">
         <button type="submit" disabled={pending} className="btn btn-primary flex-1">
-          {pending ? "Saving…" : entry ? "Save changes" : "Add entry"}
+          {pending ? t("Saving…") : entry ? t("Save changes") : t("Add entry")}
         </button>
         <button type="button" onClick={close} className="btn">
-          Cancel
+          {t("Cancel")}
         </button>
       </div>
     </form>

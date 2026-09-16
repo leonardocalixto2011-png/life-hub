@@ -8,6 +8,7 @@ import { dueLabel } from "@/lib/format";
 import { isPlanAhead, occasionsBetween } from "@/lib/occasions";
 import { nextOccurrence } from "@/lib/plans";
 import { logInfo, reportError } from "@/lib/observability";
+import { langOf, translate } from "@/lib/i18n";
 
 /**
  * Per-item dated reminders — the thing `Deadline.remindDaysBefore` promised
@@ -53,11 +54,13 @@ type DueReminder = {
  */
 export async function collectDueReminders(
   userId: string,
-): Promise<{ due: DueReminder[]; multiHub: boolean }> {
+): Promise<{ due: DueReminder[]; multiHub: boolean; lang: "en" | "fr" }> {
   const hubs = await listMyHubs(userId);
-  if (hubs.length === 0) return { due: [], multiHub: false };
+  if (hubs.length === 0) return { due: [], multiHub: false, lang: "en" };
 
   const today = startOfDay(new Date());
+  const person = await prisma.user.findUnique({ where: { id: userId }, select: { locale: true } });
+  const lang = langOf(person?.locale);
 
   const perHub = await withHub(userId, (tx) =>
     Promise.all(
@@ -118,7 +121,7 @@ export async function collectDueReminders(
   const occasionHub = hubs.find((h) => h.showOccasions);
   const target = new Date(today.getTime() + OCCASION_NOTICE_DAYS * 864e5);
   const fromOccasions = occasionHub
-    ? occasionsBetween(target, target)
+    ? occasionsBetween(target, target, lang)
         .filter((o) => isPlanAhead(o.kind))
         .map((o) => ({
           entityType: ENTITY_OCCASION,
@@ -133,7 +136,7 @@ export async function collectDueReminders(
 
   const multiHub = hubs.length > 1;
   const candidates = [...perHub.flat(), ...fromOccasions];
-  if (candidates.length === 0) return { due: [], multiHub };
+  if (candidates.length === 0) return { due: [], multiHub, lang };
 
   const alreadySent = await prisma.reminderSent.findMany({
     where: {
@@ -150,6 +153,7 @@ export async function collectDueReminders(
   return {
     due: candidates.filter((c) => !sent.has(key(c))),
     multiHub,
+    lang,
   };
 }
 
@@ -163,10 +167,12 @@ export async function dispatchReminders(userId: string): Promise<number> {
 
   let due: DueReminder[];
   let multiHub = false;
+  let lang: "en" | "fr" = "en";
   try {
     const collected = await collectDueReminders(userId);
     due = collected.due;
     multiHub = collected.multiHub;
+    lang = collected.lang;
   } catch (err) {
     await reportError("reminders.collect_failed", err, { userId });
     return 0;
@@ -174,14 +180,24 @@ export async function dispatchReminders(userId: string): Promise<number> {
 
   for (const r of due) {
     try {
+      const tr = (k: string, v?: Record<string, string | number>) => translate(lang, k, v);
       const when =
-        r.daysBefore === 0 ? "Today" : `In ${r.daysBefore} day${r.daysBefore === 1 ? "" : "s"}`;
+        r.daysBefore === 0
+          ? tr("Today")
+          : r.daysBefore === 1
+            ? tr("Tomorrow")
+            : tr("In {n} days", { n: r.daysBefore });
       const result = await sendPushToUser(userId, {
-        title: r.entityType === ENTITY_DEADLINE ? (r.daysBefore === 0 ? "Due today" : `Due ${when.toLowerCase()}`) : when,
+        title:
+          r.entityType === ENTITY_DEADLINE
+            ? r.daysBefore === 0
+              ? tr("Due today")
+              : tr("Due in {n} days", { n: r.daysBefore })
+            : when,
         body:
           multiHub && r.entityType !== ENTITY_OCCASION
-            ? `${r.title} — ${dueLabel(r.dueDate)} [${r.hubName}]`
-            : `${r.title} — ${dueLabel(r.dueDate)}`,
+            ? `${r.title} — ${dueLabel(r.dueDate, lang)} [${r.hubName}]`
+            : `${r.title} — ${dueLabel(r.dueDate, lang)}`,
         url: r.url,
         tag: `reminder-${r.entityType}-${r.entityId}-${r.daysBefore}`,
       });

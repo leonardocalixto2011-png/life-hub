@@ -25,7 +25,7 @@ export default function Loading() {
   return (
     <div className="space-y-4 p-3">
       <span className="sr-only" role="status" aria-live="polite">
-        Loading
+        …
       </span>
 
       <Bar w="w-32" h="h-6" />

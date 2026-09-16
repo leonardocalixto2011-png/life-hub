@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { requireHub, listMyHubs, listPendingInvites } from "@/lib/session";
+import { getT } from "@/lib/i18n-server";
 import { hubChrome } from "@/lib/data";
 import { QuickAdd } from "@/components/QuickAdd";
 import { BottomNav } from "@/components/BottomNav";
@@ -15,6 +16,7 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const { user, hub } = await requireHub();
+  const t = await getT();
   const [{ ventures, members, reviewCount }, hubs, invites] = await Promise.all([
     hubChrome(user.id, hub.id),
     listMyHubs(user.id),
@@ -78,7 +80,7 @@ export default async function AppLayout({
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-2.5 backdrop-blur">
         <HubSwitcher hubs={hubs} currentHubId={hub.id} pendingInvites={invites.length} />
         <div className="flex items-center gap-3">
-          <Link href="/inbox" aria-label="Review inbox" className="relative text-lg leading-none">
+          <Link href="/inbox" aria-label={t("Review inbox")} className="relative text-lg leading-none">
             📥
             {reviewCount > 0 && (
               <span className="absolute -right-1.5 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-[var(--color-danger)] px-1 text-[0.6rem] font-bold text-white">
@@ -112,11 +114,11 @@ export default async function AppLayout({
             }}
           >
             <span className="min-w-0 truncate">
-              <span className="font-semibold">{invites[0].invitedBy}</span> invited you to{" "}
+              <span className="font-semibold">{invites[0].invitedBy}</span> {t("invited you to")}{" "}
               <span className="font-semibold">{invites[0].name}</span>
-              {invites.length > 1 ? ` (+${invites.length - 1} more)` : ""}
+              {invites.length > 1 ? ` (+${invites.length - 1})` : ""}
             </span>
-            <span className="shrink-0 font-semibold text-[var(--color-primary)]">Join →</span>
+            <span className="shrink-0 font-semibold text-[var(--color-primary)]">{t("Join")} →</span>
           </Link>
         )}
 

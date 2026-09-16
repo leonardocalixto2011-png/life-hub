@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { money } from "@/lib/format";
 import { logDebtPayment } from "./actions";
+import { useT } from "@/components/I18nProvider";
 
 /** One-tap "log the usual payment" for a debt row. */
 export function LogPaymentButton({
@@ -19,6 +20,7 @@ export function LogPaymentButton({
   locale: string;
 }) {
   const router = useRouter();
+  const t = useT();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState(false);
 
@@ -44,7 +46,7 @@ export function LogPaymentButton({
       disabled={pending}
       className="mt-1 text-[0.62rem] font-semibold text-[var(--color-primary)] underline disabled:opacity-50"
     >
-      {pending ? "logging…" : error ? "failed — retry" : `log ${money(amountCents, currency, locale)} payment`}
+      {pending ? t("logging…") : error ? t("failed — retry") : t("log {amount} payment", { amount: money(amountCents, currency, locale) })}
     </button>
   );
 }

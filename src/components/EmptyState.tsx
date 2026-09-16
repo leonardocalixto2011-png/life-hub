@@ -1,3 +1,5 @@
+import type { Lang } from "@/lib/i18n";
+
 /**
  * Empty state that teaches: a headline in the app's own voice, then the
  * example phrases the quick-add box actually parses.
@@ -38,8 +40,22 @@ export function EmptyState({
   );
 }
 
-export const QUICK_ADD_EXAMPLES = [
-  "Pay Hydro-Québec $180 by Sept 15",
-  "Renew Netflix Oct 3",
-  "Call the accountant Friday 10am",
-];
+const EXAMPLES: Record<Lang, string[]> = {
+  en: [
+    "Pay Hydro-Québec $180 by Sept 15",
+    "Renew Netflix Oct 3",
+    "Call the accountant Friday 10am",
+  ],
+  fr: [
+    "Payer Hydro-Québec 180 $ avant le 15 sept",
+    "Renouveler Netflix le 3 oct",
+    "Appeler le comptable vendredi 10 h",
+  ],
+};
+
+/** The quick-add box parses either language, so the examples follow the person. */
+export function quickAddExamples(lang: Lang): string[] {
+  return EXAMPLES[lang];
+}
+
+export const QUICK_ADD_EXAMPLES = EXAMPLES.en;

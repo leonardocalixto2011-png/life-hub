@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { eventTimeRange, initials } from "@/lib/format";
 import { VentureChip } from "@/components/VentureChip";
+import { useLang, useT } from "@/components/I18nProvider";
 import type { EventWithRefs } from "@/lib/data";
 import { deleteEvents } from "./actions";
 
@@ -42,13 +43,13 @@ function AttendeeDots({ ids, members }: { ids: string[]; members: Member[] }) {
   );
 }
 
-function EventBody({ e, members }: { e: EventWithRefs; members: Member[] }) {
+function EventBody({ e, members, lang }: { e: EventWithRefs; members: Member[]; lang: "en" | "fr" }) {
   return (
     <>
       <div className="flex items-start justify-between gap-2">
         <span className="font-medium">{e.title}</span>
         <span className="shrink-0 text-xs font-semibold text-[var(--color-text-dim)]">
-          {eventTimeRange(e.startAt, e.endAt)}
+          {eventTimeRange(e.startAt, e.endAt, lang)}
         </span>
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -62,7 +63,7 @@ function EventBody({ e, members }: { e: EventWithRefs; members: Member[] }) {
   );
 }
 
-function Plans({ plans, spaced }: { plans: PlanChip[]; spaced: boolean }) {
+function Plans({ plans, spaced, planWord }: { plans: PlanChip[]; spaced: boolean; planWord: string }) {
   if (plans.length === 0) return null;
   return (
     <div className={`flex flex-wrap gap-1.5 ${spaced ? "mb-2" : ""}`}>
@@ -71,7 +72,7 @@ function Plans({ plans, spaced }: { plans: PlanChip[]; spaced: boolean }) {
           <Link key={p.key} href={p.href} className="chip">
             {p.label}
             {p.planAhead && (
-              <span className="font-semibold text-[var(--color-primary)]"> · plan</span>
+              <span className="font-semibold text-[var(--color-primary)]"> · {planWord}</span>
             )}
           </Link>
         ) : (
@@ -86,6 +87,8 @@ function Plans({ plans, spaced }: { plans: PlanChip[]; spaced: boolean }) {
 
 export function CalendarList({ days, members }: { days: Day[]; members: Member[] }) {
   const router = useRouter();
+  const t = useT();
+  const lang = useLang();
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
@@ -122,14 +125,14 @@ export function CalendarList({ days, members }: { days: Day[]; members: Member[]
         <div className="flex justify-end">
           {selecting ? (
             <button onClick={exitSelect} className="text-xs font-semibold text-[var(--color-text-dim)]">
-              Cancel
+              {t("Cancel")}
             </button>
           ) : (
             <button
               onClick={() => setSelecting(true)}
               className="text-xs font-semibold text-[var(--color-primary)]"
             >
-              Select
+              {t("Select")}
             </button>
           )}
         </div>
@@ -140,7 +143,7 @@ export function CalendarList({ days, members }: { days: Day[]; members: Member[]
           <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
             {label}
           </h2>
-          <Plans plans={plans} spaced={items.length > 0} />
+          <Plans plans={plans} spaced={items.length > 0} planWord={t("plan")} />
           {items.length > 0 && (
             <div className="space-y-2">
               {items.map((e) =>
@@ -157,12 +160,12 @@ export function CalendarList({ days, members }: { days: Day[]; members: Member[]
                   >
                     <input type="checkbox" checked={selected.has(e.id)} readOnly className="mt-0.5 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <EventBody e={e} members={members} />
+                      <EventBody e={e} members={members} lang={lang} />
                     </div>
                   </button>
                 ) : (
                   <Link key={e.id} href={`/calendar/${e.id}`} className="card block p-3">
-                    <EventBody e={e} members={members} />
+                    <EventBody e={e} members={members} lang={lang} />
                   </Link>
                 ),
               )}
@@ -178,7 +181,7 @@ export function CalendarList({ days, members }: { days: Day[]; members: Member[]
             disabled={pending}
             className="btn w-full bg-[var(--color-danger)] text-white"
           >
-            {pending ? "Deleting…" : `Delete ${selected.size} selected`}
+            {pending ? t("Deleting…") : t("Delete {n} selected", { n: selected.size })}
           </button>
         </div>
       )}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 
 import { switchHub } from "@/app/(app)/hubs/actions";
+import { useT } from "@/components/I18nProvider";
 
 type Hub = { id: string; name: string; color: string };
 
@@ -18,7 +19,10 @@ export function HubSwitcher({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const t = useT();
   const current = hubs.find((h) => h.id === currentHubId) ?? hubs[0];
+
+  const item = "block rounded-lg px-2 py-2 text-sm text-[var(--color-text-dim)]";
 
   return (
     <div ref={ref} className="relative">
@@ -35,7 +39,7 @@ export function HubSwitcher({
         <span className="text-[0.6rem] text-[var(--color-text-dim)]">▾</span>
         {pendingInvites > 0 && (
           <span
-            aria-label={`${pendingInvites} pending invite${pendingInvites === 1 ? "" : "s"}`}
+            aria-label={t("{n} pending invitations", { n: pendingInvites })}
             className="grid h-4 min-w-4 place-items-center rounded-full bg-[var(--color-danger)] px-1 text-[0.6rem] font-bold text-white"
           >
             {pendingInvites}
@@ -73,43 +77,27 @@ export function HubSwitcher({
                   onClick={() => setOpen(false)}
                   className="block rounded-lg px-2 py-2 text-sm font-semibold text-[var(--color-danger)]"
                 >
-                  Invitations · {pendingInvites}
+                  {t("Invitations")} · {pendingInvites}
                 </Link>
               )}
-              <Link
-                href={`/hubs/${currentHubId}/members`}
-                onClick={() => setOpen(false)}
-                className="block rounded-lg px-2 py-2 text-sm text-[var(--color-text-dim)]"
-              >
-                Members & invites
+              <Link href={`/hubs/${currentHubId}/members`} onClick={() => setOpen(false)} className={item}>
+                {t("Members & invites")}
               </Link>
-              <Link
-                href="/mine"
-                onClick={() => setOpen(false)}
-                className="block rounded-lg px-2 py-2 text-sm text-[var(--color-text-dim)]"
-              >
-                Mine, across hubs
+              <Link href="/mine" onClick={() => setOpen(false)} className={item}>
+                {t("Mine, across hubs")}
               </Link>
-              <Link
-                href="/mail"
-                onClick={() => setOpen(false)}
-                className="block rounded-lg px-2 py-2 text-sm text-[var(--color-text-dim)]"
-              >
-                Connected mailboxes
+              <Link href="/mail" onClick={() => setOpen(false)} className={item}>
+                {t("Connected mailboxes")}
               </Link>
-              <Link
-                href="/debts"
-                onClick={() => setOpen(false)}
-                className="block rounded-lg px-2 py-2 text-sm text-[var(--color-text-dim)]"
-              >
-                Debts
+              <Link href="/debts" onClick={() => setOpen(false)} className={item}>
+                {t("Debts")}
               </Link>
               <Link
                 href="/hubs/new"
                 onClick={() => setOpen(false)}
                 className="block rounded-lg px-2 py-2 text-sm font-semibold text-[var(--color-primary)]"
               >
-                + Create a hub
+                {t("+ Create a hub")}
               </Link>
             </div>
           </div>

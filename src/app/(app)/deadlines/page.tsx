@@ -3,6 +3,8 @@ import Link from "next/link";
 import { hubChrome, listDeadlines, type DeadlineWithRefs } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getLang, getT } from "@/lib/i18n-server";
+import type { Lang, T } from "@/lib/i18n";
 import { daysUntil } from "@/lib/format";
 import { Countdown } from "@/components/Countdown";
 import { VentureChip } from "@/components/VentureChip";
@@ -11,7 +13,7 @@ import { toggleDeadlineDone } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-function Row({ d }: { d: DeadlineWithRefs }) {
+function Row({ d, t, lang }: { d: DeadlineWithRefs; t: T; lang: Lang }) {
   const done = Boolean(d.doneAt);
   return (
     <div className="flex items-start gap-3 px-3 py-3">
@@ -20,7 +22,7 @@ function Row({ d }: { d: DeadlineWithRefs }) {
         <input type="hidden" name="done" value={String(!done)} />
         <button
           type="submit"
-          aria-label={done ? "Mark not done" : "Mark done"}
+          aria-label={done ? t("Mark not done") : t("Mark done")}
           className="mt-0.5 grid h-5 w-5 place-items-center rounded-full border text-white"
           style={{
             borderColor: done ? "var(--color-ok)" : "var(--color-border)",
@@ -46,7 +48,7 @@ function Row({ d }: { d: DeadlineWithRefs }) {
           {d.venture && <VentureChip name={d.venture.name} color={d.venture.color} />}
           {!done && d.remindDaysBefore.length > 0 && (
             <span className="text-[0.68rem] text-[var(--color-text-dim)]">
-              reminds {d.remindDaysBefore.join("/")}d before
+              {t("reminds {days}d before", { days: d.remindDaysBefore.join("/") })}
             </span>
           )}
         </div>
@@ -55,29 +57,14 @@ function Row({ d }: { d: DeadlineWithRefs }) {
         )}
       </div>
 
-      <Countdown date={d.dueDate} done={done} />
+      <Countdown date={d.dueDate} done={done} lang={lang} />
     </div>
-  );
-}
-
-function Section({ title, items }: { title: string; items: DeadlineWithRefs[] }) {
-  if (items.length === 0) return null;
-  return (
-    <section>
-      <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-        {title} · {items.length}
-      </h2>
-      <div className="card divide-y divide-[var(--color-border)]">
-        {items.map((d) => (
-          <Row key={d.id} d={d} />
-        ))}
-      </div>
-    </section>
   );
 }
 
 export default async function DeadlinesPage() {
   const { user, hub } = await requireHub();
+  const [t, lang] = await Promise.all([getT(), getLang()]);
   const [deadlines, { ventures }] = await Promise.all([
     withHub(user.id, (tx) => listDeadlines(tx, hub.id, user.id, { includeDone: true })),
     hubChrome(user.id, hub.id),
@@ -85,26 +72,40 @@ export default async function DeadlinesPage() {
 
   const open = deadlines.filter((d) => !d.doneAt);
   const done = deadlines.filter((d) => d.doneAt);
-  const overdue = open.filter((d) => daysUntil(d.dueDate) < 0);
-  const soon = open.filter((d) => daysUntil(d.dueDate) >= 0 && daysUntil(d.dueDate) <= 7);
-  const later = open.filter((d) => daysUntil(d.dueDate) > 7);
+  const sections = [
+    { title: t("Overdue"), items: open.filter((d) => daysUntil(d.dueDate) < 0) },
+    { title: t("Next 7 days"), items: open.filter((d) => daysUntil(d.dueDate) >= 0 && daysUntil(d.dueDate) <= 7) },
+    { title: t("Later"), items: open.filter((d) => daysUntil(d.dueDate) > 7) },
+    { title: t("Done"), items: done },
+  ];
 
   return (
     <div className="space-y-4 p-3">
-      <h1 className="text-lg font-bold">Deadlines</h1>
+      <h1 className="text-lg font-bold">{t("Deadlines")}</h1>
 
       <DeadlineForm ventures={ventures.map((v) => ({ id: v.id, name: v.name }))} />
 
       {deadlines.length === 0 && (
         <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
-          No deadlines yet. Add filings, renewals, permits — anything with a hard date.
+          {t("No deadlines yet. Add filings, renewals, permits — anything with a hard date.")}
         </p>
       )}
 
-      <Section title="Overdue" items={overdue} />
-      <Section title="Next 7 days" items={soon} />
-      <Section title="Later" items={later} />
-      <Section title="Done" items={done} />
+      {sections.map(
+        (s) =>
+          s.items.length > 0 && (
+            <section key={s.title}>
+              <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+                {s.title} · {s.items.length}
+              </h2>
+              <div className="card divide-y divide-[var(--color-border)]">
+                {s.items.map((d) => (
+                  <Row key={d.id} d={d} t={t} lang={lang} />
+                ))}
+              </div>
+            </section>
+          ),
+      )}
     </div>
   );
 }

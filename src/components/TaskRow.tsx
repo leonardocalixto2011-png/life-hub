@@ -10,6 +10,7 @@ import { dueLabel, isOverdue, money, toDateInput } from "@/lib/format";
 import { showToast } from "@/components/Toast";
 import { Avatar } from "@/components/Avatar";
 import { VentureChip } from "@/components/VentureChip";
+import { useLang, useT } from "@/components/I18nProvider";
 
 type Venture = { id: string; name: string };
 type Member = { id: string; name: string | null; email: string | null };
@@ -39,6 +40,8 @@ export function TaskRow({
   members?: Member[];
 }) {
   const router = useRouter();
+  const t = useT();
+  const lang = useLang();
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
   const [dx, setDx] = useState(0);
@@ -80,7 +83,7 @@ export function TaskRow({
   function completeBySwipe() {
     setDone(true);
     showToast({
-      message: "Marked done",
+      message: t("Marked done"),
       onAction: () => setDone(false),
     });
   }
@@ -90,7 +93,7 @@ export function TaskRow({
     const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
     act(() => setTaskFields({ id: task.id, dueDate: tomorrow }));
     showToast({
-      message: "Snoozed to tomorrow",
+      message: t("Snoozed to tomorrow"),
       onAction: () => act(() => setTaskFields({ id: task.id, dueDate: prev })),
     });
   }
@@ -125,8 +128,8 @@ export function TaskRow({
         className="pointer-events-none absolute inset-0 flex items-center justify-between px-4 text-xs font-bold uppercase tracking-wide"
         aria-hidden
       >
-        <span style={{ color: "var(--color-ok)", opacity: dx > 12 ? 1 : 0 }}>✓ Done</span>
-        <span style={{ color: "#b45309", opacity: dx < -12 ? 1 : 0 }}>Tomorrow ⏰</span>
+        <span style={{ color: "var(--color-ok)", opacity: dx > 12 ? 1 : 0 }}>✓ {t("Done")}</span>
+        <span style={{ color: "#b45309", opacity: dx < -12 ? 1 : 0 }}>{t("Tomorrow")} ⏰</span>
       </div>
 
       <div
@@ -155,7 +158,7 @@ export function TaskRow({
             onClick={toggle}
             // Deliberately not disabled while pending: the optimistic tick is
             // already showing, so disabling would only block the undo tap.
-            aria-label={done ? "Mark not done" : "Mark done"}
+            aria-label={done ? t("Mark not done") : t("Mark done")}
             aria-pressed={done}
             data-done={done ? "" : undefined}
             className="tick mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border"
@@ -191,18 +194,18 @@ export function TaskRow({
               {task.venture ? (
                 <VentureChip name={task.venture.name} color={task.venture.color} />
               ) : canEdit ? (
-                <span className="chip text-[var(--color-text-dim)]">+ venture</span>
+                <span className="chip text-[var(--color-text-dim)]">+ {t("venture")}</span>
               ) : null}
               {due ? (
                 <span
                   className="text-[0.72rem] font-semibold"
                   style={{ color: overdue ? "var(--color-danger)" : "var(--color-text-dim)" }}
                 >
-                  {dueLabel(due)}
+                  {dueLabel(due, lang)}
                 </span>
               ) : canEdit ? (
                 <span className="text-[0.72rem] font-semibold text-[var(--color-text-dim)]">
-                  + date
+                  + {t("date")}
                 </span>
               ) : null}
               {task.amountCents != null && (
@@ -220,7 +223,7 @@ export function TaskRow({
         {editing && canEdit && (
           <div className="grid grid-cols-2 gap-2 border-t border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
             <label className="text-[0.68rem] font-semibold text-[var(--color-text-dim)]">
-              Due
+              {t("Due")}
               <input
                 type="date"
                 defaultValue={due ? toDateInput(due) : ""}
@@ -231,7 +234,7 @@ export function TaskRow({
               />
             </label>
             <label className="text-[0.68rem] font-semibold text-[var(--color-text-dim)]">
-              Priority
+              {t("Priority")}
               <select
                 defaultValue={task.priority}
                 onChange={(e) =>
@@ -244,13 +247,13 @@ export function TaskRow({
                 }
                 className="field mt-1"
               >
-                <option value="LOW">Low</option>
-                <option value="MED">Medium</option>
-                <option value="HIGH">High</option>
+                <option value="LOW">{t("Low")}</option>
+                <option value="MED">{t("Medium")}</option>
+                <option value="HIGH">{t("High")}</option>
               </select>
             </label>
             <label className="text-[0.68rem] font-semibold text-[var(--color-text-dim)]">
-              Venture
+              {t("Venture")}
               <select
                 defaultValue={task.ventureId ?? ""}
                 onChange={(e) =>
@@ -267,7 +270,7 @@ export function TaskRow({
               </select>
             </label>
             <label className="text-[0.68rem] font-semibold text-[var(--color-text-dim)]">
-              Assignee
+              {t("Assignee")}
               <select
                 defaultValue={task.assignedToId ?? ""}
                 onChange={(e) =>
@@ -275,7 +278,7 @@ export function TaskRow({
                 }
                 className="field mt-1"
               >
-                <option value="">Shared</option>
+                <option value="">{t("Shared")}</option>
                 {members!.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name ?? m.email}
@@ -288,7 +291,7 @@ export function TaskRow({
               onClick={() => setEditing(false)}
               className="col-span-2 text-[0.68rem] font-semibold text-[var(--color-primary)]"
             >
-              Done editing
+              {t("Done editing")}
             </button>
           </div>
         )}

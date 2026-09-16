@@ -6,6 +6,8 @@ import "./globals.css";
 import { getUser } from "@/lib/session";
 import { resolveThemeId, themeColor } from "@/lib/themes";
 import { MOTION_INIT_SCRIPT } from "@/lib/motion";
+import { langOf } from "@/lib/i18n";
+import { I18nProvider } from "@/components/I18nProvider";
 
 /**
  * Two faces, strictly rationed — see the design direction.
@@ -60,10 +62,11 @@ export async function generateViewport(): Promise<Viewport> {
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   // Signed-out routes (/login) resolve to the default palette.
   const user = await getUser();
+  const lang = langOf(user?.locale);
 
   return (
     <html
-      lang="en"
+      lang={lang}
       data-theme={resolveThemeId(user?.themeId)}
       className={`${sans.variable} ${display.variable} h-full antialiased`}
     >
@@ -81,7 +84,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <Script id="motion-init" strategy="beforeInteractive">
           {MOTION_INIT_SCRIPT}
         </Script>
-        {children}
+        <I18nProvider lang={lang}>{children}</I18nProvider>
       </body>
     </html>
   );

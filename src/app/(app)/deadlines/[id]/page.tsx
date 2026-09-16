@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getDeadline, hubChrome } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getT } from "@/lib/i18n-server";
 import { toDateInput } from "@/lib/format";
 import { DeadlineForm } from "../DeadlineForm";
 
@@ -15,6 +16,7 @@ export default async function DeadlineDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { user, hub } = await requireHub();
+  const t = await getT();
   const { id } = await params;
   const [deadline, { ventures }] = await Promise.all([
     withHub(user.id, (tx) => getDeadline(tx, hub.id, user.id, id)),
@@ -25,7 +27,7 @@ export default async function DeadlineDetailPage({
   return (
     <div className="space-y-3 p-3">
       <Link href="/deadlines" className="text-xs font-semibold text-[var(--color-text-dim)]">
-        ← Deadlines
+        ← {t("Deadlines")}
       </Link>
       <DeadlineForm
         ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}

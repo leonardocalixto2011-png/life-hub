@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { prisma } from "@/lib/prisma";
 import { requireHub } from "@/lib/session";
+import { getT } from "@/lib/i18n-server";
 import { PushToggle } from "@/components/PushToggle";
 import { InstallHint } from "@/components/InstallHint";
 import { DigestPrefsForm } from "./DigestPrefsForm";
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function NotificationsPage() {
   const { user } = await requireHub();
+  const t = await getT();
 
   const [pref, deviceCount] = await Promise.all([
     prisma.notificationPreference.findUnique({ where: { userId: user.id } }),
@@ -22,13 +24,13 @@ export default async function NotificationsPage() {
     <div className="space-y-4 p-3">
       <div>
         <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
-          ← Today
+          ← {t("Today")}
         </Link>
-        <h1 className="mt-1 text-lg font-bold">Notifications</h1>
+        <h1 className="mt-1 text-lg font-bold">{t("Notifications")}</h1>
         <p className="text-xs text-[var(--color-text-dim)]">
           {deviceCount > 0
-            ? `${deviceCount} device${deviceCount === 1 ? "" : "s"} registered for push.`
-            : "No devices registered for push yet."}
+            ? t("{n} devices registered for push.", { n: deviceCount })
+            : t("No devices registered for push yet.")}
         </p>
       </div>
 

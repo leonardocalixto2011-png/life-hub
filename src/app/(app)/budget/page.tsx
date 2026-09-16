@@ -6,6 +6,8 @@ import { budgetMonth, hubChrome, upcomingSummary } from "@/lib/data";
 import { BUDGET_CATEGORIES, sharedBalances } from "@/lib/couple";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getLang, getT } from "@/lib/i18n-server";
+import { fmt } from "@/lib/i18n";
 import { money } from "@/lib/format";
 import { centsToInput } from "@/lib/money";
 import { EntryForm } from "./EntryForm";
@@ -31,7 +33,7 @@ function href(month: Date, venture?: string): string {
 }
 
 const firstName = (m: { name: string | null; email: string | null }) =>
-  (m.name ?? m.email ?? "Someone").split(/[\s@]/)[0];
+  (m.name ?? m.email ?? "?").split(/[\s@]/)[0];
 
 export default async function BudgetPage({
   searchParams,
@@ -42,6 +44,7 @@ export default async function BudgetPage({
   const month = monthFromParam(sp.m);
   const isUpcomingMonth = endOfMonth(month) >= startOfMonth(new Date());
   const { user, hub } = await requireHub();
+  const [t, lang] = await Promise.all([getT(), getLang()]);
   const { ventures, members } = await hubChrome(user.id, hub.id);
   const memberIds = members.map((m) => m.id);
 
@@ -63,6 +66,7 @@ export default async function BudgetPage({
     ? upcoming.subscriptionsCents + upcoming.debtsCents + upcoming.billsCents
     : 0;
   const vOpts = ventures.map((v) => ({ id: v.id, name: v.name }));
+  const $ = (cents: number) => money(cents, currency, locale);
 
   // Two-person hubs get a plain sentence and a settle-up button. With more
   // people a single "X owes Y" isn't well defined, so each balance is listed.
@@ -71,17 +75,18 @@ export default async function BudgetPage({
   const debtor = balances.find((b) => b.netCents < 0);
 
   const spentBy = new Map(data.categories.map((c) => [c.category.toLowerCase(), c.cents]));
+  const activeChip = { background: "var(--color-primary)", borderColor: "var(--color-primary)", color: "#fff" };
 
   return (
     <div className="space-y-4 p-3">
       <div className="flex items-baseline justify-between">
-        <h1 className="text-lg font-bold">Budget</h1>
+        <h1 className="text-lg font-bold">{t("Budget")}</h1>
         <div className="flex gap-3 text-[0.7rem] font-semibold">
           <Link href="/trips" className="text-[var(--color-primary)]">
-            Trips →
+            {t("Trips")} →
           </Link>
           <Link href="/debts" className="text-[var(--color-primary)]">
-            Debts →
+            {t("Debts")} →
           </Link>
         </div>
       </div>
@@ -90,7 +95,7 @@ export default async function BudgetPage({
         <Link href={href(subMonths(month, 1), sp.venture)} className="btn btn-ghost px-2">
           ‹
         </Link>
-        <span className="text-sm font-semibold">{format(month, "MMMM yyyy")}</span>
+        <span className="text-sm font-semibold capitalize">{fmt(month, "MMMM yyyy", lang)}</span>
         <Link href={href(addMonths(month, 1), sp.venture)} className="btn btn-ghost px-2">
           ›
         </Link>
@@ -100,40 +105,34 @@ export default async function BudgetPage({
           the one figure at `lg`; in and out are its working. */}
       <div className="card grid grid-cols-3 divide-x divide-[var(--color-border)] p-0">
         <div className="p-3">
-          <Figure cents={data.income} currency={currency} locale={locale} label="in" tone="ok" />
+          <Figure cents={data.income} currency={currency} locale={locale} label={t("in")} tone="ok" />
         </div>
         <div className="p-3">
-          <Figure cents={data.expense} currency={currency} locale={locale} label="out" />
+          <Figure cents={data.expense} currency={currency} locale={locale} label={t("out")} />
         </div>
         <div className="p-3">
-          <Figure
-            cents={data.net}
-            currency={currency}
-            locale={locale}
-            label="net"
-            tone={data.net < 0 ? "danger" : "ok"}
-          />
+          <Figure cents={data.net} currency={currency} locale={locale} label={t("net")} tone={data.net < 0 ? "danger" : "ok"} />
         </div>
       </div>
 
       {members.length > 1 && (
         <section>
           <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Shared expenses
+            {t("Shared expenses")}
           </h2>
           <div className="card space-y-2 p-3 text-sm">
             {balances.every((b) => b.netCents === 0) ? (
               <p className="text-[var(--color-text-dim)]">
-                All square. Log an expense as &quot;shared&quot; and this keeps track of who owes whom.
+                {t("All square. Log an expense as “shared” and this keeps track of who owes whom.")}
               </p>
             ) : members.length === 2 && creditor && debtor ? (
               <>
                 <p>
-                  <span className="font-semibold">{firstName(byId.get(debtor.userId)!)}</span> owes{" "}
-                  <span className="font-semibold">{firstName(byId.get(creditor.userId)!)}</span>{" "}
-                  <span className="font-semibold tabular-nums">
-                    {money(creditor.netCents, currency, locale)}
-                  </span>
+                  {t("{debtor} owes {creditor} {amount}", {
+                    debtor: firstName(byId.get(debtor.userId)!),
+                    creditor: firstName(byId.get(creditor.userId)!),
+                    amount: $(creditor.netCents),
+                  })}
                 </p>
                 <form action={settleUp} className="flex items-center gap-2">
                   <input type="hidden" name="fromId" value={debtor.userId} />
@@ -146,10 +145,10 @@ export default async function BudgetPage({
                     inputMode="decimal"
                     defaultValue={centsToInput(creditor.netCents)}
                     className="field w-28"
-                    aria-label="Amount paid back"
+                    aria-label={t("Amount paid back")}
                   />
                   <button type="submit" className="btn btn-primary flex-1 text-xs">
-                    Mark as paid back
+                    {t("Mark as paid back")}
                   </button>
                 </form>
               </>
@@ -161,8 +160,7 @@ export default async function BudgetPage({
                     className="font-semibold tabular-nums"
                     style={{ color: b.netCents < 0 ? "var(--color-danger)" : "var(--color-ok)" }}
                   >
-                    {b.netCents < 0 ? "owes " : "is owed "}
-                    {money(Math.abs(b.netCents), currency, locale)}
+                    {b.netCents < 0 ? t("owes {amount}", { amount: $(-b.netCents) }) : t("is owed {amount}", { amount: $(b.netCents) })}
                   </span>
                 </div>
               ))
@@ -175,51 +173,32 @@ export default async function BudgetPage({
         <div className="card space-y-1 p-3 text-xs">
           {upcomingTotal > 0 && (
             <>
-              <div className="font-semibold">
-                {money(upcomingTotal, currency, locale)}/mo in recurring commitments
-              </div>
+              <div className="font-semibold">{t("{amount}/mo in recurring commitments", { amount: $(upcomingTotal) })}</div>
               <div className="text-[var(--color-text-dim)]">
-                {money(upcoming.subscriptionsCents, currency, locale)} subscriptions
-                {" + "}
-                {money(upcoming.debtsCents, currency, locale)} debt payments
-                {upcoming.billsCents > 0 && (
-                  <> {" + "}{money(upcoming.billsCents, currency, locale)} bills</>
-                )}
-                {" "}— separate from what&apos;s logged above
+                {t("{subs} subscriptions + {debts} debt payments", { subs: $(upcoming.subscriptionsCents), debts: $(upcoming.debtsCents) })}
+                {upcoming.billsCents > 0 && <> + {$(upcoming.billsCents)} {t("bills")}</>}
+                {" "}— {t("separate from what's logged above")}
               </div>
             </>
           )}
           {upcoming.pendingBills > 0 && (
             <Link href="/inbox" className="block font-semibold text-[var(--color-primary)]">
-              {upcoming.pendingBills} bill{upcoming.pendingBills === 1 ? "" : "s"} detected from your
-              mail, not yet reviewed →
+              {t("{n} bills detected from your mail, not yet reviewed →", { n: upcoming.pendingBills })}
             </Link>
           )}
         </div>
       )}
 
       <div className="flex flex-wrap gap-1.5">
-        <Link
-          href={href(month)}
-          className="chip"
-          style={
-            !sp.venture
-              ? { background: "var(--color-primary)", borderColor: "var(--color-primary)", color: "#fff" }
-              : undefined
-          }
-        >
-          All ventures
+        <Link href={href(month)} className="chip" style={!sp.venture ? activeChip : undefined}>
+          {t("All ventures")}
         </Link>
         {ventures.map((v) => (
           <Link
             key={v.id}
             href={href(month, sp.venture === v.slug ? undefined : v.slug)}
             className="chip"
-            style={
-              sp.venture === v.slug
-                ? { background: "var(--color-primary)", borderColor: "var(--color-primary)", color: "#fff" }
-                : undefined
-            }
+            style={sp.venture === v.slug ? activeChip : undefined}
           >
             {v.name}
           </Link>
@@ -230,30 +209,29 @@ export default async function BudgetPage({
 
       <section>
         <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-          Monthly budget
+          {t("Monthly budget")}
         </h2>
         <div className="card space-y-2.5 p-3">
           {targets.length === 0 && (
             <p className="text-xs text-[var(--color-text-dim)]">
-              Set a monthly limit per category — groceries, outings, gifts — and see how the month
-              is tracking.
+              {t("Set a monthly limit per category — groceries, outings, gifts — and see how the month is tracking.")}
             </p>
           )}
-          {targets.map((t) => {
-            const spent = spentBy.get(t.category.toLowerCase()) ?? 0;
-            const pct = t.monthlyCents > 0 ? spent / t.monthlyCents : 0;
-            const over = spent > t.monthlyCents;
+          {targets.map((tg) => {
+            const spent = spentBy.get(tg.category.toLowerCase()) ?? 0;
+            const pct = tg.monthlyCents > 0 ? spent / tg.monthlyCents : 0;
+            const over = spent > tg.monthlyCents;
             return (
-              <div key={t.id}>
+              <div key={tg.id}>
                 <div className="flex items-center justify-between gap-2 text-xs">
-                  <span>{t.category}</span>
+                  <span>{t(tg.category)}</span>
                   <span className="flex items-center gap-2 tabular-nums">
                     <span style={{ color: over ? "var(--color-danger)" : "var(--color-text-dim)" }}>
-                      {money(spent, currency, locale)} / {money(t.monthlyCents, currency, locale)}
+                      {$(spent)} / {$(tg.monthlyCents)}
                     </span>
                     <form action={deleteBudgetTarget}>
-                      <input type="hidden" name="id" value={t.id} />
-                      <button aria-label={`Remove ${t.category} budget`} className="text-[var(--color-text-dim)]">
+                      <input type="hidden" name="id" value={tg.id} />
+                      <button aria-label={t("Remove {category} budget", { category: tg.category })} className="text-[var(--color-text-dim)]">
                         ✕
                       </button>
                     </form>
@@ -272,30 +250,15 @@ export default async function BudgetPage({
             );
           })}
           <form action={setBudgetTarget} className="grid grid-cols-[1fr_6rem_auto] gap-2 pt-1">
-            <input
-              name="category"
-              required
-              list="budget-target-categories"
-              placeholder="Category"
-              className="field"
-            />
+            <input name="category" required list="budget-target-categories" placeholder={t("Category")} className="field" />
             <datalist id="budget-target-categories">
               {BUDGET_CATEGORIES.map((c) => (
-                <option key={c} value={c} />
+                <option key={c} value={t(c)} />
               ))}
             </datalist>
-            <input
-              name="amount"
-              type="number"
-              step="0.01"
-              min="0"
-              inputMode="decimal"
-              required
-              placeholder="/month"
-              className="field"
-            />
+            <input name="amount" type="number" step="0.01" min="0" inputMode="decimal" required placeholder={t("/month")} className="field" />
             <button type="submit" className="btn">
-              Set
+              {t("Set")}
             </button>
           </form>
         </div>
@@ -304,16 +267,14 @@ export default async function BudgetPage({
       {data.categories.length > 0 && (
         <section>
           <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Where it went
+            {t("Where it went")}
           </h2>
           <div className="card space-y-2 p-3">
             {data.categories.map((c) => (
               <div key={c.category}>
                 <div className="flex justify-between text-xs">
-                  <span>{c.category}</span>
-                  <span className="tabular-nums text-[var(--color-text-dim)]">
-                    {money(c.cents, currency, locale)}
-                  </span>
+                  <span>{t(c.category)}</span>
+                  <span className="tabular-nums text-[var(--color-text-dim)]">{$(c.cents)}</span>
                 </div>
                 <div className="mt-1 h-1.5 rounded-full bg-[var(--color-surface-2)]">
                   <div
@@ -329,16 +290,16 @@ export default async function BudgetPage({
 
       <section>
         <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-          Entries · {data.entries.length}
+          {t("Entries")} · {data.entries.length}
         </h2>
         {data.entries.length === 0 ? (
           <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
-            Nothing logged for {format(month, "MMMM")}.
+            {t("Nothing logged for {month}.", { month: fmt(month, "MMMM", lang) })}
           </p>
         ) : (
           <div className="card divide-y divide-[var(--color-border)]">
             {data.entries.map((e) => (
-              <EntryRow key={e.id} e={e} ventures={vOpts} members={members} currentUserId={user.id} />
+              <EntryRow key={e.id} e={e} ventures={vOpts} members={members} currentUserId={user.id} locale={locale} />
             ))}
           </div>
         )}

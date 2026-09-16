@@ -1,13 +1,15 @@
 import Link from "next/link";
-import { addDays, format, isSameDay, startOfDay } from "date-fns";
+import { addDays, isSameDay, startOfDay } from "date-fns";
 
 import { agendaItems, type AgendaItem } from "@/lib/data";
 import { planHref, planItemsBetween } from "@/lib/plans";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getLang, getT } from "@/lib/i18n-server";
+import { fmtDay, fmtTime } from "@/lib/i18n";
 import { daysUntil } from "@/lib/format";
 import { VentureChip } from "@/components/VentureChip";
-import { EmptyState, QUICK_ADD_EXAMPLES } from "@/components/EmptyState";
+import { EmptyState, quickAddExamples } from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +33,7 @@ type Row = {
   meta: string | null;
 };
 
-function RowView({ item }: { item: Row }) {
+function RowView({ item, lang }: { item: Row; lang: "en" | "fr" }) {
   const body = (
     <>
       <span className="mt-0.5 w-4 shrink-0 text-center text-sm">{item.icon}</span>
@@ -41,7 +43,7 @@ function RowView({ item }: { item: Row }) {
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {!item.allDay && (
               <span className="text-[0.72rem] font-semibold text-[var(--color-text-dim)]">
-                {format(item.at, "h:mm a")}
+                {fmtTime(item.at, lang)}
               </span>
             )}
             {item.venture && <VentureChip name={item.venture.name} color={item.venture.color} />}
@@ -64,10 +66,11 @@ function RowView({ item }: { item: Row }) {
 
 export default async function AgendaPage() {
   const { user, hub } = await requireHub();
+  const [t, lang] = await Promise.all([getT(), getLang()]);
   const [{ now, items }, plans] = await withHub(user.id, (tx) =>
     Promise.all([
       agendaItems(tx, hub.id, user.id, 30),
-      planItemsBetween(tx, hub, user.id, new Date(), addDays(startOfDay(new Date()), 30)),
+      planItemsBetween(tx, hub, user.id, new Date(), addDays(startOfDay(new Date()), 30), lang),
     ]),
   );
 
@@ -75,7 +78,12 @@ export default async function AgendaPage() {
     ...items.map((i) => ({
       key: `${i.kind}-${i.id}`,
       icon: KIND_ICON[i.kind],
-      title: i.title,
+      title:
+        i.kind === "subscription"
+          ? t("{name} renews", { name: i.title.replace(/ renews$/, "") })
+          : i.kind === "debt"
+            ? t("{name} payment", { name: i.title.replace(/ payment$/, "") })
+            : i.title,
       at: i.at,
       href: i.href,
       allDay: i.allDay,
@@ -107,28 +115,28 @@ export default async function AgendaPage() {
   return (
     <div className="space-y-4 p-3">
       <div>
-        <h1 className="text-lg font-bold">Agenda</h1>
+        <h1 className="text-lg font-bold">{t("Agenda")}</h1>
         <p className="text-xs text-[var(--color-text-dim)]">
-          Everything dated on one timeline · next 30 days
+          {t("Everything dated on one timeline · next 30 days")}
         </p>
       </div>
 
       {rows.length === 0 && (
         <EmptyState
-          headline="A clear week ahead."
-          title="Add something with a date — the box up top understands plain sentences:"
-          examples={QUICK_ADD_EXAMPLES}
+          headline={t("A clear week ahead.")}
+          title={t("Add something with a date — the box up top understands plain sentences:")}
+          examples={quickAddExamples(lang)}
         />
       )}
 
       {overdue.length > 0 && (
         <section>
           <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-danger)]">
-            Overdue · {overdue.length}
+            {t("Overdue")} · {overdue.length}
           </h2>
           <div className="card divide-y divide-[var(--color-border)]">
             {overdue.map((i) => (
-              <RowView key={i.key} item={i} />
+              <RowView key={i.key} item={i} lang={lang} />
             ))}
           </div>
         </section>
@@ -137,11 +145,11 @@ export default async function AgendaPage() {
       {days.map(({ date, items: dayItems }) => (
         <section key={date.toISOString()}>
           <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-            {isSameDay(date, now) ? "Today" : format(date, "EEEE, MMM d")}
+            {isSameDay(date, now) ? t("Today") : fmtDay(date, lang)}
           </h2>
           <div className="card divide-y divide-[var(--color-border)]">
             {dayItems.map((i) => (
-              <RowView key={i.key} item={i} />
+              <RowView key={i.key} item={i} lang={lang} />
             ))}
           </div>
         </section>

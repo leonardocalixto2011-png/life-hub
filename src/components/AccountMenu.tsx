@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { Avatar } from "@/components/Avatar";
+import { useT } from "@/components/I18nProvider";
 import { signOutAction } from "@/app/(app)/auth-actions";
 
 /**
@@ -30,13 +31,14 @@ export function AccountMenu({
   email: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  const t = useT();
 
   return (
     <div className="relative">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Account menu"
+        aria-label={t("Account menu")}
         aria-expanded={open}
         className="block rounded-full"
       >
@@ -48,7 +50,7 @@ export function AccountMenu({
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="card absolute right-0 top-full z-40 mt-2 w-52 divide-y divide-[var(--color-border)] p-0">
             <div className="px-3 py-2">
-              <div className="truncate text-sm font-semibold">{name ?? "You"}</div>
+              <div className="truncate text-sm font-semibold">{name ?? t("You")}</div>
               {email && (
                 <div className="truncate text-[0.68rem] text-[var(--color-text-dim)]">{email}</div>
               )}
@@ -63,7 +65,7 @@ export function AccountMenu({
                   className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm"
                 >
                   <span className="text-base leading-none">{l.icon}</span>
-                  {l.label}
+                  {t(l.label)}
                 </Link>
               ))}
             </div>
@@ -74,7 +76,7 @@ export function AccountMenu({
                   type="submit"
                   className="w-full rounded-lg px-2 py-2 text-left text-sm text-[var(--color-text-dim)]"
                 >
-                  Sign out
+                  {t("Sign out")}
                 </button>
               </form>
             </div>

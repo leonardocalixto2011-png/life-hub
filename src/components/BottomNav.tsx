@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useT } from "@/components/I18nProvider";
+
 const ITEMS = [
   { href: "/today", label: "Today", icon: "☀️" },
   { href: "/tasks", label: "Tasks", icon: "✓" },
@@ -41,6 +43,7 @@ function PendingDot() {
 
 export function BottomNav() {
   const pathname = usePathname();
+  const t = useT();
 
   return (
     <nav className="safe-b sticky bottom-0 z-20 grid grid-cols-5 border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur">
@@ -55,7 +58,7 @@ export function BottomNav() {
           >
             <PendingDot />
             <span className="text-base leading-none">{it.icon}</span>
-            {it.label}
+            {t(it.label)}
           </Link>
         );
       })}

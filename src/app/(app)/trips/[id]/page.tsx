@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { differenceInCalendarDays, format, startOfDay } from "date-fns";
+import { differenceInCalendarDays, startOfDay } from "date-fns";
 
 import { hubChrome } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getLang, getT } from "@/lib/i18n-server";
+import { fmt } from "@/lib/i18n";
 import { countdownLabel, initials, money, toDateInput } from "@/lib/format";
 import { centsToInput } from "@/lib/money";
 import { Figure } from "@/components/Figure";
@@ -22,6 +24,7 @@ const SECTIONS = [
 export default async function TripPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { user, hub } = await requireHub();
+  const [t, lang] = await Promise.all([getT(), getLang()]);
   const [trip, { members }] = await Promise.all([
     withHub(user.id, (tx) =>
       tx.trip.findFirst({
@@ -43,27 +46,28 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
   const nights = differenceInCalendarDays(trip.endDate, trip.startDate);
   const status =
     trip.startDate <= today && trip.endDate >= today
-      ? "Happening now"
+      ? t("Happening now")
       : trip.endDate < today
-        ? "Done"
-        : countdownLabel(trip.startDate);
+        ? t("Done")
+        : countdownLabel(trip.startDate, lang);
 
   const planned = trip.items.reduce((n, i) => n + (i.costCents ?? 0), 0);
   const memberName = new Map(members.map((m) => [m.id, m]));
   const add = addTripItem.bind(null, trip.id);
+  const dayFmt = lang === "fr" ? "EEE d MMM" : "EEE MMM d";
 
   return (
     <div className="space-y-4 p-3">
       <Link href="/trips" className="text-xs font-semibold text-[var(--color-text-dim)]">
-        ← Trips
+        ← {t("Trips")}
       </Link>
 
       <div>
         <h1 className="display text-2xl">{trip.title}</h1>
         <p className="text-xs text-[var(--color-text-dim)]">
           {trip.destination ? `${trip.destination} · ` : ""}
-          {format(trip.startDate, "EEE MMM d")} – {format(trip.endDate, "EEE MMM d, yyyy")}
-          {nights > 0 ? ` · ${nights} night${nights === 1 ? "" : "s"}` : ""}
+          {fmt(trip.startDate, dayFmt, lang)} – {fmt(trip.endDate, `${dayFmt} yyyy`, lang)}
+          {nights > 0 ? ` · ${nights === 1 ? t("1 night") : t("{n} nights", { n: nights })}` : ""}
         </p>
         <span className="chip mt-2">{status}</span>
       </div>
@@ -71,13 +75,13 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       <div className="card grid grid-cols-3 divide-x divide-[var(--color-border)] p-0">
         <div className="p-3">
           {trip.budgetCents != null ? (
-            <Figure cents={trip.budgetCents} currency={currency} locale={locale} label="budget" />
+            <Figure cents={trip.budgetCents} currency={currency} locale={locale} label={t("budget")} />
           ) : (
-            <div className="text-[0.68rem] text-[var(--color-text-dim)]">No budget set</div>
+            <div className="text-[0.68rem] text-[var(--color-text-dim)]">{t("No budget set")}</div>
           )}
         </div>
         <div className="p-3">
-          <Figure cents={planned} currency={currency} locale={locale} label="planned" />
+          <Figure cents={planned} currency={currency} locale={locale} label={t("planned")} />
         </div>
         <div className="p-3">
           {trip.budgetCents != null && (
@@ -85,7 +89,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
               cents={trip.budgetCents - planned}
               currency={currency}
               locale={locale}
-              label="left"
+              label={t("left")}
               tone={trip.budgetCents - planned < 0 ? "danger" : "ok"}
             />
           )}
@@ -94,12 +98,12 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
 
       <form action={add} className="card space-y-2 p-3">
         <div className="grid grid-cols-[7rem_1fr] gap-2">
-          <select name="kind" defaultValue="BOOK" className="field" aria-label="List">
-            <option value="BOOK">To book</option>
-            <option value="TODO">To do</option>
-            <option value="PACK">To pack</option>
+          <select name="kind" defaultValue="BOOK" className="field" aria-label={t("List")}>
+            <option value="BOOK">{t("To book")}</option>
+            <option value="TODO">{t("To do")}</option>
+            <option value="PACK">{t("To pack")}</option>
           </select>
-          <input name="title" required className="field" placeholder="Hotel, passport, sunscreen…" />
+          <input name="title" required className="field" placeholder={t("Hotel, passport, sunscreen…")} />
         </div>
         <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
           <input
@@ -109,10 +113,10 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
             min="0"
             inputMode="decimal"
             className="field"
-            placeholder="Cost"
+            placeholder={t("Cost")}
           />
-          <select name="assignedToId" defaultValue="" className="field" aria-label="Who">
-            <option value="">Anyone</option>
+          <select name="assignedToId" defaultValue="" className="field" aria-label={t("Who")}>
+            <option value="">{t("Anyone")}</option>
             {members.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name ?? m.email}
@@ -120,7 +124,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
             ))}
           </select>
           <button type="submit" className="btn btn-primary">
-            Add
+            {t("Add")}
           </button>
         </div>
       </form>
@@ -130,11 +134,11 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         return (
           <section key={sec.kind}>
             <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-              {sec.title}
+              {t(sec.title)}
               {items.length > 0 ? ` · ${items.filter((i) => i.done).length}/${items.length}` : ""}
             </h2>
             {items.length === 0 ? (
-              <p className="card p-3 text-[0.72rem] text-[var(--color-text-dim)]">{sec.hint}</p>
+              <p className="card p-3 text-[0.72rem] text-[var(--color-text-dim)]">{t(sec.hint)}</p>
             ) : (
               <div className="card divide-y divide-[var(--color-border)]">
                 {items.map((i) => {
@@ -144,7 +148,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                       <form action={toggleTripItem}>
                         <input type="hidden" name="id" value={i.id} />
                         <button
-                          aria-label={i.done ? "Mark not done" : "Mark done"}
+                          aria-label={i.done ? t("Mark not done") : t("Mark done")}
                           className="grid h-5 w-5 place-items-center rounded border border-[var(--color-border)] text-xs"
                           style={i.done ? { background: "var(--color-ok)", color: "#fff", borderColor: "var(--color-ok)" } : undefined}
                         >
@@ -172,7 +176,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                       )}
                       <form action={deleteTripItem}>
                         <input type="hidden" name="id" value={i.id} />
-                        <button aria-label="Delete" className="text-xs text-[var(--color-text-dim)]">
+                        <button aria-label={t("Delete")} className="text-xs text-[var(--color-text-dim)]">
                           ✕
                         </button>
                       </form>
@@ -189,7 +193,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
 
       <details className="group">
         <summary className="cursor-pointer list-none text-xs font-semibold text-[var(--color-primary)]">
-          Edit trip details
+          {t("Edit trip details")}
         </summary>
         <div className="mt-2 space-y-2">
           <TripForm
@@ -207,7 +211,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
           <form action={deleteTrip}>
             <input type="hidden" name="id" value={trip.id} />
             <button type="submit" className="btn w-full text-[var(--color-danger)]">
-              Delete trip
+              {t("Delete trip")}
             </button>
           </form>
         </div>

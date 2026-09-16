@@ -12,15 +12,17 @@ import {
 import { myShares, sharedDebtSummaries } from "@/lib/debt-sharing";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getLang, getT } from "@/lib/i18n-server";
+import type { Lang, T } from "@/lib/i18n";
 import { countdownLabel, money } from "@/lib/format";
 import { VentureChip } from "@/components/VentureChip";
 import { Avatar } from "@/components/Avatar";
 import { DebtForm } from "./DebtForm";
 import { DebtStatusChip } from "./DebtStatusChip";
 import { LogPaymentButton } from "./LogPaymentButton";
+import { ShareControls } from "./ShareControls";
 import { moveMyDebtsHere } from "./actions";
 import { perMonth } from "@/lib/money";
-import { ShareControls } from "./ShareControls";
 
 export const dynamic = "force-dynamic";
 
@@ -51,11 +53,15 @@ function Row({
   own,
   currency,
   locale,
+  t,
+  lang,
 }: {
   d: DebtWithRefs;
   own: boolean;
   currency: string;
   locale: string;
+  t: T;
+  lang: Lang;
 }) {
   const paidOff = d.status === "PAID_OFF";
   const payment = d.actualPaymentCents ?? d.minimumPaymentCents;
@@ -82,7 +88,7 @@ function Row({
 
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {TYPE_LABEL[d.type] && (
-              <span className="chip text-[var(--color-text-dim)]">{TYPE_LABEL[d.type]}</span>
+              <span className="chip text-[var(--color-text-dim)]">{t(TYPE_LABEL[d.type])}</span>
             )}
             {d.venture && <VentureChip name={d.venture.name} color={d.venture.color} />}
             {!own && d.owner && (
@@ -104,19 +110,15 @@ function Row({
               d.status === "DEFAULT" && (
                 <span
                   className="chip"
-                  style={{
-                    background: "var(--color-danger)",
-                    borderColor: "var(--color-danger)",
-                    color: "#fff",
-                  }}
+                  style={{ background: "var(--color-danger)", borderColor: "var(--color-danger)", color: "#fff" }}
                 >
-                  in default
+                  {t("in default")}
                 </span>
               )
             )}
             {!paidOff && d.dueDate && (
               <span className="text-[0.68rem] text-[var(--color-text-dim)]">
-                due {countdownLabel(d.dueDate)}
+                {t("due")} {countdownLabel(d.dueDate, lang)}
               </span>
             )}
           </div>
@@ -126,8 +128,8 @@ function Row({
           <div className="font-semibold tabular-nums">{money(d.balanceCents, currency, locale)}</div>
           <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
             {payment != null
-              ? `${money(payment, currency, locale)}${FREQ_SUFFIX[d.paymentFrequency]}`
-              : "balance"}
+              ? `${money(payment, currency, locale)}${t(FREQ_SUFFIX[d.paymentFrequency])}`
+              : t("balance")}
             {d.aprBasisPoints != null ? ` · ${(d.aprBasisPoints / 100).toFixed(2)}%` : ""}
           </div>
           {own && !paidOff && payment != null && payment > 0 && (
@@ -139,13 +141,10 @@ function Row({
       {pct != null && !paidOff && (
         <div className="mt-2">
           <div className="h-1 rounded-full bg-[var(--color-surface-2)]">
-            <div
-              className="h-full rounded-full bg-[var(--color-ok)]"
-              style={{ width: `${Math.max(2, pct * 100)}%` }}
-            />
+            <div className="h-full rounded-full bg-[var(--color-ok)]" style={{ width: `${Math.max(2, pct * 100)}%` }} />
           </div>
           <div className="mt-0.5 text-[0.6rem] text-[var(--color-text-dim)]">
-            {Math.round(pct * 100)}% paid off
+            {t("{pct}% paid off", { pct: Math.round(pct * 100) })}
           </div>
         </div>
       )}
@@ -155,6 +154,7 @@ function Row({
 
 export default async function DebtsPage() {
   const { user, hub } = await requireHub();
+  const [t, lang] = await Promise.all([getT(), getLang()]);
 
   const [{ ventures, members }, [mine, shared, needsReview, elsewhere], shares, summaries] = await Promise.all([
     hubChrome(user.id, hub.id),
@@ -180,27 +180,24 @@ export default async function DebtsPage() {
     (n, d) => n + perMonth(d.actualPaymentCents ?? d.minimumPaymentCents ?? 0, d.paymentFrequency),
     0,
   );
+  const rowProps = { currency, locale, t, lang };
 
   return (
     <div className="space-y-4 p-3">
       <div>
-        <h1 className="text-lg font-bold">Debts</h1>
+        <h1 className="text-lg font-bold">{t("Debts")}</h1>
         <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-          Yours alone, and only in {hub.name} — unless you share them below.
+          {t("Yours alone, and only in {hub} — unless you share them below.", { hub: hub.name })}
         </p>
       </div>
 
       {elsewhere > 0 && (
-        <form
-          action={moveMyDebtsHere}
-          className="card flex items-center justify-between gap-3 p-3 text-xs"
-        >
+        <form action={moveMyDebtsHere} className="card flex items-center justify-between gap-3 p-3 text-xs">
           <span className="text-[var(--color-text-dim)]">
-            {elsewhere} of your debts {elsewhere === 1 ? "lives" : "live"} in another hub, so{" "}
-            {elsewhere === 1 ? "it isn't" : "they aren't"} shown here.
+            {t("{n} of your debts live in another hub, so they aren't shown here.", { n: elsewhere })}
           </span>
           <button type="submit" className="btn btn-primary shrink-0 px-3 py-1.5 text-xs">
-            Move here
+            {t("Move here")}
           </button>
         </form>
       )}
@@ -208,12 +205,10 @@ export default async function DebtsPage() {
       {needsReview.length > 0 && (
         <div className="card border-[var(--color-danger)] p-3 text-xs">
           <div className="font-semibold text-[var(--color-danger)]">
-            {needsReview.length} debt{needsReview.length === 1 ? "" : "s"} assigned to you
-            automatically
+            {t("{n} debts assigned to you automatically", { n: needsReview.length })}
           </div>
           <p className="mt-1 text-[var(--color-text-dim)]">
-            When debts became personal these had no owner recorded, so they went to the hub
-            owner. Open each one and save to confirm — or reassign it if it isn&apos;t yours:{" "}
+            {t("When debts became personal these had no owner recorded, so they went to the hub owner. Open each one and save to confirm — or reassign it if it isn't yours:")}{" "}
             {needsReview.map((d) => d.name).join(", ")}.
           </p>
         </div>
@@ -222,40 +217,27 @@ export default async function DebtsPage() {
       {/* The balance is what this page is about — the only `lg` figure on it. */}
       <div className="card grid grid-cols-2 divide-x divide-[var(--color-border)] p-0">
         <div className="p-3">
-          <Figure
-            cents={totalBalance}
-            currency={currency}
-            locale={locale}
-            label="total balance"
-            size="lg"
-          />
+          <Figure cents={totalBalance} currency={currency} locale={locale} label={t("total balance")} size="lg" />
         </div>
         <div className="p-3">
-          <Figure
-            cents={totalMonthly}
-            currency={currency}
-            locale={locale}
-            label={`per month · ${current.length} current`}
-          />
+          <Figure cents={totalMonthly} currency={currency} locale={locale} label={`${t("per month")} · ${t("{n} current", { n: current.length })}`} />
         </div>
       </div>
 
       <DebtForm ventures={ventures.map((v) => ({ id: v.id, name: v.name }))} members={members} />
 
       {mine.length === 0 && (
-        <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
-          No debts tracked yet.
-        </p>
+        <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">{t("No debts tracked yet.")}</p>
       )}
 
       {current.length > 0 && (
         <section>
           <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Current · {current.length}
+            {t("Current")} · {current.length}
           </h2>
           <div className="card divide-y divide-[var(--color-border)]">
             {current.map((d) => (
-              <Row key={d.id} d={d} own currency={currency} locale={locale} />
+              <Row key={d.id} d={d} own {...rowProps} />
             ))}
           </div>
         </section>
@@ -264,11 +246,11 @@ export default async function DebtsPage() {
       {paidOff.length > 0 && (
         <section>
           <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Paid off · {paidOff.length}
+            {t("Paid off")} · {paidOff.length}
           </h2>
           <div className="card divide-y divide-[var(--color-border)]">
             {paidOff.map((d) => (
-              <Row key={d.id} d={d} own currency={currency} locale={locale} />
+              <Row key={d.id} d={d} own {...rowProps} />
             ))}
           </div>
         </section>
@@ -279,7 +261,7 @@ export default async function DebtsPage() {
       {(shared.length > 0 || summaries.length > 0) && (
         <section>
           <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Shared with {hub.name}
+            {t("Shared with {hub}", { hub: hub.name })}
           </h2>
 
           {summaries.length > 0 && (
@@ -289,17 +271,14 @@ export default async function DebtsPage() {
                   <div className="min-w-0">
                     <div className="truncate font-medium">{s.ownerName}</div>
                     <div className="text-[0.68rem] text-[var(--color-text-dim)]">
-                      {s.debtCount} debt{s.debtCount === 1 ? "" : "s"}
-                      {s.inDefaultCount > 0 ? ` · ${s.inDefaultCount} in default` : ""} · summary
-                      only
+                      {t("{n} debts", { n: s.debtCount })}
+                      {s.inDefaultCount > 0 ? ` · ${t("{n} in default", { n: s.inDefaultCount })}` : ""} · {t("summary only")}
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-semibold tabular-nums">
-                      {money(s.totalBalanceCents, currency, locale)}
-                    </div>
+                    <div className="font-semibold tabular-nums">{money(s.totalBalanceCents, currency, locale)}</div>
                     <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
-                      {money(s.monthlyPaymentCents, currency, locale)}/mo
+                      {money(s.monthlyPaymentCents, currency, locale)}{t("/mo")}
                     </div>
                   </div>
                 </div>
@@ -310,7 +289,7 @@ export default async function DebtsPage() {
           {shared.length > 0 && (
             <div className="card divide-y divide-[var(--color-border)]">
               {shared.map((d) => (
-                <Row key={d.id} d={d} own={false} currency={currency} locale={locale} />
+                <Row key={d.id} d={d} own={false} {...rowProps} />
               ))}
             </div>
           )}

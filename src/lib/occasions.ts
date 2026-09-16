@@ -17,6 +17,7 @@ export type OccasionKind = "holiday" | "love" | "family" | "season" | "culture" 
 export type Occasion = {
   /** Stable per occurrence, e.g. "valentine-2027" — used as a React key. */
   key: string;
+  /** In the viewer's language — see `occasionsBetween`'s `lang`. */
   title: string;
   date: Date;
   emoji: string;
@@ -58,28 +59,29 @@ const fixed = (month: number, day: number) => (y: number) => new Date(y, month -
 type Def = {
   key: string;
   title: string;
+  fr: string;
   emoji: string;
   kind: OccasionKind;
   date: (year: number) => Date;
 };
 
 const DEFS: Def[] = [
-  { key: "new-year", title: "Jour de l'An", emoji: "🎆", kind: "holiday", date: fixed(1, 1) },
-  { key: "haiti-independence", title: "Indépendance d'Haïti", emoji: "🇭🇹", kind: "culture", date: fixed(1, 1) },
-  { key: "haiti-ancestors", title: "Jour des Aïeux (Haïti)", emoji: "🇭🇹", kind: "culture", date: fixed(1, 2) },
-  { key: "valentine", title: "Saint-Valentin", emoji: "❤️", kind: "love", date: fixed(2, 14) },
-  { key: "womens-day", title: "Journée internationale des femmes", emoji: "💐", kind: "love", date: fixed(3, 8) },
-  { key: "st-patrick", title: "Saint-Patrick", emoji: "☘️", kind: "fun", date: fixed(3, 17) },
-  { key: "spring", title: "Premier jour du printemps", emoji: "🌸", kind: "season", date: fixed(3, 20) },
-  { key: "good-friday", title: "Vendredi saint", emoji: "✝️", kind: "holiday", date: (y) => shift(easterSunday(y), -2) },
-  { key: "easter", title: "Pâques", emoji: "🐣", kind: "family", date: easterSunday },
-  { key: "easter-monday", title: "Lundi de Pâques", emoji: "🐣", kind: "holiday", date: (y) => shift(easterSunday(y), 1) },
-  { key: "mothers-day", title: "Fête des Mères", emoji: "💐", kind: "family", date: (y) => nthWeekday(y, 4, 0, 2) },
-  { key: "haiti-flag", title: "Fête du Drapeau haïtien", emoji: "🇭🇹", kind: "culture", date: fixed(5, 18) },
+  { key: "new-year", title: "New Year's Day", fr: "Jour de l'An", emoji: "🎆", kind: "holiday", date: fixed(1, 1) },
+  { key: "haiti-independence", title: "Haitian Independence Day", fr: "Indépendance d'Haïti", emoji: "🇭🇹", kind: "culture", date: fixed(1, 1) },
+  { key: "haiti-ancestors", title: "Ancestors' Day (Haiti)", fr: "Jour des Aïeux (Haïti)", emoji: "🇭🇹", kind: "culture", date: fixed(1, 2) },
+  { key: "valentine", title: "Valentine's Day", fr: "Saint-Valentin", emoji: "❤️", kind: "love", date: fixed(2, 14) },
+  { key: "womens-day", title: "International Women's Day", fr: "Journée internationale des femmes", emoji: "💐", kind: "love", date: fixed(3, 8) },
+  { key: "st-patrick", title: "St. Patrick's Day", fr: "Saint-Patrick", emoji: "☘️", kind: "fun", date: fixed(3, 17) },
+  { key: "spring", title: "First day of spring", fr: "Premier jour du printemps", emoji: "🌸", kind: "season", date: fixed(3, 20) },
+  { key: "good-friday", title: "Good Friday", fr: "Vendredi saint", emoji: "✝️", kind: "holiday", date: (y) => shift(easterSunday(y), -2) },
+  { key: "easter", title: "Easter", fr: "Pâques", emoji: "🐣", kind: "family", date: easterSunday },
+  { key: "easter-monday", title: "Easter Monday", fr: "Lundi de Pâques", emoji: "🐣", kind: "holiday", date: (y) => shift(easterSunday(y), 1) },
+  { key: "mothers-day", title: "Mother's Day", fr: "Fête des Mères", emoji: "💐", kind: "family", date: (y) => nthWeekday(y, 4, 0, 2) },
+  { key: "haiti-flag", title: "Haitian Flag Day", fr: "Fête du Drapeau haïtien", emoji: "🇭🇹", kind: "culture", date: fixed(5, 18) },
   {
     // The Monday on or before May 24 (same rule as Victoria Day).
     key: "patriotes",
-    title: "Journée nationale des patriotes",
+    title: "National Patriots' Day", fr: "Journée nationale des patriotes",
     emoji: "🍁",
     kind: "holiday",
     date: (y) => {
@@ -87,35 +89,41 @@ const DEFS: Def[] = [
       return shift(may24, -((may24.getDay() + 6) % 7));
     },
   },
-  { key: "fathers-day", title: "Fête des Pères", emoji: "👔", kind: "family", date: (y) => nthWeekday(y, 5, 0, 3) },
-  { key: "summer", title: "Premier jour de l'été", emoji: "☀️", kind: "season", date: fixed(6, 21) },
-  { key: "fete-nationale", title: "Fête nationale du Québec", emoji: "⚜️", kind: "holiday", date: fixed(6, 24) },
-  { key: "canada-day", title: "Fête du Canada", emoji: "🇨🇦", kind: "holiday", date: fixed(7, 1) },
-  { key: "girlfriend-day", title: "Girlfriend Day", emoji: "💕", kind: "love", date: fixed(8, 1) },
-  { key: "labour-day", title: "Fête du Travail", emoji: "🛠️", kind: "holiday", date: (y) => nthWeekday(y, 8, 1, 1) },
-  { key: "fall", title: "Premier jour de l'automne", emoji: "🍂", kind: "season", date: fixed(9, 22) },
-  { key: "boyfriend-day", title: "Boyfriend Day", emoji: "💙", kind: "love", date: fixed(10, 3) },
-  { key: "thanksgiving", title: "Action de grâce", emoji: "🦃", kind: "family", date: (y) => nthWeekday(y, 9, 1, 2) },
-  { key: "halloween", title: "Halloween", emoji: "🎃", kind: "fun", date: fixed(10, 31) },
-  { key: "remembrance", title: "Jour du Souvenir", emoji: "🌺", kind: "holiday", date: fixed(11, 11) },
-  { key: "mens-day", title: "Journée internationale des hommes", emoji: "🧔", kind: "love", date: fixed(11, 19) },
-  { key: "black-friday", title: "Black Friday", emoji: "🛍️", kind: "fun", date: (y) => shift(nthWeekday(y, 10, 4, 4), 1) },
-  { key: "winter", title: "Premier jour de l'hiver", emoji: "❄️", kind: "season", date: fixed(12, 21) },
-  { key: "christmas-eve", title: "Réveillon de Noël", emoji: "🎄", kind: "family", date: fixed(12, 24) },
-  { key: "christmas", title: "Noël", emoji: "🎄", kind: "holiday", date: fixed(12, 25) },
-  { key: "boxing-day", title: "Lendemain de Noël", emoji: "🎁", kind: "holiday", date: fixed(12, 26) },
-  { key: "new-years-eve", title: "Réveillon du Nouvel An", emoji: "🥂", kind: "fun", date: fixed(12, 31) },
+  { key: "fathers-day", title: "Father's Day", fr: "Fête des Pères", emoji: "👔", kind: "family", date: (y) => nthWeekday(y, 5, 0, 3) },
+  { key: "summer", title: "First day of summer", fr: "Premier jour de l'été", emoji: "☀️", kind: "season", date: fixed(6, 21) },
+  { key: "fete-nationale", title: "Fête nationale du Québec", fr: "Fête nationale du Québec", emoji: "⚜️", kind: "holiday", date: fixed(6, 24) },
+  { key: "canada-day", title: "Canada Day", fr: "Fête du Canada", emoji: "🇨🇦", kind: "holiday", date: fixed(7, 1) },
+  { key: "girlfriend-day", title: "Girlfriend Day", fr: "Girlfriend Day", emoji: "💕", kind: "love", date: fixed(8, 1) },
+  { key: "labour-day", title: "Labour Day", fr: "Fête du Travail", emoji: "🛠️", kind: "holiday", date: (y) => nthWeekday(y, 8, 1, 1) },
+  { key: "fall", title: "First day of fall", fr: "Premier jour de l'automne", emoji: "🍂", kind: "season", date: fixed(9, 22) },
+  { key: "boyfriend-day", title: "Boyfriend Day", fr: "Boyfriend Day", emoji: "💙", kind: "love", date: fixed(10, 3) },
+  { key: "thanksgiving", title: "Thanksgiving", fr: "Action de grâce", emoji: "🦃", kind: "family", date: (y) => nthWeekday(y, 9, 1, 2) },
+  { key: "halloween", title: "Halloween", fr: "Halloween", emoji: "🎃", kind: "fun", date: fixed(10, 31) },
+  { key: "remembrance", title: "Remembrance Day", fr: "Jour du Souvenir", emoji: "🌺", kind: "holiday", date: fixed(11, 11) },
+  { key: "mens-day", title: "International Men's Day", fr: "Journée internationale des hommes", emoji: "🧔", kind: "love", date: fixed(11, 19) },
+  { key: "black-friday", title: "Black Friday", fr: "Black Friday", emoji: "🛍️", kind: "fun", date: (y) => shift(nthWeekday(y, 10, 4, 4), 1) },
+  { key: "winter", title: "First day of winter", fr: "Premier jour de l'hiver", emoji: "❄️", kind: "season", date: fixed(12, 21) },
+  { key: "christmas-eve", title: "Christmas Eve", fr: "Réveillon de Noël", emoji: "🎄", kind: "family", date: fixed(12, 24) },
+  { key: "christmas", title: "Christmas", fr: "Noël", emoji: "🎄", kind: "holiday", date: fixed(12, 25) },
+  { key: "boxing-day", title: "Boxing Day", fr: "Lendemain de Noël", emoji: "🎁", kind: "holiday", date: fixed(12, 26) },
+  { key: "new-years-eve", title: "New Year's Eve", fr: "Réveillon du Nouvel An", emoji: "🥂", kind: "fun", date: fixed(12, 31) },
 ];
 
 /** Every occasion from the start of `from`'s day through `to`, in date order. */
-export function occasionsBetween(from: Date, to: Date): Occasion[] {
+export function occasionsBetween(from: Date, to: Date, lang: "en" | "fr" = "en"): Occasion[] {
   const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
   const out: Occasion[] = [];
   for (let y = start.getFullYear(); y <= to.getFullYear(); y++) {
     for (const def of DEFS) {
       const date = def.date(y);
       if (date >= start && date <= to) {
-        out.push({ key: `${def.key}-${y}`, title: def.title, date, emoji: def.emoji, kind: def.kind });
+        out.push({
+          key: `${def.key}-${y}`,
+          title: lang === "fr" ? def.fr : def.title,
+          date,
+          emoji: def.emoji,
+          kind: def.kind,
+        });
       }
     }
   }

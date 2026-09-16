@@ -5,15 +5,18 @@ import { useRouter } from "next/navigation";
 
 import { LOCALES } from "@/lib/locales";
 import { money } from "@/lib/format";
+import { langOf } from "@/lib/i18n";
+import { useT } from "@/components/I18nProvider";
 import { setLocale } from "./actions";
 
 /**
- * Shows a live example rather than only a language name — the whole point of
- * this setting is how numbers look, and "fr-CA" means nothing until you see
- * that it renders 1 234,56 $ instead of $1,234.56.
+ * One setting picks both the interface language and how numbers look —
+ * "Français (Canada)" speaks French *and* renders 1 234,56 $. The live example
+ * shows the second half, which "fr-CA" alone never explains.
  */
 export function LocalePicker({ current, currency }: { current: string; currency: string }) {
   const router = useRouter();
+  const t = useT();
   const [pending, start] = useTransition();
   const [value, setValue] = useState(current);
 
@@ -32,7 +35,7 @@ export function LocalePicker({ current, currency }: { current: string; currency:
         value={value}
         disabled={pending}
         onChange={(e) => choose(e.target.value)}
-        aria-label="Number and date formatting"
+        aria-label={t("Language and formatting")}
         className="field"
       >
         {LOCALES.map((l) => (
@@ -42,8 +45,10 @@ export function LocalePicker({ current, currency }: { current: string; currency:
         ))}
       </select>
       <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-        Amounts look like <span className="font-semibold">{money(123456, currency, value)}</span>.
-        This changes formatting only — the app is still in English.
+        {t("Amounts look like {example}.", { example: money(123456, currency, value) })}{" "}
+        {langOf(value) === "fr"
+          ? t("The interface is in French.")
+          : t("The interface is in English.")}
       </p>
     </div>
   );

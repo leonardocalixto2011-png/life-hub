@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { requireUser } from "@/lib/session";
+import { getT } from "@/lib/i18n-server";
 import { prisma } from "@/lib/prisma";
 import { InviteCard } from "./InviteCard";
 
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function InvitesPage() {
   const user = await requireUser();
+  const t = await getT();
   const invites = await prisma.hubMembership.findMany({
     where: { userId: user.id, status: "INVITED" },
     include: {
@@ -39,19 +41,18 @@ export default async function InvitesPage() {
     <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-6 p-6">
       <div>
         <h1 className="display text-3xl">
-          {invites.length === 0 ? "Nothing waiting." : "You've been invited."}
+          {invites.length === 0 ? t("Nothing waiting.") : t("You've been invited.")}
         </h1>
         <p className="mt-1 text-sm text-[var(--color-text-dim)]">
-          Joining a hub shares its bills, deadlines and calendar. Your debts stay private
-          until you choose otherwise.
+          {t("Joining a hub shares its bills, deadlines and calendar. Your debts stay private until you choose otherwise.")}
         </p>
       </div>
 
       {invites.length === 0 ? (
         <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
-          No pending invites.{" "}
+          {t("No pending invites.")}{" "}
           <Link href="/today" className="font-semibold underline">
-            Back to Life Hub
+            {t("Back to Life Hub")}
           </Link>
         </p>
       ) : (
@@ -64,7 +65,7 @@ export default async function InvitesPage() {
               color={inv.hub.color}
               coverImageUrl={inv.hub.coverImageUrl}
               coverBy={inv.hub.coverBy?.name ?? null}
-              invitedBy={inv.hub.createdBy.name ?? inv.hub.createdBy.email ?? "Someone"}
+              invitedBy={inv.hub.createdBy.name ?? inv.hub.createdBy.email ?? t("Someone")}
               members={inv.hub.memberships.map((m) => m.user)}
             />
           ))}

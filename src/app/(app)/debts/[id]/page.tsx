@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getDebt, hubChrome } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getT } from "@/lib/i18n-server";
 import { toDateInput } from "@/lib/format";
 import { basisPointsToInput, centsToInput } from "@/lib/money";
 import { DebtForm } from "../DebtForm";
@@ -17,6 +18,7 @@ export default async function DebtDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { user, hub } = await requireHub();
+  const t = await getT();
   const { id } = await params;
   const [debt, { ventures, members }] = await Promise.all([
     withHub(user.id, (tx) => getDebt(tx, user.id, id)),
@@ -31,7 +33,7 @@ export default async function DebtDetailPage({
   return (
     <div className="space-y-3 p-3">
       <Link href="/debts" className="text-xs font-semibold text-[var(--color-text-dim)]">
-        ← Debts
+        ← {t("Debts")}
       </Link>
       <DebtForm
         ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}
@@ -56,14 +58,13 @@ export default async function DebtDetailPage({
       {debt.status !== "PAID_OFF" && (
         <form action={logDebtPayment} className="card space-y-2 p-4">
           <input type="hidden" name="id" value={debt.id} />
-          <div className="text-xs font-semibold">Log a payment</div>
+          <div className="text-xs font-semibold">{t("Log a payment")}</div>
           <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-            Adds a matching Budget expense, drops the balance, and moves the due
-            date forward a month.
+            {t("Adds a matching Budget expense, drops the balance, and moves the due date forward one payment.")}
           </p>
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-              Amount
+              {t("Amount")}
               <input
                 name="amount"
                 type="number"
@@ -78,7 +79,7 @@ export default async function DebtDetailPage({
               />
             </label>
             <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-              Date
+              {t("Date")}
               <input
                 type="date"
                 name="date"
@@ -88,7 +89,7 @@ export default async function DebtDetailPage({
             </label>
           </div>
           <button type="submit" className="btn btn-primary w-full">
-            Log payment
+            {t("Log payment")}
           </button>
         </form>
       )}

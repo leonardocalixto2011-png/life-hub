@@ -3,8 +3,9 @@ import Link from "next/link";
 import { hubChrome, listTasks, recurringSuggestions } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getLang, getT } from "@/lib/i18n-server";
 import { TaskListCard } from "@/components/TaskListCard";
-import { EmptyState, QUICK_ADD_EXAMPLES } from "@/components/EmptyState";
+import { EmptyState, quickAddExamples } from "@/components/EmptyState";
 import { RecurringNudge } from "@/components/RecurringNudge";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +53,7 @@ export default async function TasksPage({
 }) {
   const sp = await searchParams;
   const { user, hub } = await requireHub();
+  const [t, lang] = await Promise.all([getT(), getLang()]);
   const noFilters = !sp.venture && sp.mine !== "1" && sp.show !== "all";
 
   const includeDone = sp.show === "all";
@@ -73,7 +75,7 @@ export default async function TasksPage({
 
   return (
     <div className="space-y-3 p-3">
-      <h1 className="text-lg font-bold">Tasks</h1>
+      <h1 className="text-lg font-bold">{t("Tasks")}</h1>
 
       {noFilters && suggestions.length > 0 && (
         <RecurringNudge suggestions={suggestions} />
@@ -81,7 +83,7 @@ export default async function TasksPage({
 
       <div className="flex flex-wrap gap-1.5">
         <Chip href={qs(sp, { venture: undefined })} active={!sp.venture}>
-          All
+          {t("All")}
         </Chip>
         {ventures.map((v) => (
           <Chip
@@ -96,10 +98,10 @@ export default async function TasksPage({
 
       <div className="flex flex-wrap gap-1.5">
         <Chip href={qs(sp, { mine: mine ? undefined : "1" })} active={mine}>
-          Mine
+          {t("Mine")}
         </Chip>
         <Chip href={qs(sp, { show: includeDone ? undefined : "all" })} active={includeDone}>
-          Show done
+          {t("Show done")}
         </Chip>
       </div>
 
@@ -109,12 +111,12 @@ export default async function TasksPage({
         members={members}
         empty={
           mine ? (
-            "No tasks assigned to you."
+            t("No tasks assigned to you.")
           ) : (
             <EmptyState
-              headline="Nothing on your list."
-              title="The box up top takes plain sentences:"
-              examples={QUICK_ADD_EXAMPLES}
+              headline={t("Nothing on your list.")}
+              title={t("The box up top takes plain sentences:")}
+              examples={quickAddExamples(lang)}
             />
           )
         }

@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { format, isSameDay } from "date-fns";
+import { isSameDay } from "date-fns";
 
 import { requireUser, listMyHubs } from "@/lib/session";
 import { withHub } from "@/lib/hub-context";
 import { myItemsInHub, type MyItem } from "@/lib/data";
+import { getLang, getT } from "@/lib/i18n-server";
+import { fmtDay } from "@/lib/i18n";
 import { daysUntil } from "@/lib/format";
 import { VentureChip } from "@/components/VentureChip";
 
@@ -36,6 +38,7 @@ function Row({ item }: { item: MyItem }) {
 
 export default async function MinePage() {
   const user = await requireUser();
+  const [t, lang] = await Promise.all([getT(), getLang()]);
   const hubs = await listMyHubs(user.id);
 
   const perHub = await withHub(user.id, (tx) =>
@@ -60,22 +63,22 @@ export default async function MinePage() {
   return (
     <div className="space-y-4 p-3">
       <div>
-        <h1 className="text-lg font-bold">Mine</h1>
+        <h1 className="text-lg font-bold">{t("Mine")}</h1>
         <p className="text-xs text-[var(--color-text-dim)]">
-          Assigned to you, across all {hubs.length} of your hub{hubs.length === 1 ? "" : "s"}.
+          {t("Assigned to you, across all {n} of your hubs.", { n: hubs.length })}
         </p>
       </div>
 
       {items.length === 0 && (
         <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
-          Nothing assigned to you right now.
+          {t("Nothing assigned to you right now.")}
         </p>
       )}
 
       {overdue.length > 0 && (
         <section>
           <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-danger)]">
-            Overdue · {overdue.length}
+            {t("Overdue")} · {overdue.length}
           </h2>
           <div className="card divide-y divide-[var(--color-border)]">
             {overdue.map((i) => (
@@ -88,7 +91,7 @@ export default async function MinePage() {
       {days.map(({ date, items: dayItems }) => (
         <section key={date.toISOString()}>
           <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-            {isSameDay(date, now) ? "Today" : format(date, "EEEE, MMM d")}
+            {isSameDay(date, now) ? t("Today") : fmtDay(date, lang)}
           </h2>
           <div className="card divide-y divide-[var(--color-border)]">
             {dayItems.map((i) => (
