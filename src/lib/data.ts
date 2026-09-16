@@ -13,6 +13,7 @@ import { cache } from "react";
 
 import type { HubTx } from "@/lib/hub-context";
 import { withHub } from "@/lib/hub-context";
+import { prisma } from "@/lib/prisma";
 import { money } from "@/lib/format";
 import { monthlyCents, perMonth } from "@/lib/money";
 
@@ -60,9 +61,24 @@ export function listVentures(tx: HubTx, hubId: string) {
   });
 }
 
-/** Active members of a hub — the source for assignee pickers and the members list. */
-export function listMembers(tx: HubTx, hubId: string) {
-  return tx.hubMembership
+/**
+ * Active members of a hub — the source for every people picker (assignee,
+ * attendees, paid-by, whose schedule).
+ *
+ * Trusted client on purpose, guarded by the viewer's own membership. The
+ * HubMembership RLS policy is self-row-only (documented in the multihub_rls
+ * migration), so under `app_user` this query returned exactly one row — the
+ * viewer — and in production every picker offered nobody else. Local dev
+ * never showed it, since its Postgres enforces no policy. The membership
+ * check below is the boundary that policy would otherwise have been.
+ */
+export async function listMembers(viewerId: string, hubId: string) {
+  const viewer = await prisma.hubMembership.findFirst({
+    where: { hubId, userId: viewerId, status: "ACTIVE" },
+    select: { id: true },
+  });
+  if (!viewer) return [];
+  return prisma.hubMembership
     .findMany({
       where: { hubId, status: "ACTIVE" },
       include: { user: { select: { id: true, name: true, email: true, role: true } } },
@@ -88,7 +104,7 @@ export const hubChrome = cache(async (userId: string, hubId: string) => {
   return withHub(userId, async (tx) => {
     const [ventures, members, reviewCount] = await Promise.all([
       listVentures(tx, hubId),
-      listMembers(tx, hubId),
+      listMembers(userId, hubId),
       pendingReviewCount(tx, userId),
     ]);
     return { ventures, members, reviewCount };

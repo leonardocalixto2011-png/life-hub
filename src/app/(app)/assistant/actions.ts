@@ -61,7 +61,7 @@ export async function parseAndAdd(
   }
 
   const [ventures, members] = await withHub(user.id, (tx) =>
-    Promise.all([listVentures(tx, hub.id), listMembers(tx, hub.id)]),
+    Promise.all([listVentures(tx, hub.id), listMembers(user.id, hub.id)]),
   );
   const today = new Date();
 
