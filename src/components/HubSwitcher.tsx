@@ -10,9 +10,11 @@ type Hub = { id: string; name: string; color: string };
 export function HubSwitcher({
   hubs,
   currentHubId,
+  pendingInvites = 0,
 }: {
   hubs: Hub[];
   currentHubId: string;
+  pendingInvites?: number;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -31,6 +33,14 @@ export function HubSwitcher({
         />
         <span className="max-w-[9rem] truncate">{current?.name ?? "Life Hub"}</span>
         <span className="text-[0.6rem] text-[var(--color-text-dim)]">▾</span>
+        {pendingInvites > 0 && (
+          <span
+            aria-label={`${pendingInvites} pending invite${pendingInvites === 1 ? "" : "s"}`}
+            className="grid h-4 min-w-4 place-items-center rounded-full bg-[var(--color-danger)] px-1 text-[0.6rem] font-bold text-white"
+          >
+            {pendingInvites}
+          </span>
+        )}
       </button>
 
       {open && (
@@ -57,6 +67,15 @@ export function HubSwitcher({
               ))}
             </div>
             <div className="p-1">
+              {pendingInvites > 0 && (
+                <Link
+                  href="/hubs/invites"
+                  onClick={() => setOpen(false)}
+                  className="block rounded-lg px-2 py-2 text-sm font-semibold text-[var(--color-danger)]"
+                >
+                  Invitations · {pendingInvites}
+                </Link>
+              )}
               <Link
                 href={`/hubs/${currentHubId}/members`}
                 onClick={() => setOpen(false)}

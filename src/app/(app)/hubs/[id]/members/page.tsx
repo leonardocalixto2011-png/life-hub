@@ -49,18 +49,25 @@ export default async function HubMembersPage({
       include: { user: { select: { id: true, name: true, email: true } } },
       orderBy: [{ status: "asc" }, { role: "asc" }, { joinedAt: "asc" }],
     }),
-    // People the owner already shares another hub with, who aren't in this
-    // one yet. The same rule addKnownMember enforces server-side — the list
-    // is a convenience, the action is the boundary.
+    // People the owner may add without an email round-trip: everyone, for an
+    // app ADMIN (they admitted every account); otherwise people they already
+    // share another hub with. Same rule addKnownMember enforces server-side —
+    // the list is a convenience, the action is the boundary. Someone already
+    // invited here still shows, so a stalled invite can be completed in a tap.
     isOwner
       ? prisma.user.findMany({
           where: {
             id: { not: user.id },
+            email: { not: null },
             hubMemberships: {
-              some: {
-                status: "ACTIVE",
-                hub: { memberships: { some: { userId: user.id, status: "ACTIVE" } } },
-              },
+              ...(user.role === "ADMIN"
+                ? {}
+                : {
+                    some: {
+                      status: "ACTIVE",
+                      hub: { memberships: { some: { userId: user.id, status: "ACTIVE" } } },
+                    },
+                  }),
               none: { hubId, status: "ACTIVE" },
             },
           },

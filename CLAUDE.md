@@ -1088,6 +1088,21 @@ upcoming event including holidays.
   by a server component arrives as a client reference — `.map is not a function`
   at runtime, with a clean `tsc` and a clean build. Shared constants live in
   plain modules (`BUDGET_CATEGORIES` → `lib/couple.ts`).
+- ⚠️ **Timezone bug found in production, fixed in Phase 13b.** Vercel runs in
+  UTC; every date here is built with local constructors/date-fns. Typed "08:00"
+  was stored as 08:00Z: server renders showed 08:00, the browser (Toronto)
+  showed 4:00 AM, and "today" rolled over at 8 p.m. Montréal. Local dev never
+  shows it (the dev box is in Toronto). Fix: `src/instrumentation.ts` sets
+  `process.env.TZ = "America/Toronto"` in `register()` (Node re-reads TZ on
+  assignment — verified), and migration `20260915150000_event_times_to_local`
+  converts existing `Event` rows (`(ts AT TIME ZONE 'America/Toronto') AT TIME
+  ZONE 'UTC'`). Date-only fields are stored at local noon and need no change.
+  **That migration must only run against UTC-written data** — on a local dev DB
+  use `prisma migrate resolve --applied` instead. If you ever add a new
+  time-of-day column, it inherits the pinned zone automatically.
+- Invited users with zero active hubs are now redirected to `/hubs/invites`
+  rather than `/hubs/new` (a real member sat "invited" because the invite was
+  hidden behind a create-a-hub form).
 - Dev-only: `document.querySelector('main').innerText` reads the loading
   skeleton ("Loading") while the real page is parked in the streamed hidden div —
   screenshot instead (same root cause as the Phase 12 `S:0` note).

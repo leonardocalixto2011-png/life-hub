@@ -92,6 +92,29 @@ export const listMyHubs = cache(async (userId: string): Promise<SessionHub[]> =>
 });
 
 /**
+ * Hubs this user has been invited to and hasn't answered. Surfaced in the hub
+ * switcher and on /today: an invite that only lived on /hubs/invites (a page
+ * nothing linked to once you had one hub) sat unanswered for days.
+ */
+export const listPendingInvites = cache(async (userId: string) => {
+  const rows = await prisma.hubMembership.findMany({
+    where: { userId, status: "INVITED" },
+    select: {
+      hub: {
+        select: { id: true, name: true, color: true, createdBy: { select: { name: true, email: true } } },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map((r) => ({
+    id: r.hub.id,
+    name: r.hub.name,
+    color: r.hub.color,
+    invitedBy: r.hub.createdBy.name ?? r.hub.createdBy.email ?? "Someone",
+  }));
+});
+
+/**
  * Resolves the "current" hub from the `current_hub` cookie, falling back to
  * the user's oldest ACTIVE membership. Returns null if the user belongs to no
  * hub yet (brand new invited user who hasn't accepted anything).
@@ -116,6 +139,14 @@ const resolveCurrentHub = cache(async (userId: string): Promise<SessionHub | nul
 export async function requireHub(): Promise<{ user: SessionUser; hub: SessionHub }> {
   const user = await requireUser();
   const hub = await resolveCurrentHub(user.id);
-  if (!hub) redirect("/hubs/new");
+  if (!hub) {
+    // Someone who was invited but hasn't accepted yet has zero active hubs.
+    // Sending them to "Create a hub" buried the invite behind a form they had
+    // no reason to fill in — a real member sat as "invited" for this reason.
+    const pending = await prisma.hubMembership.count({
+      where: { userId: user.id, status: "INVITED" },
+    });
+    redirect(pending > 0 ? "/hubs/invites" : "/hubs/new");
+  }
   return { user, hub };
 }

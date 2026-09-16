@@ -105,6 +105,18 @@ export async function inviteMember(hubId: string, formData: FormData) {
   });
 
   if (!invited.already) {
+    // Someone already using the app gets a push too — the email alone was
+    // easy to miss, and the invite then sat unanswered.
+    try {
+      await sendPushToUser(invited.target.id, {
+        title: `Invited to "${hub.name}"`,
+        body: `${user.name ?? user.email} invited you. Tap to join.`,
+        url: "/hubs/invites",
+        tag: `hub-invite-${hubId}`,
+      });
+    } catch {
+      // No devices yet is the normal case for a brand-new address.
+    }
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     await sendEmail({
       to: email,
@@ -279,14 +291,20 @@ export async function addKnownMember(hubId: string, formData: FormData) {
 
   await requireHubOwner(hubId, user.id, "add people");
 
-  const known = await prisma.hubMembership.findFirst({
-    where: {
-      userId: targetId,
-      status: "ACTIVE",
-      hub: { memberships: { some: { userId: user.id, status: "ACTIVE" } } },
-    },
-    select: { id: true },
-  });
+  // An app ADMIN admitted every account into this invite-only app, so they may
+  // place anyone; everyone else is limited to people they already share a hub
+  // with. Both are the entire privacy boundary here — keep them server-side.
+  const known =
+    user.role === "ADMIN"
+      ? await prisma.user.findUnique({ where: { id: targetId }, select: { id: true } })
+      : await prisma.hubMembership.findFirst({
+          where: {
+            userId: targetId,
+            status: "ACTIVE",
+            hub: { memberships: { some: { userId: user.id, status: "ACTIVE" } } },
+          },
+          select: { id: true },
+        });
   if (!known) throw new Error("You can only add people you already share a hub with.");
 
   const hub = await prisma.hub.findUniqueOrThrow({ where: { id: hubId }, select: { name: true } });

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { requireHub, listMyHubs } from "@/lib/session";
+import { requireHub, listMyHubs, listPendingInvites } from "@/lib/session";
 import { hubChrome } from "@/lib/data";
 import { QuickAdd } from "@/components/QuickAdd";
 import { BottomNav } from "@/components/BottomNav";
@@ -15,9 +15,10 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const { user, hub } = await requireHub();
-  const [{ ventures, members, reviewCount }, hubs] = await Promise.all([
+  const [{ ventures, members, reviewCount }, hubs, invites] = await Promise.all([
     hubChrome(user.id, hub.id),
     listMyHubs(user.id),
+    listPendingInvites(user.id),
   ]);
 
   return (
@@ -75,7 +76,7 @@ export default async function AppLayout({
           first. The hairline says which hub you're in without that. */}
       <div className="relative z-10 h-[3px] shrink-0" style={{ background: "var(--hub)" }} aria-hidden />
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-2.5 backdrop-blur">
-        <HubSwitcher hubs={hubs} currentHubId={hub.id} />
+        <HubSwitcher hubs={hubs} currentHubId={hub.id} pendingInvites={invites.length} />
         <div className="flex items-center gap-3">
           <Link href="/inbox" aria-label="Review inbox" className="relative text-lg leading-none">
             📥
@@ -97,6 +98,27 @@ export default async function AppLayout({
           defaultAssigneeId={user.id}
           aiEnabled={Boolean(process.env.ANTHROPIC_API_KEY)}
         />
+
+        {/* An invite is the one thing that should interrupt every page: until
+            it's answered the person is looking at a hub that isn't the one
+            they were asked into, and nothing else in the app tells them so. */}
+        {invites.length > 0 && (
+          <Link
+            href="/hubs/invites"
+            className="mx-3 mt-3 flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-sm"
+            style={{
+              borderColor: invites[0].color,
+              background: `color-mix(in srgb, ${invites[0].color} 12%, var(--color-surface))`,
+            }}
+          >
+            <span className="min-w-0 truncate">
+              <span className="font-semibold">{invites[0].invitedBy}</span> invited you to{" "}
+              <span className="font-semibold">{invites[0].name}</span>
+              {invites.length > 1 ? ` (+${invites.length - 1} more)` : ""}
+            </span>
+            <span className="shrink-0 font-semibold text-[var(--color-primary)]">Join →</span>
+          </Link>
+        )}
 
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
