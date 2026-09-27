@@ -18,7 +18,8 @@
     "gen:mail-key": "node scripts/gen-mail-key.mjs",
     "verify:isolation": "node scripts/verify-isolation.mjs",
     "postinstall": "prisma generate",
-    "db:seed-finances": "tsx prisma/seed-finances.ts"
+    "db:seed-finances": "tsx prisma/seed-finances.ts",
+    "db:seed-trip": "tsx prisma/seed-trip-thailand.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
