@@ -1117,6 +1117,18 @@ upcoming event including holidays.
   its checklist, and dated Deadlines for each savings deposit and booking step
   so the existing reminders carry the schedule. Plan page:
   `https://claude.ai/artifact/ELFjwkRrCDFSnPvAdiXREY`.
+- **Trip page is a full itinerary** (migration `20260927020000_trip_itinerary`):
+  `TripItemKind` gained `ACTIVITY` (dated, day-by-day), `SAVE` (dated deposit;
+  ticking it counts toward Saved) and `STOP` (a place, `date`→`endDate`, drives
+  the coloured day strip). `TripItem` gained `date`/`endDate`/`note`. Still one
+  table under `trip_item_via_visible_trip`, so no RLS change. Planned totals
+  exclude SAVE and STOP; checked-off counts exclude STOP.
+- **"Import a whole plan"** (`importTripPlan`) takes a built-in template
+  (`TRIP_TEMPLATES` in `src/lib/trip-plan.ts`) or pasted JSON validated by
+  `tripPlanSchema`, so a plan loads from the browser without a terminal. The
+  Thailand plan lives in `src/lib/trip-plans/thailand-2027.ts`, shared with the
+  seed. `planRows` staggers `createdAt` by 1ms because the page orders a day's
+  items by it and a bulk insert would otherwise shuffle them.
 
 ### Ordered queue (as of 2026-09-07)
 
