@@ -11,7 +11,7 @@ import { countdownLabel, initials, money, toDateInput } from "@/lib/format";
 import { centsToInput } from "@/lib/money";
 import { Figure } from "@/components/Figure";
 import { TripForm } from "../TripForm";
-import { addTripItem, deleteTrip, deleteTripItem, toggleTripItem } from "../actions";
+import { addTripItem, addTripSavings, deleteTrip, deleteTripItem, toggleTripItem } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +54,11 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
   const planned = trip.items.reduce((n, i) => n + (i.costCents ?? 0), 0);
   const memberName = new Map(members.map((m) => [m.id, m]));
   const add = addTripItem.bind(null, trip.id);
+  const save = addTripSavings.bind(null, trip.id);
+  const savedPct =
+    trip.budgetCents && trip.budgetCents > 0
+      ? Math.min(100, Math.round((trip.savedCents / trip.budgetCents) * 100))
+      : null;
   const dayFmt = lang === "fr" ? "EEE d MMM" : "EEE MMM d";
 
   return (
@@ -95,6 +100,45 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
           )}
         </div>
       </div>
+
+      <section className="card space-y-2 p-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">{t("Savings")}</h2>
+          <span className="text-sm tabular-nums">
+            {money(trip.savedCents, currency, locale)}
+            {trip.budgetCents != null && (
+              <span className="text-[var(--color-text-dim)]"> / {money(trip.budgetCents, currency, locale)}</span>
+            )}
+          </span>
+        </div>
+        {savedPct != null && (
+          <div
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={savedPct}
+            aria-label={t("Saved for this trip")}
+            className="h-2.5 overflow-hidden rounded-full bg-[var(--color-surface-2)]"
+          >
+            <div className="h-full rounded-full bg-[var(--color-ok)]" style={{ width: `${savedPct}%` }} />
+          </div>
+        )}
+        <form action={save} className="grid grid-cols-[1fr_auto] gap-2">
+          <input
+            name="amount"
+            type="number"
+            step="0.01"
+            inputMode="decimal"
+            required
+            className="field"
+            placeholder={t("Amount put aside")}
+            aria-label={t("Amount put aside")}
+          />
+          <button type="submit" className="btn">
+            {t("+ Add to savings")}
+          </button>
+        </form>
+      </section>
 
       <form action={add} className="card space-y-2 p-3">
         <div className="grid grid-cols-[7rem_1fr] gap-2">

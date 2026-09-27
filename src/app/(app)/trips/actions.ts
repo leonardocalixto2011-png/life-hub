@@ -146,3 +146,27 @@ export async function deleteTripItem(fd: FormData) {
   });
   revalidateContent(`/trips/${tripId}`, "/trips");
 }
+
+/**
+ * Adds to (or, with a negative amount, takes back from) what's been saved for
+ * a trip. Never lets the total go below zero.
+ */
+export async function addTripSavings(tripId: string, fd: FormData) {
+  const { user, hub } = await requireHub();
+  z.string().cuid().parse(tripId);
+  const { amount } = parse(z.object({ amount: z.string().trim().min(1, "Enter an amount") }), fd);
+  const cents = dollarsToCents(amount);
+  if (cents == null || cents === 0) throw new Error("Enter an amount");
+  await withHub(user.id, async (tx) => {
+    const trip = await tx.trip.findFirst({
+      where: { id: tripId, ...visibleTrip(hub.id, user.id) },
+      select: { savedCents: true },
+    });
+    if (!trip) throw new Error("Trip not found");
+    await tx.trip.update({
+      where: { id: tripId },
+      data: { savedCents: Math.max(0, trip.savedCents + cents) },
+    });
+  });
+  revalidateContent(`/trips/${tripId}`, "/trips");
+}

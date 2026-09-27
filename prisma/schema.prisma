@@ -717,6 +717,8 @@ model Trip {
   startDate   DateTime
   endDate     DateTime
   budgetCents Int?
+  /// Put aside so far for this trip — the savings progress bar on the trip page.
+  savedCents  Int        @default(0)
   notes       String?
   createdById String
   createdBy   User       @relation(fields: [createdById], references: [id], onDelete: Restrict)

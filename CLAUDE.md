@@ -1107,6 +1107,17 @@ upcoming event including holidays.
   skeleton ("Loading") while the real page is parked in the streamed hidden div —
   screenshot instead (same root cause as the Phase 12 `S:0` note).
 
+### Trip savings + the Thailand plan (2026-09-27)
+
+- `Trip.savedCents` (migration `20260927010000_trip_savings`, additive, no RLS
+  change) drives a Savings progress bar on `/trips/[id]`; `addTripSavings`
+  accepts a negative amount to take money back and floors the total at 0.
+- `prisma/seed-trip-thailand.ts` (`SEED_TRIP=yes ADMIN_EMAIL=… HUB_NAME=… npm
+  run db:seed-trip`) loads the March 2027 Thailand + Vietnam plan: the trip,
+  its checklist, and dated Deadlines for each savings deposit and booking step
+  so the existing reminders carry the schedule. Plan page:
+  `https://claude.ai/artifact/ELFjwkRrCDFSnPvAdiXREY`.
+
 ### Ordered queue (as of 2026-09-07)
 
 Supersedes the 2026-09-06 list below, which is kept for its detail.
