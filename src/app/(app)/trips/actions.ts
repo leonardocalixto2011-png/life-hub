@@ -8,6 +8,7 @@ import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
 import { revalidateContent } from "@/lib/revalidate";
+import { planRows, TRIP_TEMPLATES, tripPlanSchema, type TripPlan } from "@/lib/trip-plan";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the dates");
@@ -82,9 +83,11 @@ export async function deleteTrip(fd: FormData) {
 }
 
 const itemSchema = z.object({
-  kind: z.enum(["BOOK", "TODO", "PACK"]).default("TODO"),
+  kind: z.enum(["BOOK", "TODO", "PACK", "ACTIVITY", "SAVE", "STOP"]).default("TODO"),
   title: z.string().trim().min(1, "What needs doing?").max(160),
   cost: z.preprocess(emptyToNull, z.string().nullable()),
+  date: z.preprocess(emptyToNull, day.nullable()),
+  endDate: z.preprocess(emptyToNull, day.nullable()),
   assignedToId: z.preprocess(emptyToNull, z.string().cuid().nullable()),
 });
 
@@ -92,6 +95,12 @@ export async function addTripItem(tripId: string, fd: FormData) {
   const { user, hub } = await requireHub();
   z.string().cuid().parse(tripId);
   const d = parse(itemSchema, fd);
+  if ((d.kind === "ACTIVITY" || d.kind === "SAVE" || d.kind === "STOP") && !d.date) {
+    throw new Error("Pick a date");
+  }
+  if (d.kind === "STOP" && (!d.endDate || d.endDate <= d.date!)) {
+    throw new Error("A stop needs the day you leave, after the day you arrive.");
+  }
   await withHub(user.id, async (tx) => {
     const trip = await tx.trip.findFirst({
       where: { id: tripId, ...visibleTrip(hub.id, user.id) },
@@ -105,6 +114,8 @@ export async function addTripItem(tripId: string, fd: FormData) {
         kind: d.kind,
         title: d.title,
         costCents: dollarsToCents(d.cost),
+        date: fromDateInput(d.date),
+        endDate: d.kind === "STOP" ? fromDateInput(d.endDate) : null,
         assignedToId: d.assignedToId,
       },
     });
@@ -167,6 +178,49 @@ export async function addTripSavings(tripId: string, fd: FormData) {
       where: { id: tripId },
       data: { savedCents: Math.max(0, trip.savedCents + cents) },
     });
+  });
+  revalidateContent(`/trips/${tripId}`, "/trips");
+}
+
+/**
+ * Loads a whole plan into a trip: stops, day-by-day activities, dated
+ * bookings and to-dos, the savings schedule and the packing list. The plan
+ * is either a built-in template or pasted JSON in the same shape. Adds to
+ * what's there; sets the budget only when the trip has none.
+ */
+export async function importTripPlan(tripId: string, fd: FormData) {
+  const { user, hub } = await requireHub();
+  z.string().cuid().parse(tripId);
+
+  let plan: TripPlan;
+  const key = String(fd.get("template") ?? "");
+  const json = String(fd.get("json") ?? "").trim();
+  if (key && TRIP_TEMPLATES[key]) {
+    plan = TRIP_TEMPLATES[key].plan;
+  } else if (json) {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(json);
+    } catch {
+      throw new Error("That isn't valid JSON.");
+    }
+    const res = tripPlanSchema.safeParse(raw);
+    if (!res.success) throw new Error(res.error.issues[0]?.message ?? "That plan doesn't look right.");
+    plan = res.data;
+  } else {
+    throw new Error("Pick a plan or paste one.");
+  }
+
+  await withHub(user.id, async (tx) => {
+    const trip = await tx.trip.findFirst({
+      where: { id: tripId, ...visibleTrip(hub.id, user.id) },
+      select: { hubId: true, budgetCents: true },
+    });
+    if (!trip) throw new Error("Trip not found");
+    await tx.tripItem.createMany({ data: planRows(plan, tripId, trip.hubId) });
+    if (trip.budgetCents == null && plan.budget != null) {
+      await tx.trip.update({ where: { id: tripId }, data: { budgetCents: Math.round(plan.budget * 100) } });
+    }
   });
   revalidateContent(`/trips/${tripId}`, "/trips");
 }

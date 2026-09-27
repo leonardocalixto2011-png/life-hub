@@ -16,7 +16,7 @@ export default async function TripsPage() {
   const trips = await withHub(user.id, (tx) =>
     tx.trip.findMany({
       where: { hubId: hub.id, OR: [{ visibility: "SHARED" }, { createdById: user.id }] },
-      include: { items: { select: { done: true, costCents: true } } },
+      include: { items: { select: { done: true, costCents: true, kind: true } } },
       orderBy: { startDate: "asc" },
     }),
   );
@@ -29,8 +29,12 @@ export default async function TripsPage() {
     `${fmtShort(start, lang)} – ${fmt(end, lang === "fr" ? "d MMM yyyy" : "MMM d, yyyy", lang)}`;
 
   const Card = ({ trip }: { trip: (typeof trips)[number] }) => {
-    const done = trip.items.filter((i) => i.done).length;
-    const planned = trip.items.reduce((n, i) => n + (i.costCents ?? 0), 0);
+    // Stops aren't to-dos, and savings deposits aren't spending.
+    const checkable = trip.items.filter((i) => i.kind !== "STOP");
+    const done = checkable.filter((i) => i.done).length;
+    const planned = trip.items
+      .filter((i) => i.kind !== "SAVE" && i.kind !== "STOP")
+      .reduce((n, i) => n + (i.costCents ?? 0), 0);
     const ongoing = trip.startDate <= today && trip.endDate >= today;
     return (
       <Link href={`/trips/${trip.id}`} className="card block p-3">
@@ -47,8 +51,8 @@ export default async function TripsPage() {
           </span>
         </div>
         <div className="mt-1.5 flex flex-wrap gap-3 text-[0.7rem] text-[var(--color-text-dim)]">
-          {trip.items.length > 0 && (
-            <span>{t("{done}/{total} checked off", { done, total: trip.items.length })}</span>
+          {checkable.length > 0 && (
+            <span>{t("{done}/{total} checked off", { done, total: checkable.length })}</span>
           )}
           {trip.budgetCents != null && (
             <span>{t("budget")} {money(trip.budgetCents, hub.currency, locale)}</span>

@@ -32,8 +32,8 @@ model User {
   emailVerified      DateTime?
   image              String?
   backgroundImageUrl String? // Vercel Blob URL, set via /appearance — deliberately
-                             // separate from `image` above (an unused Auth.js
-                             // sign-in-provider avatar field, different concern)
+  // separate from `image` above (an unused Auth.js
+  // sign-in-provider avatar field, different concern)
   themeId            String? // slug from src/lib/themes.ts; null = the default palette
   locale             String? // BCP-47 tag for number/date formatting; null = en-CA
   role               UserRole  @default(MEMBER)
@@ -83,21 +83,21 @@ enum Visibility {
 }
 
 model Hub {
-  id          String   @id @default(cuid())
-  name        String
-  color       String   @default("#6366f1")
-  plan        String   @default("free") // placeholder for future Stripe billing
+  id           String   @id @default(cuid())
+  name         String
+  color        String   @default("#6366f1")
+  plan         String   @default("free") // placeholder for future Stripe billing
   /// One currency per hub. Deliberately not per-row for display: totals across
   /// mixed currencies are meaningless without FX rates, and the pages used to
   /// sum everything then label it with whichever row happened to be first.
-  currency    String   @default("CAD")
-  createdById String
-  createdBy   User     @relation("HubCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  createdAt   DateTime @default(now())
+  currency     String   @default("CAD")
+  createdById  String
+  createdBy    User     @relation("HubCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt    DateTime @default(now())
   /// Random slug in this hub's inbound email alias (hub-<token>@…). Null until
   /// someone asks for the address. Unique so a forwarded mail resolves to
   /// exactly one hub — see src/lib/inbound-address.ts.
-  inboundToken String? @unique
+  inboundToken String?  @unique
 
   /// The hub's shared cover photo — everyone in the hub sees the same one.
   /// Deliberately distinct from `User.backgroundImageUrl`, which stays private
@@ -360,13 +360,13 @@ model Debt {
   name                 String
   type                 DebtType         @default(OTHER)
   ownerBackfilled      Boolean          @default(false) // owner was guessed by the
-                                                        // 20260906111321 migration; UI asks a human to confirm
+  // 20260906111321 migration; UI asks a human to confirm
   balanceCents         Int
   originalBalanceCents Int? // what it started at — drives payoff progress
   aprBasisPoints       Int? // 2599 = 25.99% APR; null when unknown/undisclosed
   minimumPaymentCents  Int? // the contractual minimum
   actualPaymentCents   Int? // what's actually being paid, if different (e.g. a
-                            // negotiated or hardship-program amount)
+  // negotiated or hardship-program amount)
   paymentFrequency     PaymentFrequency @default(MONTHLY)
   dueDate              DateTime?
   status               DebtStatus       @default(CURRENT)
@@ -453,22 +453,22 @@ enum EventKind {
 }
 
 model Event {
-  id          String     @id @default(cuid())
-  hubId       String
-  hub         Hub        @relation(fields: [hubId], references: [id], onDelete: Cascade)
-  visibility  Visibility @default(SHARED)
-  title       String
-  notes       String?
-  startAt     DateTime
-  endAt       DateTime
-  location    String?
-  ventureId   String?
-  venture     Venture?   @relation(fields: [ventureId], references: [id], onDelete: SetNull)
-  attendeeIds String[]   @default([])
-  createdById String
-  createdBy   User       @relation(fields: [createdById], references: [id], onDelete: Restrict)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id                String     @id @default(cuid())
+  hubId             String
+  hub               Hub        @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  visibility        Visibility @default(SHARED)
+  title             String
+  notes             String?
+  startAt           DateTime
+  endAt             DateTime
+  location          String?
+  ventureId         String?
+  venture           Venture?   @relation(fields: [ventureId], references: [id], onDelete: SetNull)
+  attendeeIds       String[]   @default([])
+  createdById       String
+  createdBy         User       @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
   // Shared across every row generated from one "repeat on these weekdays
   // until this date" setup (src/app/(app)/calendar/actions.ts) — real rows,
   // not a live recurrence engine. Null for a normal one-off event.
@@ -595,8 +595,8 @@ model MailAccount {
   imapUidValidity Int? // YAHOO only — IMAP UIDVALIDITY of the polled INBOX
   imapLastUid     Int? // YAHOO only — last UID successfully processed
   graphDeltaLink  String? // MICROSOFT only — opaque Graph delta continuation URL;
-                          // may be an in-progress @odata.nextLink or a completed
-                          // @odata.deltaLink, both called identically
+  // may be an in-progress @odata.nextLink or a completed
+  // @odata.deltaLink, both called identically
   status          MailAccountStatus @default(ACTIVE)
   lastSyncedAt    DateTime?
   lastError       String?
@@ -730,10 +730,17 @@ model Trip {
   @@index([hubId, startDate])
 }
 
+/// BOOK/TODO/PACK are checklists. ACTIVITY is something to do on a given day
+/// of the trip. SAVE is a planned savings deposit (costCents = amount, done =
+/// put aside). STOP is where you sleep: `date` is the first night, `endDate`
+/// the morning you leave, which is what draws the day strip.
 enum TripItemKind {
   BOOK
   TODO
   PACK
+  ACTIVITY
+  SAVE
+  STOP
 }
 
 /// Carries its own `hubId` so the policy can check membership without a join;
@@ -748,6 +755,11 @@ model TripItem {
   kind         TripItemKind @default(TODO)
   title        String
   costCents    Int?
+  /// The day an activity happens, or the date a booking / deposit is due.
+  date         DateTime?
+  /// Only for STOP: the day you leave.
+  endDate      DateTime?
+  note         String?
   done         Boolean      @default(false)
   assignedToId String?
   createdAt    DateTime     @default(now())

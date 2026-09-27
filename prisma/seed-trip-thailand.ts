@@ -1,6 +1,6 @@
 /**
  * Loads the March 2027 Thailand + Vietnam trip plan into a hub: the trip with
- * its budget, the booking / to-do / packing checklist, and dated deadlines for
+ * its itinerary and checklists, and dated deadlines for
  * every savings deposit and booking step, so the digest and push reminders
  * walk you through it month by month.
  *
@@ -10,11 +10,15 @@
  * invites them. HUB_NAME picks a hub by name instead. With neither, you must
  * belong to exactly one active hub.
  *
- * Nothing personal is in here, only the plan itself: public prices and
- * dates. Idempotent: a trip with the same title in that hub means it has
- * already run, and nothing is written.
+ * The plan itself lives in src/lib/trip-plans/thailand-2027.ts, shared with
+ * the "Import a whole plan" form on the trip page. Idempotent: a trip with this
+ * title that already has stops is left alone; one made by hand without them
+ * gets the plan filled in.
  */
-import { PrismaClient, type TripItemKind } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
+
+import { planRows } from "../src/lib/trip-plan";
+import { thailand2027 } from "../src/lib/trip-plans/thailand-2027";
 
 const prisma = new PrismaClient();
 
@@ -25,31 +29,6 @@ const c = (dollars: number) => Math.round(dollars * 100);
 /** Date-only fields are stored at local noon, like the rest of the app. */
 const day = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12, 0, 0);
 
-const ITEMS: { kind: TripItemKind; title: string; cost?: number }[] = [
-  { kind: "BOOK", title: "Long-haul flights YUL → BKK, back from DAD (≤ $1,300 each)", cost: 2600 },
-  { kind: "BOOK", title: "Travel insurance (check credit card first)", cost: 230 },
-  { kind: "BOOK", title: "Bangkok hotel, 3 nights (Mar 12–15)", cost: 390 },
-  { kind: "BOOK", title: "Railay / Ao Nang hotel, 4 nights (Mar 15–19)", cost: 600 },
-  { kind: "BOOK", title: "Hoi An hotel, 3 nights (Mar 19–22)", cost: 360 },
-  { kind: "BOOK", title: "Flight Bangkok DMK → Krabi (Mon Mar 15)", cost: 150 },
-  { kind: "BOOK", title: "Flights Krabi → Bangkok → Da Nang (Fri Mar 19)", cost: 300 },
-  { kind: "BOOK", title: "Four-islands boat tour, Krabi (Tue Mar 16)" },
-  { kind: "BOOK", title: "Car Da Nang airport → Hoi An (Fri Mar 19)" },
-  { kind: "TODO", title: "Check passports valid until Sept 23, 2027" },
-  { kind: "TODO", title: "Set Google Flights alerts YUL → BKK, Mar 11–22" },
-  { kind: "TODO", title: "Open the trip savings account + automatic transfer" },
-  { kind: "TODO", title: "Vietnam e-visas at evisa.gov.vn only (entry: Da Nang)", },
-  { kind: "TODO", title: "Travel clinic: hep A, typhoid, mosquito protection" },
-  { kind: "TODO", title: "eSIM for Thailand + Vietnam; tell the bank you're travelling" },
-  { kind: "TODO", title: "TDAC arrival cards at tdac.immigration.go.th (Mar 9–11)" },
-  { kind: "TODO", title: "About $100 in baht for the first night" },
-  { kind: "PACK", title: "Temple clothes (shoulders + knees covered)" },
-  { kind: "PACK", title: "Reef-safe sunscreen, insect repellent" },
-  { kind: "PACK", title: "Water shoes for the islands" },
-  { kind: "PACK", title: "Universal adapter + power bank" },
-  { kind: "PACK", title: "Passports, printed e-visas, TDAC screenshots" },
-  { kind: "PACK", title: "Room in the bag for Hoi An tailoring" },
-];
 
 /** Savings deposits for two: ahead of every payment, see the plan page. */
 const SAVINGS: [Date, number][] = [
@@ -173,40 +152,39 @@ async function main() {
 
   const hub = await pickHub(user.id);
 
-  if (await prisma.trip.findFirst({ where: { hubId: hub.id, title: TITLE } })) {
-    console.log(`· "${TITLE}" already exists in ${hub.name}; nothing written.`);
+  // A trip made by hand under the same title gets the plan filled in, once.
+  const existing = await prisma.trip.findFirst({
+    where: { hubId: hub.id, title: TITLE },
+    include: { _count: { select: { items: { where: { kind: "STOP" } } } } },
+  });
+  if (existing && existing._count.items > 0) {
+    console.log(`· "${TITLE}" already has its itinerary in ${hub.name}; nothing written.`);
     return;
   }
 
   await prisma.$transaction(async (tx) => {
-    const trip = await tx.trip.create({
-      data: {
-        hubId: hub.id,
-        title: TITLE,
-        destination: "Bangkok · Krabi · Hoi An",
-        startDate: day(2027, 3, 11),
-        endDate: day(2027, 3, 22),
-        budgetCents: c(6300),
-        notes:
-          "Bangkok 3 nights, Krabi/Railay 4 nights, Hoi An 3 nights. Budget is for two; keep about $500 extra for tailoring and extras.",
-        createdById: user.id,
-      },
-    });
-    await tx.tripItem.createMany({
-      data: ITEMS.map((i) => ({
-        tripId: trip.id,
-        hubId: hub.id,
-        kind: i.kind,
-        title: i.title,
-        costCents: i.cost == null ? null : c(i.cost),
-      })),
-    });
+    const trip =
+      existing ??
+      (await tx.trip.create({
+        data: {
+          hubId: hub.id,
+          title: TITLE,
+          destination: "Bangkok · Krabi · Hoi An",
+          startDate: day(2027, 3, 11),
+          endDate: day(2027, 3, 22),
+          budgetCents: c(6300),
+          notes:
+            "Bangkok 3 nights, Krabi/Railay 4 nights, Hoi An 3 nights. Budget is for two; keep about $500 extra for tailoring and extras.",
+          createdById: user.id,
+        },
+      }));
+    await tx.tripItem.createMany({ data: planRows(thailand2027, trip.id, hub.id) });
     await tx.deadline.createMany({
       data: [
         ...SAVINGS.map(([due, total]) => ({
           hubId: hub.id,
           title: `Put $${total.toLocaleString("en-CA")} aside for Thailand ($${(total / 2).toLocaleString("en-CA")} each)`,
-          notes: "Then add it on the trip page under Savings.",
+          notes: "Then tick it in the trip's booking calendar.",
           dueDate: due,
           remindDaysBefore: [3, 1],
           createdById: user.id,
@@ -223,7 +201,7 @@ async function main() {
     });
   });
 
-  console.log(`✔ "${TITLE}" in ${hub.name}: ${ITEMS.length} checklist items, ${SAVINGS.length + MILESTONES.length} deadlines`);
+  console.log(`✔ "${TITLE}" in ${hub.name}: ${thailand2027.stops.length} stops, ${thailand2027.items.length} plan items, ${SAVINGS.length + MILESTONES.length} reminders`);
 }
 
 main()
