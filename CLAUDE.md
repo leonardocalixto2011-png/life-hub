@@ -1112,7 +1112,7 @@ upcoming event including holidays.
 - `Trip.savedCents` (migration `20260927010000_trip_savings`, additive, no RLS
   change) drives a Savings progress bar on `/trips/[id]`; `addTripSavings`
   accepts a negative amount to take money back and floors the total at 0.
-- `prisma/seed-trip-thailand.ts` (`SEED_TRIP=yes ADMIN_EMAIL=… HUB_NAME=… npm
+- `prisma/seed-trip-thailand.ts` (`SEED_TRIP=yes ADMIN_EMAIL=… SHARE_WITH=… npm
   run db:seed-trip`) loads the March 2027 Thailand + Vietnam plan: the trip,
   its checklist, and dated Deadlines for each savings deposit and booking step
   so the existing reminders carry the schedule. Plan page:

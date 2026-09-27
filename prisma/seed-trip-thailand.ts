@@ -4,9 +4,11 @@
  * every savings deposit and booking step, so the digest and push reminders
  * walk you through it month by month.
  *
- *   SEED_TRIP=yes ADMIN_EMAIL=you@example.com HUB_NAME="Your hub" npm run db:seed-trip
+ *   SEED_TRIP=yes ADMIN_EMAIL=you@example.com SHARE_WITH=partner@example.com npm run db:seed-trip
  *
- * HUB_NAME may be left out when you belong to exactly one active hub.
+ * SHARE_WITH puts the trip in the hub you both belong to, or creates one and
+ * invites them. HUB_NAME picks a hub by name instead. With neither, you must
+ * belong to exactly one active hub.
  *
  * Nothing personal is in here, only the plan itself: public prices and
  * dates. Idempotent: a trip with the same title in that hub means it has
@@ -89,6 +91,70 @@ const MILESTONES: { due: Date; title: string; notes: string; remind?: number[] }
   },
 ];
 
+/**
+ * Where the trip goes, in order: HUB_NAME if given; else, with SHARE_WITH, a
+ * hub you're both ACTIVE in; else a new "Thailand 2027" hub you own with that
+ * person invited (they accept at /hubs/invites); else your only hub.
+ */
+async function pickHub(userId: string): Promise<{ id: string; name: string }> {
+  const mine = await prisma.hubMembership.findMany({
+    where: { userId, status: "ACTIVE" },
+    include: { hub: { select: { id: true, name: true } } },
+  });
+
+  const hubName = process.env.HUB_NAME?.trim();
+  if (hubName) {
+    const m = mine.find((x) => x.hub.name === hubName);
+    if (!m) fail(`No active hub named "${hubName}" for you.`);
+    return m.hub;
+  }
+
+  const partnerEmail = process.env.SHARE_WITH?.toLowerCase().trim();
+  if (partnerEmail) {
+    const partner = await prisma.user.findUnique({ where: { email: partnerEmail } });
+    if (partner) {
+      const together = await prisma.hubMembership.findMany({
+        where: { userId: partner.id, status: "ACTIVE", hubId: { in: mine.map((m) => m.hub.id) } },
+        include: { hub: { select: { id: true, name: true } } },
+      });
+      if (together.length === 1) return together[0].hub;
+      if (together.length > 1) {
+        fail(`You share ${together.length} hubs with ${partnerEmail}: ${together.map((m) => m.hub.name).join(", ")}. Pick one with HUB_NAME.`);
+      }
+    }
+    // No hub in common yet: make one and invite them, the same rows the
+    // in-app invite writes (minus the email, so tell them yourself).
+    return prisma.$transaction(async (tx) => {
+      const hub = await tx.hub.create({
+        data: { name: "Thailand 2027", color: "#0e6e70", createdById: userId },
+      });
+      await tx.hubMembership.create({
+        data: { hubId: hub.id, userId, role: "OWNER", status: "ACTIVE", joinedAt: new Date() },
+      });
+      const target = await tx.user.upsert({
+        where: { email: partnerEmail },
+        update: {},
+        create: { email: partnerEmail, role: "MEMBER" },
+      });
+      await tx.hubMembership.create({
+        data: { hubId: hub.id, userId: target.id, role: "MEMBER", status: "INVITED" },
+      });
+      console.log(`✔ created hub "Thailand 2027" and invited ${partnerEmail}: they sign in and accept at /hubs/invites`);
+      return { id: hub.id, name: hub.name };
+    });
+  }
+
+  if (mine.length !== 1) {
+    fail(`Set HUB_NAME or SHARE_WITH — you're in ${mine.length} hubs: ${mine.map((m) => m.hub.name).join(", ")}`);
+  }
+  return mine[0].hub;
+}
+
+function fail(msg: string): never {
+  console.error(msg);
+  process.exit(1);
+}
+
 async function main() {
   if (process.env.SEED_TRIP !== "yes") {
     console.error("Refusing to run without SEED_TRIP=yes.");
@@ -105,21 +171,7 @@ async function main() {
     process.exit(1);
   }
 
-  const memberships = await prisma.hubMembership.findMany({
-    where: { userId: user.id, status: "ACTIVE" },
-    include: { hub: { select: { id: true, name: true } } },
-  });
-  const hubName = process.env.HUB_NAME?.trim();
-  const matches = hubName ? memberships.filter((m) => m.hub.name === hubName) : memberships;
-  if (matches.length !== 1) {
-    console.error(
-      hubName
-        ? `No active hub named "${hubName}" for ${email}.`
-        : `Set HUB_NAME — you're in ${memberships.length} hubs: ${memberships.map((m) => m.hub.name).join(", ")}`,
-    );
-    process.exit(1);
-  }
-  const hub = matches[0].hub;
+  const hub = await pickHub(user.id);
 
   if (await prisma.trip.findFirst({ where: { hubId: hub.id, title: TITLE } })) {
     console.log(`· "${TITLE}" already exists in ${hub.name}; nothing written.`);
