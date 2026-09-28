@@ -2,7 +2,7 @@ import { z } from "zod";
 import { overAiBudget, recordAiSpend } from "@/lib/ai-budget";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
-import { ai, aiEnabled, AI_MODEL_FAST } from "@/lib/ai";
+import { ai, aiEnabled, fastEffort, AI_MODEL_FAST } from "@/lib/ai";
 import { reportError } from "@/lib/observability";
 import type { Draft } from "@/lib/parse";
 
@@ -122,7 +122,7 @@ export async function classifyEmail(input: ClassifyInput): Promise<ClassifyResul
     const res = await ai().messages.parse({
       model: AI_MODEL_FAST,
       max_tokens: 1024,
-      output_config: { effort: "low", format: zodOutputFormat(ClassifySchema) },
+      output_config: { ...fastEffort(), format: zodOutputFormat(ClassifySchema) },
       system,
       messages: [{ role: "user", content: message }],
     });

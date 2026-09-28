@@ -51,6 +51,16 @@ const contentSecurityPolicy = [
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["web-push", "@anthropic-ai/sdk", "imapflow"],
+  experimental: {
+    serverActions: {
+      // Quick-add "Snap" sends a photo to parseImage as base64. The client
+      // downscales to ~1600px JPEG first (typically 200-800KB encoded), and
+      // parseImage itself rejects anything over 3.5MB — this only has to sit
+      // above that, with room for the action's own encoding. The default 1MB
+      // would refuse a detailed receipt before the action even ran.
+      bodySizeLimit: "4mb",
+    },
+  },
   async redirects() {
     return [
       // /money became /budget (every other route matches its nav label).
@@ -77,11 +87,15 @@ const nextConfig: NextConfig = {
             key: "Strict-Transport-Security",
             value: "max-age=31536000; includeSubDomains",
           },
-          // Nothing here uses these. Denying them means a script that somehow
-          // does run still cannot reach the camera, mic or location.
+          // Deny what nothing here uses, so a script that somehow does run
+          // still cannot reach the camera or location. The mic is the one
+          // exception, same-origin only: quick-add's voice button uses the
+          // Web Speech API, which the browser refuses under microphone=().
+          // "Snap" needs no camera grant — a capture file input hands off to
+          // the OS camera app and only ever receives the finished photo.
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+            value: "camera=(), microphone=(self), geolocation=(), payment=(), usb=()",
           },
           { key: "Content-Security-Policy", value: contentSecurityPolicy },
         ],
