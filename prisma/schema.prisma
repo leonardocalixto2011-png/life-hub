@@ -239,6 +239,9 @@ model Task {
   createdById      String
   createdBy        User       @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   dueDate          DateTime?
+  /// Day of month a monthly recurrence lands on (1–31), so Jan 31 → Feb 28 → Mar 31
+  /// instead of sticking on the 28th. Null = use dueDate's own day; cleared when the date is edited.
+  dueDay           Int?
   isRecurring      Boolean    @default(false)
   recurrence       String? // simple token e.g. "weekly" / "monthly" — expanded in Phase 3
   priority         Priority   @default(MED)
@@ -306,6 +309,8 @@ model Subscription {
   currency     String             @default("CAD")
   billingCycle BillingCycle       @default(MONTHLY)
   renewalDate  DateTime
+  /// Same anchor as Task.dueDay, for monthly/quarterly/yearly renewals.
+  renewalDay   Int?
   cancelByDate DateTime?
   ventureId    String?
   venture      Venture?           @relation(fields: [ventureId], references: [id], onDelete: SetNull)
@@ -369,6 +374,8 @@ model Debt {
   // negotiated or hardship-program amount)
   paymentFrequency     PaymentFrequency @default(MONTHLY)
   dueDate              DateTime?
+  /// Same anchor as Task.dueDay, for monthly payments.
+  dueDay               Int?
   status               DebtStatus       @default(CURRENT)
   notes                String?
   ventureId            String?
@@ -719,6 +726,9 @@ model Trip {
   budgetCents Int?
   /// Put aside so far for this trip — the savings progress bar on the trip page.
   savedCents  Int        @default(0)
+  /// Who's going — plain member ids (no FK, like Event.attendeeIds). Empty =
+  /// everyone in the hub. Drives the per-person "Each" split of deposits.
+  travelerIds String[]   @default([])
   notes       String?
   createdById String
   createdBy   User       @relation(fields: [createdById], references: [id], onDelete: Restrict)

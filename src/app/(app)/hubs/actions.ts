@@ -286,10 +286,12 @@ export async function removeHubCover(hubId: string) {
  * everyone landed in Main Hub and there was no way to then bring them into a
  * second one without a fresh email invite.
  *
- * Active immediately rather than INVITED: both people are already in a hub
- * together, and the person is told by push. The "already share a hub" check is
- * the entire privacy boundary here — without it, any user id copied from
- * anywhere would be a way to pull a stranger into a hub.
+ * Creates an INVITED membership, like an email invite: being in one hub with
+ * someone is not consent to be placed in another, so they accept (or decline)
+ * from /hubs/invites. Someone already ACTIVE here is left as is. The "already
+ * share a hub" check is still the privacy boundary for who can be invited
+ * without an email — without it, any user id copied from anywhere would be a
+ * way to put a stranger's name on this hub's roster.
  */
 export async function addKnownMember(hubId: string, formData: FormData) {
   const user = await requireUser();
@@ -315,21 +317,27 @@ export async function addKnownMember(hubId: string, formData: FormData) {
   if (!known) throw new Error("You can only add people you already share a hub with.");
 
   const hub = await prisma.hub.findUniqueOrThrow({ where: { id: hubId }, select: { name: true } });
-  await prisma.hubMembership.upsert({
+  const existing = await prisma.hubMembership.findUnique({
     where: { hubId_userId: { hubId, userId: targetId } },
-    update: { status: "ACTIVE", joinedAt: new Date() },
-    create: { hubId, userId: targetId, role: "MEMBER", status: "ACTIVE", joinedAt: new Date() },
+    select: { status: true },
   });
+  if (existing?.status === "ACTIVE") return;
+  if (!existing) {
+    await prisma.hubMembership.create({
+      data: { hubId, userId: targetId, role: "MEMBER", status: "INVITED" },
+    });
+  }
 
+  // Sent again for a stalled invite too — that's the point of picking them.
   try {
     await sendPushToUser(targetId, {
-      title: `You're in "${hub.name}"`,
-      body: `${user.name ?? user.email} added you. Switch hubs from the top of Life Hub.`,
-      url: "/today",
-      tag: `hub-added-${hubId}`,
+      title: `Invited to "${hub.name}"`,
+      body: `${user.name ?? user.email} invited you. Tap to join.`,
+      url: "/hubs/invites",
+      tag: `hub-invite-${hubId}`,
     });
   } catch {
-    // A missing push setup must not undo the membership that was just created.
+    // A missing push setup must not undo the invite that was just created.
   }
 
   revalidatePath(`/hubs/${hubId}/members`);

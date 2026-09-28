@@ -123,7 +123,9 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
     trip.budgetCents && trip.budgetCents > 0 ? Math.min(100, Math.round((saved / trip.budgetCents) * 100)) : null;
   const next = dated.find((i) => !i.done);
   const daysToGo = differenceInCalendarDays(startOfDay(trip.startDate), today);
-  const heads = Math.max(1, members.length);
+  // Split between the people going; no one picked (every older trip) = the whole hub.
+  const going = trip.travelerIds.filter((id) => members.some((m) => m.id === id)).length;
+  const heads = Math.max(1, going || members.length);
 
   // Day strip + day by day.
   const colorOf = new Map(stops.map((s, n) => [s.id, STOP_COLORS[n % STOP_COLORS.length]]));
@@ -727,7 +729,9 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
               budget: centsToInput(trip.budgetCents),
               notes: trip.notes,
               visibility: trip.visibility,
+              travelerIds: trip.travelerIds,
             }}
+            members={members}
           />
           <form action={deleteTrip}>
             <input type="hidden" name="id" value={trip.id} />

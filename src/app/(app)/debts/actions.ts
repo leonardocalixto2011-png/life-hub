@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { addMonths, addWeeks } from "date-fns";
+import { addWeeks } from "date-fns";
 import { z } from "zod";
 
 import { withHub } from "@/lib/hub-context";
@@ -11,6 +11,7 @@ import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents, percentToBasisPoints } from "@/lib/money";
 import { revalidateContent } from "@/lib/revalidate";
+import { addMonthsOnDay, anchorOf } from "@/lib/recur";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -49,6 +50,8 @@ function data(d: z.infer<typeof createSchema>) {
     minimumPaymentCents: dollarsToCents(d.minimumPayment),
     actualPaymentCents: dollarsToCents(d.actualPayment),
     dueDate: fromDateInput(d.dueDate),
+    // An edited date is the new anchor; re-derived from it on the next roll.
+    dueDay: null,
     status: d.status,
     type: d.type,
     originalBalanceCents: dollarsToCents(d.originalBalance),
@@ -120,10 +123,10 @@ export async function deleteDebt(fd: FormData) {
 }
 
 /** One payment period later — a biweekly debt used to jump a whole month. */
-function nextDue(d: Date, frequency: "WEEKLY" | "BIWEEKLY" | "MONTHLY"): Date {
+function nextDue(d: Date, frequency: "WEEKLY" | "BIWEEKLY" | "MONTHLY", day: number): Date {
   if (frequency === "WEEKLY") return addWeeks(d, 1);
   if (frequency === "BIWEEKLY") return addWeeks(d, 2);
-  return addMonths(d, 1);
+  return addMonthsOnDay(d, 1, day);
 }
 
 /**
@@ -175,6 +178,7 @@ export async function logDebtPayment(fd: FormData) {
         name: true,
         ventureId: true,
         dueDate: true,
+        dueDay: true,
         ownerId: true,
         hubId: true,
         paymentFrequency: true,
@@ -209,7 +213,8 @@ export async function logDebtPayment(fd: FormData) {
       data: {
         balanceCents,
         ...(balanceCents === 0 ? { status: "PAID_OFF" as const } : {}),
-        dueDate: debt.dueDate ? nextDue(debt.dueDate, debt.paymentFrequency) : null,
+        dueDate: debt.dueDate ? nextDue(debt.dueDate, debt.paymentFrequency, anchorOf(debt.dueDate, debt.dueDay)) : null,
+        dueDay: debt.dueDate ? anchorOf(debt.dueDate, debt.dueDay) : null,
       },
     });
   });

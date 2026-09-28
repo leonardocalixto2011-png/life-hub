@@ -128,7 +128,7 @@ export default async function HubMembersPage({
       {isOwner && known.length > 0 && (
         <form action={addKnownMember.bind(null, hubId)} className="card space-y-2 p-4">
           <label htmlFor="add-known-member" className="block text-xs font-semibold text-[var(--color-text-dim)]">
-            {t("Add someone already on Life Hub")}
+            {t("Invite someone already on Life Hub")}
           </label>
           <div className="flex gap-2">
             <select id="add-known-member" name="userId" required className="field flex-1" defaultValue="">
@@ -142,11 +142,11 @@ export default async function HubMembersPage({
               ))}
             </select>
             <SubmitButton className="btn btn-primary shrink-0" pendingLabel="…">
-              {t("Add")}
+              {t("Invite")}
             </SubmitButton>
           </div>
           <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-            {t("They're added right away and get a notification.")}
+            {t("They get a notification and join once they accept.")}
           </p>
         </form>
       )}

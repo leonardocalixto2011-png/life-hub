@@ -18,9 +18,12 @@ type Existing = {
   budget: string;
   notes: string | null;
   visibility: "PRIVATE" | "SHARED";
+  travelerIds: string[];
 };
 
-function Fields({ existing, t }: { existing?: Existing; t: T }) {
+type Member = { id: string; name: string | null; email: string | null };
+
+function Fields({ existing, members = [], t }: { existing?: Existing; members?: Member[]; t: T }) {
   const label = "block text-xs font-semibold text-[var(--color-text-dim)]";
   return (
     <>
@@ -66,12 +69,32 @@ function Fields({ existing, t }: { existing?: Existing; t: T }) {
         {t("Notes")}
         <textarea name="notes" rows={2} defaultValue={existing?.notes ?? ""} className="field mt-1" />
       </label>
+      {members.length > 1 && (
+        <fieldset className={label}>
+          <legend>{t("Who's going")}</legend>
+          <input type="hidden" name="travelersShown" value="1" />
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm font-normal text-[var(--color-text)]">
+            {members.map((m) => (
+              <label key={m.id} className="flex min-h-11 items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="travelerIds"
+                  value={m.id}
+                  defaultChecked={!existing?.travelerIds.length || existing.travelerIds.includes(m.id)}
+                />
+                {m.name ?? m.email}
+              </label>
+            ))}
+          </div>
+          <p className="mt-1 font-normal">{t("Deposits are split between the people going.")}</p>
+        </fieldset>
+      )}
       <PrivacyToggle defaultValue={existing?.visibility} />
     </>
   );
 }
 
-export function TripForm({ existing }: { existing?: Existing }) {
+export function TripForm({ existing, members }: { existing?: Existing; members?: Member[] }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +104,7 @@ export function TripForm({ existing }: { existing?: Existing }) {
     return (
       <ActionForm action={updateTrip} className="card space-y-3 p-4">
         <input type="hidden" name="id" value={existing.id} />
-        <Fields existing={existing} t={t} />
+        <Fields existing={existing} members={members} t={t} />
         <SubmitButton className="btn btn-primary w-full">
           {t("Save trip")}
         </SubmitButton>

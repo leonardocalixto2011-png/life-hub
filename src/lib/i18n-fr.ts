@@ -548,9 +548,11 @@ export const FR: Record<string, string> = {
   "Holidays on the calendar": "Fêtes au calendrier",
   "Valentine's Day, Mother's Day, Christmas, the seasons… with a week's notice.":
     "Saint-Valentin, fête des Mères, Noël, les saisons… avec une semaine d'avis.",
-  "Add someone already on Life Hub": "Ajouter quelqu'un déjà sur Life Hub",
+  "Who's going": "Qui part",
+  "Deposits are split between the people going.": "Les dépôts sont partagés entre les personnes qui partent.",
+  "Invite someone already on Life Hub": "Inviter quelqu'un déjà sur Life Hub",
   "Pick a person…": "Choisir une personne…",
-  "They're added right away and get a notification.": "La personne est ajoutée tout de suite et reçoit une notification.",
+  "They get a notification and join once they accept.": "La personne reçoit une notification et rejoint le hub une fois l'invitation acceptée.",
   "Invite someone new by email": "Inviter quelqu'un de nouveau par courriel",
   "Invite": "Inviter",
   "They'll get an email to sign in and accept — works even if they've never used Life Hub before.":

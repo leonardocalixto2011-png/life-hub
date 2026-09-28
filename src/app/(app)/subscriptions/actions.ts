@@ -53,6 +53,8 @@ function data(d: z.infer<typeof createSchema>) {
     currency: d.currency,
     billingCycle: d.billingCycle,
     renewalDate: fromDateInput(d.renewalDate)!,
+    // An edited date is the new anchor; re-derived from it on the next roll.
+    renewalDay: null,
     cancelByDate: fromDateInput(d.cancelByDate),
     ventureId: d.ventureId,
     ownerId: d.ownerId,

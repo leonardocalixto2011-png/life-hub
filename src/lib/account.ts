@@ -180,7 +180,7 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
   // because a hub handed to someone else still records who made it. The
   // plain member-id columns (who paid, whose shift, who's on a trip task) have
   // no FK to cascade, so they're severed explicitly in the same transaction.
-  const [t, d, e, b, sd, tr, h, paid, shifts, tripTasks] = await prisma.$transaction([
+  const [t, d, e, b, sd, tr, h, paid, shifts, tripTasks, travellers] = await prisma.$transaction([
     prisma.task.updateMany({ where: { createdById: userId }, data: { createdById: ghostId } }),
     prisma.deadline.updateMany({ where: { createdById: userId }, data: { createdById: ghostId } }),
     prisma.event.updateMany({ where: { createdById: userId }, data: { createdById: ghostId } }),
@@ -191,10 +191,12 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
     prisma.budgetEntry.updateMany({ where: { paidById: userId }, data: { paidById: ghostId } }),
     prisma.event.updateMany({ where: { personId: userId }, data: { personId: ghostId } }),
     prisma.tripItem.updateMany({ where: { assignedToId: userId }, data: { assignedToId: null } }),
+    // An array column, which updateMany can't edit element-wise.
+    prisma.$executeRaw`UPDATE "Trip" SET "travelerIds" = array_remove("travelerIds", ${userId}) WHERE ${userId} = ANY("travelerIds")`,
   ]);
   report.authorshipAnonymised =
     t.count + d.count + e.count + b.count + sd.count + tr.count + h.count +
-    paid.count + shifts.count + tripTasks.count;
+    paid.count + shifts.count + tripTasks.count + travellers;
 
   // Everything else — memberships, debts, debt shares, mail accounts, push
   // subscriptions, notification prefs, sessions, auth accounts — is
