@@ -59,6 +59,8 @@ export default async function AppearancePage() {
 
         {user.backgroundImageUrl && (
           <div className="card overflow-hidden p-0">
+            {/* A user-uploaded Blob URL; next/image would need remotePatterns for it. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={user.backgroundImageUrl}
               alt={t("Current background")}

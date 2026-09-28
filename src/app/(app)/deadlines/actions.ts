@@ -7,6 +7,7 @@ import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { revalidateContent } from "@/lib/revalidate";
+import { visibleTo } from "@/lib/visibility";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -30,6 +31,11 @@ const fields = {
 
 const createSchema = z.object(fields);
 const updateSchema = z.object({ ...fields, id: z.string().cuid() });
+
+/** Hub + privacy clause for writes by id — app-level mirror of the RLS policy. */
+function scoped(id: string, hubId: string, userId: string) {
+  return { id, hubId, ...visibleTo(userId) };
+}
 
 function parse<T extends z.ZodTypeAny>(schema: T, fd: FormData): z.infer<T> {
   const res = schema.safeParse(Object.fromEntries(fd.entries()));
@@ -58,11 +64,11 @@ export async function createDeadline(fd: FormData) {
 }
 
 export async function updateDeadline(fd: FormData) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const d = parse(updateSchema, fd);
-  await withHub(user.id, (tx) =>
-    tx.deadline.update({
-      where: { id: d.id },
+  await withHub(user.id, async (tx) => {
+    const { count } = await tx.deadline.updateMany({
+      where: scoped(d.id, hub.id, user.id),
       data: {
         title: d.title,
         notes: d.notes,
@@ -71,29 +77,37 @@ export async function updateDeadline(fd: FormData) {
         remindDaysBefore: d.remindDaysBefore,
         visibility: d.visibility,
       },
-    }),
-  );
+    });
+    if (count === 0) throw new Error("Not found.");
+  });
   revalidateContent(`/deadlines/${d.id}`);
   redirect("/deadlines");
 }
 
 export async function toggleDeadlineDone(fd: FormData) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const schema = z.object({
     id: z.string().cuid(),
     done: z.preprocess((v) => v === "true" || v === true, z.boolean()),
   });
   const { id, done } = schema.parse({ id: fd.get("id"), done: fd.get("done") });
-  await withHub(user.id, (tx) =>
-    tx.deadline.update({ where: { id }, data: { doneAt: done ? new Date() : null } }),
-  );
+  await withHub(user.id, async (tx) => {
+    const { count } = await tx.deadline.updateMany({
+      where: scoped(id, hub.id, user.id),
+      data: { doneAt: done ? new Date() : null },
+    });
+    if (count === 0) throw new Error("Not found.");
+  });
   revalidateContent();
 }
 
 export async function deleteDeadline(fd: FormData) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
-  await withHub(user.id, (tx) => tx.deadline.delete({ where: { id } }));
+  await withHub(user.id, async (tx) => {
+    const { count } = await tx.deadline.deleteMany({ where: scoped(id, hub.id, user.id) });
+    if (count === 0) throw new Error("Not found.");
+  });
   revalidateContent();
   redirect("/deadlines");
 }

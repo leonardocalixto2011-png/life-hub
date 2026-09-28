@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseText, type Draft } from "@/lib/parse";
 import { rateLimit } from "@/lib/rate-limit";
+import { secretMatches } from "@/lib/bearer";
 import { resolveHubFromRecipient } from "@/lib/inbound-address";
 
 export const runtime = "nodejs";
@@ -91,7 +92,8 @@ async function extract(req: Request, raw: string): Promise<Extracted | NextRespo
     if (!expected) {
       return NextResponse.json({ error: "inbound not configured" }, { status: 503 });
     }
-    if (cfSecret !== expected) {
+    // Constant-time, like the Svix branch below and the cron endpoints.
+    if (!secretMatches(cfSecret, expected)) {
       return NextResponse.json({ error: "bad secret" }, { status: 401 });
     }
     let payload: CloudflarePayload;
@@ -161,8 +163,13 @@ export async function POST(req: Request) {
 
   // Each accepted message costs a paid AI parse. The signature check already
   // stops anonymous callers; this bounds the damage if a webhook secret ever
-  // leaks, or a misconfigured sender starts looping.
-  if (!(await rateLimit("inbound", 120, 3600)).ok) {
+  // leaks, or a misconfigured sender starts looping. Keyed per hub so one
+  // hub's mail loop can't starve every other hub's inbound; the global bucket
+  // stays as an overall ceiling on spend.
+  if (!(await rateLimit(`inbound:${hubId}`, 60, 3600)).ok) {
+    return NextResponse.json({ error: "rate limited" }, { status: 429 });
+  }
+  if (!(await rateLimit("inbound", 500, 3600)).ok) {
     return NextResponse.json({ error: "rate limited" }, { status: 429 });
   }
 

@@ -141,12 +141,13 @@ export async function moveMyDebtsHere() {
 
 /**
  * Records a payment against a debt: logs a matching Budget expense, drops
- * the balance, and rolls the due date forward a month. `amount` is dollars
+ * the balance (never below zero; zero marks it PAID_OFF), and rolls the due
+ * date forward one payment period. `amount` is dollars
  * (the client sends the row's actual-or-minimum payment as the default);
  * `date` defaults to today.
  */
 export async function logDebtPayment(fd: FormData) {
-  const { user, hub } = await requireHub();
+  const { user } = await requireHub();
   const schema = z.object({
     id: z.string().cuid(),
     amount: z.string().min(1, "Amount is required"),
@@ -173,6 +174,9 @@ export async function logDebtPayment(fd: FormData) {
         ownerId: true,
         hubId: true,
         paymentFrequency: true,
+        balanceCents: true,
+        // Labelled in the debt's hub currency — the entry is booked there.
+        hub: { select: { currency: true } },
       },
     });
     if (!debt) throw new Error("Debt not found");
@@ -184,7 +188,7 @@ export async function logDebtPayment(fd: FormData) {
         amountCents,
         // The debt's own hub, not whichever hub happens to be open.
         hubId: debt.hubId,
-        currency: hub.currency,
+        currency: debt.hub.currency,
         category: debt.name,
         description: "Debt payment",
         date: fromDateInput(date) ?? new Date(),
@@ -193,10 +197,14 @@ export async function logDebtPayment(fd: FormData) {
       },
     });
 
+    // Clamped at zero: overpaying the last instalment must not leave a
+    // negative balance, and reaching zero is what "paid off" means.
+    const balanceCents = Math.max(0, debt.balanceCents - amountCents);
     await tx.debt.update({
       where: { id },
       data: {
-        balanceCents: { decrement: amountCents },
+        balanceCents,
+        ...(balanceCents === 0 ? { status: "PAID_OFF" as const } : {}),
         dueDate: debt.dueDate ? nextDue(debt.dueDate, debt.paymentFrequency) : null,
       },
     });

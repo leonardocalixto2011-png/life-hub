@@ -91,9 +91,11 @@ export async function updateEntry(fd: FormData) {
   const amountCents = amountOf(d.amount);
   const share = await sharing(hub.id, user.id, d);
 
-  await withHub(user.id, (tx) =>
-    tx.budgetEntry.update({
-      where: { id: d.id },
+  // updateMany so the hub is part of the match: an id from another hub the
+  // user belongs to must not be editable from this one.
+  const { count } = await withHub(user.id, (tx) =>
+    tx.budgetEntry.updateMany({
+      where: { id: d.id, hubId: hub.id },
       data: {
         type: d.type,
         amountCents,
@@ -106,14 +108,18 @@ export async function updateEntry(fd: FormData) {
       },
     }),
   );
+  if (count === 0) throw new Error("Not found.");
 
   revalidateContent();
 }
 
 export async function deleteEntry(fd: FormData) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
-  await withHub(user.id, (tx) => tx.budgetEntry.delete({ where: { id } }));
+  const { count } = await withHub(user.id, (tx) =>
+    tx.budgetEntry.deleteMany({ where: { id, hubId: hub.id } }),
+  );
+  if (count === 0) throw new Error("Not found.");
   revalidateContent();
 }
 

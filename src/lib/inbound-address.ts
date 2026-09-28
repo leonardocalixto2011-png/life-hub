@@ -33,7 +33,7 @@ import { prisma } from "@/lib/prisma";
  * switching styles doesn't strand addresses already given out.
  */
 const localPart = () => process.env.INBOUND_LOCAL_PART ?? "hub";
-const usePlusStyle = () => process.env.INBOUND_ADDRESS_STYLE === "plus";
+const isPlusStyle = () => process.env.INBOUND_ADDRESS_STYLE === "plus";
 
 export function inboundDomain(): string | null {
   return process.env.INBOUND_DOMAIN ?? null;
@@ -49,7 +49,7 @@ function newToken(): string {
 export function addressFor(token: string | null): string | null {
   const domain = inboundDomain();
   if (!domain || !token) return null;
-  const sep = usePlusStyle() ? "+" : "-";
+  const sep = isPlusStyle() ? "+" : "-";
   return `${localPart()}${sep}${token}@${domain}`;
 }
 

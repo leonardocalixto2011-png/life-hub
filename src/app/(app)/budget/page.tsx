@@ -74,7 +74,13 @@ export default async function BudgetPage({
   const creditor = balances.find((b) => b.netCents > 0);
   const debtor = balances.find((b) => b.netCents < 0);
 
-  const spentBy = new Map(data.categories.map((c) => [c.category.toLowerCase(), c.cents]));
+  // Summed, not assigned: "Food" and "food" are separate categories in the
+  // data but fold to one key here, and the second must not overwrite the first.
+  const spentBy = new Map<string, number>();
+  for (const c of data.categories) {
+    const key = c.category.toLowerCase();
+    spentBy.set(key, (spentBy.get(key) ?? 0) + c.cents);
+  }
   const activeChip = { background: "var(--color-primary)", borderColor: "var(--color-primary)", color: "#fff" };
 
   return (

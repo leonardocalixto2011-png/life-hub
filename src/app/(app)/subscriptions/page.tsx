@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { subDays } from "date-fns";
 
 import { hubChrome, listSubscriptions, type SubscriptionWithRefs } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
@@ -90,7 +91,7 @@ export default async function SubscriptionsPage() {
   const locale = user.locale ?? "en-CA";
 
   // Creep signal: monthly value of subs added in the last 60 days.
-  const since = new Date(Date.now() - 60 * 864e5);
+  const since = subDays(new Date(), 60);
   const recentNew = active.filter((s) => s.createdAt >= since);
   const recentMonthly = recentNew.reduce(
     (n, s) => n + monthlyCents(s.costCents, s.billingCycle),

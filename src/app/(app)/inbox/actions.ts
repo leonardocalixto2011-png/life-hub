@@ -10,6 +10,7 @@ import { commitDraftsCore } from "@/lib/commit-drafts";
 import { muteSender, shouldOfferTrust, trustSender } from "@/lib/mail/trust";
 import type { ActionableCategory } from "@/lib/mail/classify";
 import type { Draft } from "@/lib/parse";
+import { CommitSchema } from "@/lib/commit-schema";
 import { revalidateContent } from "@/lib/revalidate";
 
 export type AcceptResult = {
@@ -19,12 +20,36 @@ export type AcceptResult = {
   offerTrust?: { hubId: string; fromAddress: string; category: ActionableCategory };
 };
 
-export async function acceptReview(id: string, draft: Draft): Promise<AcceptResult> {
+/**
+ * Which review items this viewer may act on. These actions use the owner
+ * client, so RLS is no backstop: an unscoped lookup by id would let anyone who
+ * learned an id accept (and commit into) or discard another hub's mail. Must
+ * match `reviewVisibility` in lib/data.ts — the inbox lists exactly these —
+ * including its null-hub case (the old manual-forward path).
+ */
+function actionableBy(userId: string) {
+  return {
+    OR: [
+      { hubId: null },
+      { hub: { memberships: { some: { userId, status: "ACTIVE" as const } } } },
+    ],
+  };
+}
+
+export async function acceptReview(id: string, rawDraft: Draft): Promise<AcceptResult> {
   const { user } = await requireHub();
   z.string().cuid().parse(id);
 
-  const item = await prisma.reviewItem.findUnique({ where: { id } });
-  if (!item || item.status !== "PENDING") {
+  // The draft is edited in the browser, so it is untrusted input — same
+  // validation quick-add's commitDrafts applies.
+  const parsed = CommitSchema.safeParse(rawDraft);
+  if (!parsed.success) return { ok: false, error: "Invalid draft data." };
+  const draft = parsed.data;
+
+  const item = await prisma.reviewItem.findFirst({
+    where: { id, status: "PENDING", ...actionableBy(user.id) },
+  });
+  if (!item) {
     return { ok: false, error: "Already handled." };
   }
 
@@ -43,8 +68,11 @@ export async function acceptReview(id: string, draft: Draft): Promise<AcceptResu
     if (!result.ok) return { ok: false, error: result.error ?? "Could not save." };
   }
 
-  await prisma.reviewItem.update({
-    where: { id },
+  // Marked only after the commit succeeds — claiming first would lose the
+  // item if the commit failed. Conditional on PENDING so a concurrent
+  // discard/accept isn't overwritten; a zero count there is harmless.
+  await prisma.reviewItem.updateMany({
+    where: { id, status: "PENDING" },
     data: { status: "ACCEPTED", reviewedAt: new Date() },
   });
 
@@ -66,10 +94,10 @@ export async function acceptReview(id: string, draft: Draft): Promise<AcceptResu
 }
 
 export async function discardReview(id: string): Promise<{ ok: boolean }> {
-  await requireHub();
+  const { user } = await requireHub();
   z.string().cuid().parse(id);
   await prisma.reviewItem.updateMany({
-    where: { id, status: "PENDING" },
+    where: { id, status: "PENDING", ...actionableBy(user.id) },
     data: { status: "DISCARDED", reviewedAt: new Date() },
   });
   revalidateContent();

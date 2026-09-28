@@ -12,12 +12,33 @@ import { thailand2027 } from "./trip-plans/thailand-2027";
  * doesn't resolve the app's path alias.
  */
 
-const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Dates are YYYY-MM-DD");
+/**
+ * True only for a YYYY-MM-DD that names a real calendar day. `new Date(y, m, d)`
+ * silently rolls 2027-02-30 over to March 2, so the round trip is the check.
+ */
+export function isRealDay(value: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const dt = new Date(y, mo - 1, d, 12);
+  return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d;
+}
+
+const day = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Dates are YYYY-MM-DD")
+  .refine(isRealDay, "That date doesn't exist");
 
 export const tripPlanSchema = z.object({
   budget: z.number().nonnegative().optional(),
   stops: z
-    .array(z.object({ name: z.string().trim().min(1).max(80), from: day, to: day }))
+    .array(
+      z
+        .object({ name: z.string().trim().min(1).max(80), from: day, to: day })
+        // Same rule as adding a stop by hand: you leave after you arrive.
+        // Zero-padded YYYY-MM-DD compares correctly as a string.
+        .refine((s) => s.to > s.from, "A stop's \"to\" date must be after its \"from\" date"),
+    )
     .max(30)
     .default([]),
   items: z

@@ -8,10 +8,32 @@ import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
 import { revalidateContent } from "@/lib/revalidate";
-import { missingPlanRows, planNote, TRIP_TEMPLATES, tripPlanSchema, type TripPlan } from "@/lib/trip-plan";
+import { assertActiveMember } from "@/lib/membership";
+import {
+  isRealDay,
+  missingPlanRows,
+  planNote,
+  TRIP_TEMPLATES,
+  tripPlanSchema,
+  type TripPlan,
+} from "@/lib/trip-plan";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
-const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the dates");
+const day = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the dates")
+  .refine(isRealDay, "That date doesn't exist");
+
+/**
+ * An optional money field that may be blank but never negative. `dollarsToCents`
+ * keeps a minus sign, and a negative budget or cost would turn every
+ * "planned vs spent" figure on the trip page upside down.
+ */
+function optionalCents(raw: string | null, label: string): number | null {
+  const cents = dollarsToCents(raw);
+  if (cents != null && cents < 0) throw new Error(`${label} can't be negative.`);
+  return cents;
+}
 
 const tripFields = {
   title: z.string().trim().min(1, "Give the trip a name").max(120),
@@ -39,7 +61,7 @@ function tripData(d: z.infer<z.ZodObject<typeof tripFields>>) {
     destination: d.destination,
     startDate,
     endDate,
-    budgetCents: dollarsToCents(d.budget),
+    budgetCents: optionalCents(d.budget, "The budget"),
     notes: d.notes,
     visibility: d.visibility,
   };
@@ -103,19 +125,22 @@ export async function addTripItem(tripId: string, fd: FormData) {
     throw new Error("A stop needs the day you leave, after the day you arrive.");
   }
   if (d.kind === "BUDGET" && !d.cost) throw new Error("A budget line needs an amount.");
+  const costCents = optionalCents(d.cost, "The amount");
   await withHub(user.id, async (tx) => {
     const trip = await tx.trip.findFirst({
       where: { id: tripId, ...visibleTrip(hub.id, user.id) },
       select: { hubId: true },
     });
     if (!trip) throw new Error("Trip not found");
+    // A plain member id with no FK — checked against the trip's own hub.
+    if (d.assignedToId) await assertActiveMember(trip.hubId, d.assignedToId);
     await tx.tripItem.create({
       data: {
         tripId,
         hubId: trip.hubId,
         kind: d.kind,
         title: d.title,
-        costCents: dollarsToCents(d.cost),
+        costCents,
         date: fromDateInput(d.date),
         endDate: d.kind === "STOP" ? fromDateInput(d.endDate) : null,
         assignedToId: d.assignedToId,
@@ -198,7 +223,9 @@ export async function importTripPlan(tripId: string, fd: FormData) {
   let plan: TripPlan;
   const key = String(fd.get("template") ?? "");
   const json = String(fd.get("json") ?? "").trim();
-  if (key && TRIP_TEMPLATES[key]) {
+  // Object.hasOwn, not a plain lookup: "constructor" or "__proto__" would
+  // otherwise find something on Object.prototype and crash on `.plan`.
+  if (key && Object.hasOwn(TRIP_TEMPLATES, key)) {
     plan = TRIP_TEMPLATES[key].plan;
   } else if (json) {
     let raw: unknown;

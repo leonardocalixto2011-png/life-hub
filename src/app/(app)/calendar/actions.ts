@@ -5,11 +5,12 @@ import { redirect } from "next/navigation";
 import { addDays, differenceInCalendarDays, eachDayOfInterval, startOfDay } from "date-fns";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput, fromDateTimeInput } from "@/lib/format";
 import { revalidateContent } from "@/lib/revalidate";
+import { assertActiveMember } from "@/lib/membership";
+import { visibleTo } from "@/lib/visibility";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -31,6 +32,23 @@ function parse<T extends z.ZodTypeAny>(schema: T, fd: FormData) {
   const res = schema.safeParse(raw);
   if (!res.success) throw new Error(res.error.issues[0]?.message ?? "Invalid input");
   return res.data as z.infer<T>;
+}
+
+/**
+ * Attendees are plain member ids with no FK into the hub, so RLS never looks
+ * at them — every one is checked against this hub's ACTIVE members before it
+ * is written (otherwise any user id in the app could be put on an event).
+ */
+async function readAttendees(fd: FormData, hubId: string): Promise<string[]> {
+  const ids = [...new Set(fd.getAll("attendeeIds").map(String).filter(Boolean))];
+  z.array(z.string().cuid()).max(50).parse(ids);
+  for (const id of ids) await assertActiveMember(hubId, id);
+  return ids;
+}
+
+/** Hub + privacy clause for writes by id — the app-level mirror of RLS. */
+function scoped(hubId: string, userId: string) {
+  return { hubId, ...visibleTo(userId) };
 }
 
 function buildData(d: z.infer<typeof createSchema>, attendeeIds: string[]) {
@@ -67,7 +85,7 @@ function occurrenceOffsets(anchorStart: Date, repeatDays: number[], until: Date)
 export async function createEvent(fd: FormData) {
   const { user, hub } = await requireHub();
   const d = parse(createSchema, fd);
-  const attendeeIds = fd.getAll("attendeeIds").map(String).filter(Boolean);
+  const attendeeIds = await readAttendees(fd, hub.id);
   const base = buildData(d, attendeeIds);
 
   const repeatDays = fd.getAll("repeatDays").map(Number).filter((n) => n >= 0 && n <= 6);
@@ -107,29 +125,36 @@ export async function createEvent(fd: FormData) {
 }
 
 export async function updateEvent(fd: FormData) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const d = parse(updateSchema, fd);
-  const attendeeIds = fd.getAll("attendeeIds").map(String).filter(Boolean);
-  await withHub(user.id, (tx) =>
-    tx.event.update({ where: { id: d.id }, data: buildData(d, attendeeIds) }),
-  );
+  const attendeeIds = await readAttendees(fd, hub.id);
+  const data = buildData(d, attendeeIds);
+  await withHub(user.id, async (tx) => {
+    const { count } = await tx.event.updateMany({ where: { id: d.id, ...scoped(hub.id, user.id) }, data });
+    if (count === 0) throw new Error("Not found.");
+  });
   revalidateContent();
   redirect("/calendar");
 }
 
 export async function deleteEvent(fd: FormData) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
-  await withHub(user.id, (tx) => tx.event.delete({ where: { id } }));
+  await withHub(user.id, async (tx) => {
+    const { count } = await tx.event.deleteMany({ where: { id, ...scoped(hub.id, user.id) } });
+    if (count === 0) throw new Error("Not found.");
+  });
   revalidateContent();
   redirect("/calendar");
 }
 
 /** Deletes exactly the events whose ids are checked — no series logic. */
 export async function deleteEvents(ids: string[]) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const parsed = z.array(z.string().cuid()).min(1).max(100).parse(ids);
-  await withHub(user.id, (tx) => tx.event.deleteMany({ where: { id: { in: parsed } } }));
+  await withHub(user.id, (tx) =>
+    tx.event.deleteMany({ where: { id: { in: parsed }, ...scoped(hub.id, user.id) } }),
+  );
   revalidateContent();
 }
 
@@ -144,22 +169,18 @@ export async function moveEventToSchedule(fd: FormData) {
     .object({ id: z.string().cuid(), personId: z.string().cuid() })
     .parse({ id: fd.get("id"), personId: fd.get("personId") });
 
-  const member = await prisma.hubMembership.findFirst({
-    where: { hubId: hub.id, userId: personId, status: "ACTIVE" },
-    select: { id: true },
-  });
-  if (!member) throw new Error("That person isn't a member of this hub.");
+  await assertActiveMember(hub.id, personId);
 
   await withHub(user.id, async (tx) => {
     const ev = await tx.event.findFirst({
-      where: { id, hubId: hub.id },
+      where: { id, ...scoped(hub.id, user.id) },
       select: { recurrenceGroupId: true },
     });
     if (!ev) throw new Error("Event not found");
     await tx.event.updateMany({
       where: ev.recurrenceGroupId
-        ? { hubId: hub.id, recurrenceGroupId: ev.recurrenceGroupId }
-        : { id },
+        ? { recurrenceGroupId: ev.recurrenceGroupId, ...scoped(hub.id, user.id) }
+        : { id, ...scoped(hub.id, user.id) },
       data: { kind: "SHIFT", personId, attendeeIds: [personId] },
     });
   });
@@ -169,7 +190,7 @@ export async function moveEventToSchedule(fd: FormData) {
 
 /** Deletes this occurrence and every later one in the same series. */
 export async function deleteEventSeries(fd: FormData) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const schema = z.object({ recurrenceGroupId: z.string().min(1), fromDate: z.string().min(1) });
   const { recurrenceGroupId, fromDate } = schema.parse({
     recurrenceGroupId: fd.get("recurrenceGroupId"),
@@ -179,7 +200,9 @@ export async function deleteEventSeries(fd: FormData) {
   if (!startAt) throw new Error("Invalid date");
 
   await withHub(user.id, (tx) =>
-    tx.event.deleteMany({ where: { recurrenceGroupId, startAt: { gte: startAt } } }),
+    tx.event.deleteMany({
+      where: { recurrenceGroupId, startAt: { gte: startAt }, ...scoped(hub.id, user.id) },
+    }),
   );
   revalidateContent();
   redirect("/calendar");

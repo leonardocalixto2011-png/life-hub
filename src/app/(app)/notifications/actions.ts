@@ -43,8 +43,10 @@ export async function savePushSubscription(
 }
 
 export async function removePushSubscription(endpoint: string): Promise<{ ok: boolean }> {
-  await requireHub();
-  await prisma.pushSubscription.deleteMany({ where: { endpoint } });
+  const { user } = await requireHub();
+  // Own devices only — an endpoint string is not a secret worth relying on,
+  // and without the userId anyone could unsubscribe someone else.
+  await prisma.pushSubscription.deleteMany({ where: { endpoint, userId: user.id } });
   revalidatePath("/notifications");
   return { ok: true };
 }

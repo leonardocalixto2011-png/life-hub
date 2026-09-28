@@ -8,6 +8,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { overAiBudget, AI_BUDGET_MESSAGE } from "@/lib/ai-budget";
 import { parseText, type Draft, type DraftKind, type ParseOutcome } from "@/lib/parse";
 import { commitDraftsCore } from "@/lib/commit-drafts";
+import { CommitSchema } from "@/lib/commit-schema";
 import { revalidateContent } from "@/lib/revalidate";
 
 export type { Draft, DraftKind };
@@ -27,21 +28,6 @@ export async function parseQuickAdd(text: string): Promise<ParseResult> {
   if (await overAiBudget(user.id)) return { ok: false, error: AI_BUDGET_MESSAGE };
   return withHub(user.id, (tx) => parseText(text, { tx, hubId: hub.id }, 25, user.id));
 }
-
-const CommitSchema = z.object({
-  kind: z.enum(["task", "event", "deadline", "subscription", "budget", "needs_reply"]),
-  title: z.string().trim().min(1).max(200),
-  date: z.string().nullable(),
-  time: z.string().nullable(),
-  amount: z.string().nullable(),
-  entryType: z.enum(["INCOME", "EXPENSE"]),
-  billingCycle: z.enum(["WEEKLY", "MONTHLY", "QUARTERLY", "YEARLY", "CUSTOM"]),
-  priority: z.enum(["LOW", "MED", "HIGH"]),
-  ventureId: z.string().nullable(),
-  note: z.string().nullable(),
-  visibility: z.enum(["PRIVATE", "SHARED"]).default("SHARED"),
-  suggestedReply: z.string().nullable().default(null),
-});
 
 export async function commitDrafts(
   raw: unknown,

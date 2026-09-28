@@ -81,8 +81,11 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
     }).format(c / 100);
   const today = startOfDay(new Date());
   const nights = differenceInCalendarDays(trip.endDate, trip.startDate);
+  // startOfDay: dates are stored at local noon, so the raw start is *after*
+  // midnight today on the first day and the trip wouldn't be "now" until noon.
+  // The end side is already right (noon on the last day is >= midnight).
   const status =
-    trip.startDate <= today && trip.endDate >= today
+    startOfDay(trip.startDate) <= today && trip.endDate >= today
       ? t("Happening now")
       : trip.endDate < today
         ? t("Done")
@@ -108,6 +111,10 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       : items
           .filter((i) => i.kind !== "SAVE" && i.kind !== "STOP" && i.kind !== "TIP")
           .reduce((n, i) => n + (i.costCents ?? 0), 0);
+  // A line's share of the plan, 0–100. Guarded because `planned` can be 0 (or
+  // below, from rows saved before negative amounts were rejected), and a bar
+  // width of Infinity% or a label of NaN% is worse than an empty bar.
+  const shareOf = (c: number) => (planned > 0 ? Math.max(0, (c / planned) * 100) : 0);
   const booked = tasks.filter((i) => i.done).reduce((n, i) => n + (i.costCents ?? 0), 0);
   const saved = trip.savedCents + deposits.filter((d) => d.done).reduce((n, d) => n + (d.costCents ?? 0), 0);
   const savedPct =
@@ -494,7 +501,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                     key={b.id}
                     title={`${b.title} · ${cash(b.costCents!)}`}
                     style={{
-                      width: `${(b.costCents! / planned) * 100}%`,
+                      width: `${shareOf(b.costCents!)}%`,
                       background: MONEY_COLORS[n % MONEY_COLORS.length],
                     }}
                   />
@@ -511,7 +518,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                     />
                     <span className="min-w-0 flex-1">{b.title}</span>
                     <span className="tabular-nums text-[var(--color-text-dim)]">
-                      {Math.round((b.costCents! / planned) * 100)}%
+                      {Math.round(shareOf(b.costCents!))}%
                     </span>
                     <span className="w-20 text-right font-semibold tabular-nums">{cash(b.costCents!)}</span>
                     <form action={deleteTripItem}>

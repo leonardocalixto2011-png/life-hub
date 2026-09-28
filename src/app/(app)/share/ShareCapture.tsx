@@ -36,7 +36,6 @@ export function ShareCapture({
       if (r.ok) setDrafts(r.drafts);
       else setMsg(r.error);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiEnabled, initialText]);
 
   function parse() {
