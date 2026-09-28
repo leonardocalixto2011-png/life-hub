@@ -74,6 +74,11 @@ export const thailand2027: TripPlan = {
     { kind: "SAVE", date: "2027-01-01", cost: 900, title: "January deposit ($450 each)" },
     { kind: "SAVE", date: "2027-02-01", cost: 800, title: "February deposit ($400 each)" },
     { kind: "SAVE", date: "2027-03-01", cost: 800, title: "March deposit ($400 each)" },
+    // Top-ups so the money is there before the Nov 30 and Dec 15 bookings
+    // ($4,180 due by then against $3,800 of regular deposits).
+    { kind: "SAVE", date: "2026-10-15", cost: 130, title: "October top-up ($65 each)", note: "Covers the December bookings." },
+    { kind: "SAVE", date: "2026-11-15", cost: 130, title: "November top-up ($65 each)", note: "Covers the December bookings." },
+    { kind: "SAVE", date: "2026-12-01", cost: 130, title: "December top-up ($65 each)", note: "Covers the December bookings." },
 
     // ---- where the money goes (estimates for two) ------------------------------
     { kind: "BUDGET", cost: 2600, title: "Long-haul flights (2 × ~$1,300)" },
