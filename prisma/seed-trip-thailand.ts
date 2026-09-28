@@ -29,11 +29,11 @@ const c = (dollars: number) => Math.round(dollars * 100);
 const day = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12, 0, 0);
 
 
-/** Savings deposits for two: ahead of every payment, see the plan page. */
+/** Savings deposits for two, top-ups included: ahead of every payment, see the plan page. */
 const SAVINGS: [Date, number][] = [
-  [day(2026, 10, 1), 1450],
-  [day(2026, 11, 1), 1450],
-  [day(2026, 12, 1), 900],
+  [day(2026, 10, 1), 1580],
+  [day(2026, 11, 1), 1580],
+  [day(2026, 12, 1), 1030],
   [day(2027, 1, 1), 900],
   [day(2027, 2, 1), 800],
   [day(2027, 3, 1), 800],
