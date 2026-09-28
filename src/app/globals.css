@@ -625,4 +625,35 @@ button {
       transform: translateX(200%);
     }
   }
+
+  /* Quick-add mic while it is listening. A slow ring, not a bounce: it has to
+     say "still recording" for as long as someone talks without pulling the eye
+     off what they're saying. Four --moment beats per cycle, so the calm and
+     reduced-motion switches reach it; those also drop it to a static ring,
+     because an infinite loop at 0.01ms is a flicker, not a stillness. */
+  .mic-live {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 45%, transparent);
+    animation: mic-pulse calc(var(--moment) * 4) var(--ease) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mic-live {
+      animation: none;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 35%, transparent);
+    }
+  }
+  html.calm .mic-live {
+    animation: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 35%, transparent);
+  }
+  @keyframes mic-pulse {
+    70% {
+      box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-primary) 0%, transparent);
+    }
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 0%, transparent);
+    }
+  }
 }

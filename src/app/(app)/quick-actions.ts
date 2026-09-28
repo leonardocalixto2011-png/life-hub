@@ -6,7 +6,15 @@ import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { rateLimit } from "@/lib/rate-limit";
 import { overAiBudget, AI_BUDGET_MESSAGE } from "@/lib/ai-budget";
-import { parseText, type Draft, type DraftKind, type ParseOutcome } from "@/lib/parse";
+import {
+  parseText,
+  parseImage as parseImageCore,
+  IMAGE_MEDIA_TYPES,
+  type Draft,
+  type DraftKind,
+  type ImageMediaType,
+  type ParseOutcome,
+} from "@/lib/parse";
 import { commitDraftsCore } from "@/lib/commit-drafts";
 import { CommitSchema } from "@/lib/commit-schema";
 import { revalidateContent } from "@/lib/revalidate";
@@ -27,6 +35,46 @@ export async function parseQuickAdd(text: string): Promise<ParseResult> {
   }
   if (await overAiBudget(user.id)) return { ok: false, error: AI_BUDGET_MESSAGE };
   return withHub(user.id, (tx) => parseText(text, { tx, hubId: hub.id }, 25, user.id));
+}
+
+/**
+ * Largest base64 payload accepted from quick-add "Snap". The client downscales
+ * to ~1600px JPEG before sending (typically well under 1MB encoded), so this
+ * only turns away something that skipped that step. bodySizeLimit in
+ * next.config.ts sits just above it.
+ */
+const MAX_IMAGE_BASE64 = 3_500_000;
+
+/**
+ * Photo → drafts. Same gates as parseQuickAdd, in the same order, and the same
+ * `ai:<user>` bucket: a photo is one more way to spend the same budget, not a
+ * separate allowance. The image goes to Claude and nowhere else — it is not
+ * stored and never logged.
+ */
+export async function parseImage(input: {
+  data: string;
+  mediaType: string;
+}): Promise<ParseResult> {
+  const { user, hub } = await requireHub();
+
+  if (!(await rateLimit(`ai:${user.id}`, 60, 3600)).ok) {
+    return { ok: false, error: "You have hit the hourly limit for AI parsing. Try again shortly." };
+  }
+  const mediaType = input?.mediaType;
+  if (!(IMAGE_MEDIA_TYPES as readonly string[]).includes(mediaType)) {
+    return { ok: false, error: "That photo format isn't supported." };
+  }
+  const data = typeof input.data === "string" ? input.data : "";
+  if (data.length > MAX_IMAGE_BASE64) {
+    return { ok: false, error: "That photo is too large." };
+  }
+  if (!data || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+    return { ok: false, error: "That photo couldn't be read." };
+  }
+  if (await overAiBudget(user.id)) return { ok: false, error: AI_BUDGET_MESSAGE };
+  return withHub(user.id, (tx) =>
+    parseImageCore({ data, mediaType: mediaType as ImageMediaType }, { tx, hubId: hub.id }, user.id),
+  );
 }
 
 export async function commitDrafts(

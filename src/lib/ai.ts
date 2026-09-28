@@ -24,6 +24,17 @@ export const AI_MODEL = process.env.ANTHROPIC_MODEL ?? "claude-opus-5";
  */
 export const AI_MODEL_FAST = process.env.ANTHROPIC_MODEL_FAST ?? "claude-haiku-4-5-20251001";
 
+/**
+ * `output_config.effort` for a call on AI_MODEL_FAST. Haiku 4.5 — the default
+ * above — rejects the effort parameter outright ("This model does not support
+ * the effort parameter", 400), so sending `effort: "low"` to it failed every
+ * quick-add parse and mail classification. Models that accept it still get
+ * "low"; spread this into output_config instead of hard-coding the field.
+ */
+export function fastEffort(): { effort?: "low" } {
+  return AI_MODEL_FAST.startsWith("claude-haiku") ? {} : { effort: "low" };
+}
+
 export function aiEnabled(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }

@@ -1,9 +1,9 @@
-import { format } from "date-fns";
+import { addDays, format } from "date-fns";
 import { recordAiSpend } from "@/lib/ai-budget";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
-import { ai, aiEnabled, AI_MODEL_FAST } from "@/lib/ai";
+import { ai, aiEnabled, fastEffort, AI_MODEL_FAST } from "@/lib/ai";
 import { reportError } from "@/lib/observability";
 import { listVentures } from "@/lib/data";
 import type { HubTx } from "@/lib/hub-context";
@@ -94,19 +94,10 @@ export async function parseText(
   }
 
   const ventures = hub ? await listVentures(hub.tx, hub.hubId) : [];
-  const today = new Date();
 
   const system = [
     "Convert freeform notes (or a forwarded email) into structured items for a shared life/business admin app.",
-    `Today is ${format(today, "EEEE, yyyy-MM-dd")}. Resolve relative dates against it.`,
-    "Pick kind per item:",
-    "- event: has a specific clock time.",
-    "- subscription: a recurring paid service; set billingCycle, and put the next renewal in date if known.",
-    "- budget: a concrete payment or income with an amount; set entryType and amount (dollars).",
-    "- deadline: a hard dated milestone, no clock time, no money.",
-    "- task: everything else.",
-    "date = YYYY-MM-DD or null. time = YYYY-MM-DDTHH:MM or null. amount = dollars number or null.",
-    `Ventures (exact name or null): ${ventures.map((v) => v.name).join(", ") || "none"}.`,
+    ...itemRules(ventures),
     "Only include items clearly present in the text. Empty items array if nothing is actionable.",
   ].join("\n");
 
@@ -120,7 +111,7 @@ export async function parseText(
       // old 1536 silently truncated anything past ~9-10 items. `stop_reason`
       // below still catches the (now much rarer) case of an even longer paste.
       max_tokens: 4096,
-      output_config: { effort: "low", format: zodOutputFormat(AiSchema) },
+      output_config: { ...fastEffort(), format: zodOutputFormat(AiSchema) },
       system,
       messages: [{ role: "user", content: clean.slice(0, 6000) }],
     });
@@ -136,6 +127,51 @@ export async function parseText(
     await reportError("ai.parse_failed", err, { model: AI_MODEL_FAST });
     return { ok: false, error: friendlyAiError(err) };
   }
+  return toOutcome(parsed, ventures, maxItems, truncated);
+}
+
+/** What `listVentures` returns, narrowed to the two fields matching needs. */
+type VentureRef = { id: string; name: string };
+
+/**
+ * The part of the system prompt both parsers share: which kind to pick, the
+ * field formats, and the venture list. Kept in one place so a photo and a
+ * sentence describing the same bill come back as the same draft.
+ *
+ * "Today" is the server's local date — process TZ is pinned to
+ * America/Toronto in src/instrumentation.ts, so this is Montréal's today, not
+ * UTC's (which rolls over at 8 p.m. here).
+ *
+ * The next seven dates are spelled out because the fast model's weekday
+ * arithmetic is unreliable: tested on a Monday, "vendredi" came back as a
+ * Saturday and "dimanche" as today. A lookup it can copy from fixes both.
+ */
+function itemRules(ventures: VentureRef[]): string[] {
+  const today = new Date();
+  const week = Array.from({ length: 7 }, (_, i) => format(addDays(today, i + 1), "EEEE yyyy-MM-dd"));
+  return [
+    `Today is ${format(today, "EEEE, yyyy-MM-dd")}. Resolve relative dates against it.`,
+    `The next seven days: ${week.join(", ")}. A bare weekday ("friday", "vendredi") means the next one in this list.`,
+    "Pick kind per item:",
+    "- event: has a specific clock time.",
+    "- subscription: a recurring paid service; set billingCycle, and put the next renewal in date if known.",
+    "- budget: a payment already made, or income, with an amount; set entryType and amount (dollars).",
+    "- task: a bill or payment still to make is a task with amount and date = when it's due.",
+    "- deadline: a hard dated milestone, no clock time, no money.",
+    "- task: everything else.",
+    "date = YYYY-MM-DD or null. time = YYYY-MM-DDTHH:MM or null. amount = dollars number or null.",
+    "Write titles and notes in the language of the input (French stays French).",
+    `Ventures (exact name or null): ${ventures.map((v) => v.name).join(", ") || "none"}.`,
+  ];
+}
+
+/** Model output → reviewable drafts, shared by parseText and parseImage. */
+function toOutcome(
+  parsed: z.infer<typeof AiSchema> | null,
+  ventures: VentureRef[],
+  maxItems: number,
+  truncated: boolean,
+): ParseOutcome {
   if (!parsed || parsed.items.length === 0) {
     return { ok: false, error: "Nothing actionable found." };
   }
@@ -160,4 +196,71 @@ export async function parseText(
   }));
 
   return { ok: true, drafts, truncated: truncated || undefined };
+}
+
+/** The image types the Messages API accepts as a base64 image block. */
+export const IMAGE_MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+export type ImageMediaType = (typeof IMAGE_MEDIA_TYPES)[number];
+
+/**
+ * Turn a photo — a receipt, a bill, an invitation or poster, a renewal notice
+ * — into the same reviewable drafts as parseText. No auth; the caller gates
+ * (see parseImage in src/app/(app)/quick-actions.ts, which also enforces size
+ * and type before anything reaches here).
+ *
+ * The image is never logged: on failure only the error and the model go to
+ * reportError, exactly as on the text path.
+ */
+export async function parseImage(
+  image: { data: string; mediaType: ImageMediaType },
+  hub: { tx: HubTx; hubId: string },
+  subject: string,
+  maxItems = 10,
+): Promise<ParseOutcome> {
+  if (!aiEnabled()) {
+    return { ok: false, error: "Parsing needs ANTHROPIC_API_KEY set on the server." };
+  }
+
+  const ventures = await listVentures(hub.tx, hub.hubId);
+
+  const system = [
+    "Read a photo (receipt, bill, invitation, poster, renewal notice, appointment card…) and turn what it asks of the reader into structured items for a shared life/business admin app.",
+    ...itemRules(ventures),
+    "How to read common photos:",
+    "- Store or restaurant receipt (already paid): one budget item, entryType EXPENSE, amount = the final total paid including tax and tip, date = purchase date, title = short category + merchant, in the receipt's language (e.g. \"Épicerie — Metro\" on a French receipt). Never one item per line.",
+    "- Bill or invoice still to pay: a task, amount = amount due, date = due date, title = \"Pay <biller>\" (\"Payer <biller>\" in French).",
+    "- Invitation, poster or appointment: an event when a clock time is shown (time set), otherwise a deadline with the date. Put the place in note.",
+    "- Subscription or renewal notice: a subscription with billingCycle and the next renewal date.",
+    "A date with no year is the next such date for anything upcoming, the most recent past one for a receipt.",
+    "Keep note short (place, invoice number) and never copy card, account or client numbers into it.",
+    "Only include items clearly visible in the photo. Empty items array if it shows nothing actionable.",
+  ].join("\n");
+
+  let parsed: z.infer<typeof AiSchema> | null = null;
+  let truncated = false;
+  try {
+    const res = await ai().messages.parse({
+      model: AI_MODEL_FAST,
+      // A photo usually yields one or two items; this is headroom, not a target.
+      max_tokens: 2048,
+      output_config: { ...fastEffort(), format: zodOutputFormat(AiSchema) },
+      system,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: image.mediaType, data: image.data } },
+            { type: "text", text: "Extract the items from this photo." },
+          ],
+        },
+      ],
+    });
+    await recordAiSpend(subject, res.usage);
+    parsed = res.parsed_output;
+    truncated = res.stop_reason === "max_tokens";
+  } catch (err) {
+    await reportError("ai.parse_image_failed", err, { model: AI_MODEL_FAST });
+    return { ok: false, error: friendlyAiError(err) };
+  }
+  return toOutcome(parsed, ventures, maxItems, truncated);
 }
