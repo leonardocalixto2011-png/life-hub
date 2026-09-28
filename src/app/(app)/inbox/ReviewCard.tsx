@@ -7,6 +7,8 @@ import { formatDistanceToNow } from "date-fns";
 import type { Draft } from "@/lib/parse";
 import { DraftCard } from "@/components/DraftCard";
 import { showToast } from "@/components/Toast";
+import { useLang, useT } from "@/components/I18nProvider";
+import { dateLocale } from "@/lib/i18n";
 import { acceptReview, discardReview, trustThisSender, muteThisSender } from "./actions";
 
 export type ReviewCardData = {
@@ -27,6 +29,8 @@ export function ReviewCard({
   ventures: { id: string; name: string }[];
 }) {
   const router = useRouter();
+  const t = useT();
+  const lang = useLang();
   const [draft, setDraft] = useState<Draft>(item.draft);
   const [pending, start] = useTransition();
 
@@ -54,19 +58,19 @@ export function ReviewCard({
         if (r.offerTrust) {
           const { hubId, fromAddress, category } = r.offerTrust;
           showToast({
-            message: `Always trust ${fromAddress}?`,
-            actionLabel: "Trust sender",
+            message: t("Always trust {email}?", { email: fromAddress }),
+            actionLabel: t("Trust sender"),
             onAction: () => {
               void trustThisSender(hubId, fromAddress, category);
-              showToast({ message: "Future emails from them will auto-file." });
+              showToast({ message: t("Future emails from them will auto-file.") });
             },
           });
         } else {
-          showToast({ message: "Added" });
+          showToast({ message: t("Added") });
         }
         router.refresh();
       } else {
-        setErr(r.error ?? "Could not save");
+        setErr(t(r.error ?? "Could not save"));
       }
     });
   }
@@ -82,13 +86,13 @@ export function ReviewCard({
   return (
     <div className="space-y-2 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[0.68rem] text-[var(--color-text-dim)]">
-        <span className="chip">{item.source}</span>
-        {item.fromAddress && <span className="truncate">from {item.fromAddress}</span>}
-        <span>· {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</span>
+        <span className="chip">{t(item.source)}</span>
+        {item.fromAddress && <span className="truncate">{t("from {email}", { email: item.fromAddress })}</span>}
+        <span>· {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: dateLocale(lang) })}</span>
       </div>
 
       {item.note && (
-        <p className="px-1 text-[0.7rem] font-semibold text-[#b45309]">{item.note}</p>
+        <p className="px-1 text-[0.7rem] font-semibold text-[var(--color-warn)]">{item.note}</p>
       )}
 
       <DraftCard
@@ -101,7 +105,7 @@ export function ReviewCard({
       {item.sourceSnippet && (
         <details className="px-1">
           <summary className="cursor-pointer text-[0.68rem] font-semibold text-[var(--color-text-dim)]">
-            Source
+            {t("Source")}
           </summary>
           <p className="mt-1 whitespace-pre-wrap text-[0.7rem] text-[var(--color-text-dim)]">
             {item.sourceSnippet}
@@ -113,10 +117,10 @@ export function ReviewCard({
 
       <div className="flex gap-2">
         <button onClick={accept} disabled={pending} className="btn btn-primary flex-1">
-          {pending ? "…" : "Accept"}
+          {pending ? "…" : t("Accept")}
         </button>
         <button onClick={discard} disabled={pending} className="btn">
-          Discard
+          {t("Discard")}
         </button>
       </div>
 
@@ -126,7 +130,7 @@ export function ReviewCard({
           disabled={pending}
           className="text-[0.65rem] font-semibold text-[var(--color-text-dim)] underline disabled:opacity-60"
         >
-          Never show mail from {item.fromAddress} again
+          {t("Never show mail from {email} again", { email: item.fromAddress })}
         </button>
       )}
     </div>

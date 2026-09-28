@@ -39,7 +39,9 @@ export async function GET(req: Request) {
   const summaries: string[] = [];
 
   // Bounded fan-out — see the digest route for why.
+  let failed = 0;
   await mapLimit(users, 4, async (u) => {
+    try {
     const w = await collectWeeklyForUser(u.id);
     const text = weeklyText(w);
     const html = weeklyHtml(w, appUrl);
@@ -59,7 +61,12 @@ export async function GET(req: Request) {
       await sendEmail({ to: u.email, subject, html, text });
       emailed++;
     }
+    } catch (err) {
+      // One person's weekly failing must not abort everyone else's.
+      failed++;
+      await reportError("cron.weekly.user_failed", err, { userId: u.id });
+    }
   });
 
-  return NextResponse.json({ ok: true, pushed, emailed, summary: summaries.join(" | ") });
+  return NextResponse.json({ ok: true, pushed, emailed, failed, summary: summaries.join(" | ") });
 }

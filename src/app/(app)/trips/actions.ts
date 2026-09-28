@@ -8,10 +8,35 @@ import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
 import { revalidateContent } from "@/lib/revalidate";
-import { missingPlanRows, planNote, TRIP_TEMPLATES, tripPlanSchema, type TripPlan } from "@/lib/trip-plan";
+import { assertActiveMember } from "@/lib/membership";
+import { formResult, type ActionResult } from "@/lib/action-result";
+import {
+  isRealDay,
+  missingPlanRows,
+  planNote,
+  TRIP_TEMPLATES,
+  tripPlanSchema,
+  type TripPlan,
+} from "@/lib/trip-plan";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
-const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the dates");
+const day = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the dates")
+  .refine(isRealDay, "That date doesn't exist");
+
+/**
+ * An optional money field that may be blank but never negative. `dollarsToCents`
+ * keeps a minus sign, and a negative budget or cost would turn every
+ * "planned vs spent" figure on the trip page upside down.
+ */
+function optionalCents(raw: string | null, negativeMessage: string): number | null {
+  const cents = dollarsToCents(raw);
+  // The whole sentence is passed in (not a label spliced into one) so it
+  // stays a single translatable key.
+  if (cents != null && cents < 0) throw new Error(negativeMessage);
+  return cents;
+}
 
 const tripFields = {
   title: z.string().trim().min(1, "Give the trip a name").max(120),
@@ -39,7 +64,7 @@ function tripData(d: z.infer<z.ZodObject<typeof tripFields>>) {
     destination: d.destination,
     startDate,
     endDate,
-    budgetCents: dollarsToCents(d.budget),
+    budgetCents: optionalCents(d.budget, "The budget can't be negative."),
     notes: d.notes,
     visibility: d.visibility,
   };
@@ -50,26 +75,30 @@ function visibleTrip(hubId: string, userId: string) {
   return { hubId, OR: [{ visibility: "SHARED" as const }, { createdById: userId }] };
 }
 
-export async function createTrip(fd: FormData) {
-  const { user, hub } = await requireHub();
-  const data = tripData(parse(z.object(tripFields), fd));
-  const trip = await withHub(user.id, (tx) =>
-    tx.trip.create({ data: { ...data, hubId: hub.id, createdById: user.id } }),
-  );
-  revalidateContent("/trips");
-  redirect(`/trips/${trip.id}`);
+export async function createTrip(fd: FormData): Promise<ActionResult> {
+  return formResult(async () => {
+    const { user, hub } = await requireHub();
+    const data = tripData(parse(z.object(tripFields), fd));
+    const trip = await withHub(user.id, (tx) =>
+      tx.trip.create({ data: { ...data, hubId: hub.id, createdById: user.id } }),
+    );
+    revalidateContent("/trips");
+    redirect(`/trips/${trip.id}`);
+  });
 }
 
-export async function updateTrip(fd: FormData) {
-  const { user, hub } = await requireHub();
-  const d = parse(z.object({ ...tripFields, id: z.string().cuid() }), fd);
-  await withHub(user.id, async (tx) => {
-    const trip = await tx.trip.findFirst({ where: { id: d.id, ...visibleTrip(hub.id, user.id) } });
-    if (!trip) throw new Error("Trip not found");
-    await tx.trip.update({ where: { id: d.id }, data: tripData(d) });
+/** Edited in place on the trip page, so no redirect — revalidation re-renders it. */
+export async function updateTrip(fd: FormData): Promise<ActionResult> {
+  return formResult(async () => {
+    const { user, hub } = await requireHub();
+    const d = parse(z.object({ ...tripFields, id: z.string().cuid() }), fd);
+    await withHub(user.id, async (tx) => {
+      const trip = await tx.trip.findFirst({ where: { id: d.id, ...visibleTrip(hub.id, user.id) } });
+      if (!trip) throw new Error("Trip not found");
+      await tx.trip.update({ where: { id: d.id }, data: tripData(d) });
+    });
+    revalidateContent("/trips", `/trips/${d.id}`);
   });
-  revalidateContent("/trips", `/trips/${d.id}`);
-  redirect(`/trips/${d.id}`);
 }
 
 export async function deleteTrip(fd: FormData) {
@@ -92,7 +121,11 @@ const itemSchema = z.object({
   note: z.preprocess(emptyToNull, z.string().trim().max(800).nullable()),
 });
 
-export async function addTripItem(tripId: string, fd: FormData) {
+export async function addTripItem(tripId: string, fd: FormData): Promise<ActionResult> {
+  return formResult(() => addTripItemCore(tripId, fd));
+}
+
+async function addTripItemCore(tripId: string, fd: FormData) {
   const { user, hub } = await requireHub();
   z.string().cuid().parse(tripId);
   const d = parse(itemSchema, fd);
@@ -103,19 +136,22 @@ export async function addTripItem(tripId: string, fd: FormData) {
     throw new Error("A stop needs the day you leave, after the day you arrive.");
   }
   if (d.kind === "BUDGET" && !d.cost) throw new Error("A budget line needs an amount.");
+  const costCents = optionalCents(d.cost, "The amount can't be negative.");
   await withHub(user.id, async (tx) => {
     const trip = await tx.trip.findFirst({
       where: { id: tripId, ...visibleTrip(hub.id, user.id) },
       select: { hubId: true },
     });
     if (!trip) throw new Error("Trip not found");
+    // A plain member id with no FK — checked against the trip's own hub.
+    if (d.assignedToId) await assertActiveMember(trip.hubId, d.assignedToId);
     await tx.tripItem.create({
       data: {
         tripId,
         hubId: trip.hubId,
         kind: d.kind,
         title: d.title,
-        costCents: dollarsToCents(d.cost),
+        costCents,
         date: fromDateInput(d.date),
         endDate: d.kind === "STOP" ? fromDateInput(d.endDate) : null,
         assignedToId: d.assignedToId,
@@ -165,7 +201,11 @@ export async function deleteTripItem(fd: FormData) {
  * Adds to (or, with a negative amount, takes back from) what's been saved for
  * a trip. Never lets the total go below zero.
  */
-export async function addTripSavings(tripId: string, fd: FormData) {
+export async function addTripSavings(tripId: string, fd: FormData): Promise<ActionResult> {
+  return formResult(() => addTripSavingsCore(tripId, fd));
+}
+
+async function addTripSavingsCore(tripId: string, fd: FormData) {
   const { user, hub } = await requireHub();
   z.string().cuid().parse(tripId);
   const { amount } = parse(z.object({ amount: z.string().trim().min(1, "Enter an amount") }), fd);
@@ -191,14 +231,20 @@ export async function addTripSavings(tripId: string, fd: FormData) {
  * is either a built-in template or pasted JSON in the same shape. Adds to
  * what's there; sets the budget only when the trip has none.
  */
-export async function importTripPlan(tripId: string, fd: FormData) {
+export async function importTripPlan(tripId: string, fd: FormData): Promise<ActionResult> {
+  return formResult(() => importTripPlanCore(tripId, fd));
+}
+
+async function importTripPlanCore(tripId: string, fd: FormData) {
   const { user, hub } = await requireHub();
   z.string().cuid().parse(tripId);
 
   let plan: TripPlan;
   const key = String(fd.get("template") ?? "");
   const json = String(fd.get("json") ?? "").trim();
-  if (key && TRIP_TEMPLATES[key]) {
+  // Object.hasOwn, not a plain lookup: "constructor" or "__proto__" would
+  // otherwise find something on Object.prototype and crash on `.plan`.
+  if (key && Object.hasOwn(TRIP_TEMPLATES, key)) {
     plan = TRIP_TEMPLATES[key].plan;
   } else if (json) {
     let raw: unknown;

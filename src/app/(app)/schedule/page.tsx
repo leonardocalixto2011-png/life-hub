@@ -13,6 +13,7 @@ import { WeekFreeBars } from "@/components/viz/WeekFreeBars";
 import { peopleOf } from "@/components/viz/people";
 import { ShiftForm } from "./ShiftForm";
 import { deleteShift, deleteShiftSeries } from "./actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -66,13 +67,13 @@ export default async function SchedulePage({
       </p>
 
       <div className="flex items-center justify-between">
-        <Link href={weekHref(addDays(monday, -7))} className="btn btn-ghost px-2">
+        <Link href={weekHref(addDays(monday, -7))} className="btn btn-ghost px-2" aria-label={t("Previous week")}>
           ‹
         </Link>
         <span className="text-sm font-semibold">
           {fmtShort(monday, lang)} – {fmtShort(addDays(monday, 6), lang)}
         </span>
-        <Link href={weekHref(nextMonday)} className="btn btn-ghost px-2">
+        <Link href={weekHref(nextMonday)} className="btn btn-ghost px-2" aria-label={t("Next week")}>
           ›
         </Link>
       </div>
@@ -119,17 +120,17 @@ export default async function SchedulePage({
                             <span className="flex shrink-0 gap-2">
                               <form action={deleteShift}>
                                 <input type="hidden" name="id" value={s.id} />
-                                <button className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline">
+                                <SubmitButton className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline" pendingLabel="…">
                                   {t("remove")}
-                                </button>
+                                </SubmitButton>
                               </form>
                               {s.recurrenceGroupId && (
                                 <form action={deleteShiftSeries}>
                                   <input type="hidden" name="id" value={s.id} />
                                   <input type="hidden" name="groupId" value={s.recurrenceGroupId} />
-                                  <button className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline">
+                                  <SubmitButton className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline" pendingLabel="…">
                                     {t("+ later")}
-                                  </button>
+                                  </SubmitButton>
                                 </form>
                               )}
                             </span>

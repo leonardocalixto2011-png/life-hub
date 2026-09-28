@@ -9,6 +9,7 @@ import { ThemePicker } from "./ThemePicker";
 import { LocalePicker } from "./LocalePicker";
 import { MotionToggle } from "@/components/MotionToggle";
 import { removeBackgroundImage } from "./actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,8 @@ export default async function AppearancePage() {
 
         {user.backgroundImageUrl && (
           <div className="card overflow-hidden p-0">
+            {/* A user-uploaded Blob URL; next/image would need remotePatterns for it. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={user.backgroundImageUrl}
               alt={t("Current background")}
@@ -76,12 +79,9 @@ export default async function AppearancePage() {
 
         {user.backgroundImageUrl && (
           <form action={removeBackgroundImage}>
-            <button
-              type="submit"
-              className="w-full text-xs font-semibold text-[var(--color-danger)] underline"
-            >
+            <SubmitButton className="w-full text-xs font-semibold text-[var(--color-danger)] underline" pendingLabel="…">
               {t("Remove background")}
-            </button>
+            </SubmitButton>
           </form>
         )}
       </section>

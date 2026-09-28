@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { requireUser } from "@/lib/session";
+import { getT } from "@/lib/i18n-server";
 import { aiEnabled, AI_MODEL } from "@/lib/ai";
 import { AssistantPanel } from "./AssistantPanel";
 
@@ -8,28 +9,31 @@ export const dynamic = "force-dynamic";
 
 export default async function AssistantPage() {
   await requireUser();
+  const t = await getT();
   const enabled = aiEnabled();
 
   return (
     <div className="space-y-4 p-3">
       <div>
         <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
-          ← Today
+          ← {t("Today")}
         </Link>
-        <h1 className="mt-1 text-lg font-bold">Assistant</h1>
-        <p className="text-xs text-[var(--color-text-dim)]">Powered by Claude ({AI_MODEL}).</p>
+        <h1 className="mt-1 text-lg font-bold">{t("Assistant")}</h1>
+        <p className="text-xs text-[var(--color-text-dim)]">{t("Powered by Claude ({model}).", { model: AI_MODEL })}</p>
       </div>
 
       {enabled ? (
         <AssistantPanel />
       ) : (
         <div className="card p-4 text-sm">
-          <p className="font-semibold">Not set up yet</p>
+          <p className="font-semibold">{t("Not set up yet")}</p>
+          {/* Setup notes for whoever runs the deployment; the env names and
+              model ids stay literal in either language. */}
           <p className="mt-1 text-[var(--color-text-dim)]">
-            Add <code>ANTHROPIC_API_KEY</code> to the environment (locally in{" "}
-            <code>.env</code>, in production in the Vercel project). The model
-            defaults to <code>claude-opus-5</code>; set <code>ANTHROPIC_MODEL</code>
-            to <code>claude-haiku-4-5</code> or <code>claude-sonnet-5</code> to cut cost.
+            {t(
+              "Add {key} to the environment (locally in .env, in production in the Vercel project). The model defaults to {model}; set {modelVar} to a smaller model to cut cost.",
+              { key: "ANTHROPIC_API_KEY", model: "claude-opus-5", modelVar: "ANTHROPIC_MODEL" },
+            )}
           </p>
         </div>
       )}

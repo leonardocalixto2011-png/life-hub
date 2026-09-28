@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { makeRecurring } from "@/app/(app)/tasks/actions";
@@ -11,9 +11,44 @@ type Suggestion = { title: string; count: number; latestId: string };
 
 const DISMISS_KEY = "life-hub:recurring-dismissed";
 
-function readDismissed(): string[] {
+// localStorage as an external store. The raw string is the snapshot — stable
+// between reads, so no re-render loop — and it is parsed during render. The
+// server (and the hydrating client render) see "[]", so markup always matches.
+// `memory` keeps a dismissal working for the session when storage is blocked.
+const listeners = new Set<() => void>();
+let memory = "[]";
+
+function subscribe(cb: () => void) {
+  listeners.add(cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    listeners.delete(cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+
+function readRaw(): string {
   try {
-    return JSON.parse(localStorage.getItem(DISMISS_KEY) ?? "[]");
+    return localStorage.getItem(DISMISS_KEY) ?? memory;
+  } catch {
+    return memory;
+  }
+}
+
+function writeDismissed(list: string[]) {
+  memory = JSON.stringify(list.slice(-50));
+  try {
+    localStorage.setItem(DISMISS_KEY, memory);
+  } catch {
+    /* private mode / storage blocked — `memory` covers this session */
+  }
+  listeners.forEach((l) => l());
+}
+
+function parseDismissed(raw: string): string[] {
+  try {
+    const v: unknown = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
   } catch {
     return [];
   }
@@ -22,10 +57,8 @@ function readDismissed(): string[] {
 export function RecurringNudge({ suggestions }: { suggestions: Suggestion[] }) {
   const router = useRouter();
   const t = useT();
-  const [dismissed, setDismissed] = useState<string[]>([]);
+  const dismissed = parseDismissed(useSyncExternalStore(subscribe, readRaw, () => "[]"));
   const [pending, start] = useTransition();
-
-  useEffect(() => setDismissed(readDismissed()), []);
 
   const visible = suggestions.filter(
     (s) => !dismissed.includes(s.title.toLowerCase()),
@@ -34,13 +67,7 @@ export function RecurringNudge({ suggestions }: { suggestions: Suggestion[] }) {
   const s = visible[0];
 
   function dismiss() {
-    const next = [...dismissed, s.title.toLowerCase()];
-    setDismissed(next);
-    try {
-      localStorage.setItem(DISMISS_KEY, JSON.stringify(next.slice(-50)));
-    } catch {
-      /* ignore */
-    }
+    writeDismissed([...dismissed, s.title.toLowerCase()]);
   }
 
   function apply(cycle: "weekly" | "monthly") {

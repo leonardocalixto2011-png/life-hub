@@ -8,6 +8,7 @@ import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
 import { revalidateContent } from "@/lib/revalidate";
+import { assertActiveMember, assertVentureInHub } from "@/lib/membership";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -35,6 +36,14 @@ function parse<T extends z.ZodTypeAny>(schema: T, fd: FormData): z.infer<T> {
   return res.data;
 }
 
+/**
+ * The owner is a plain user id from the form; RLS checks the row's hub, not
+ * who it names, so it's verified against this hub's active members here.
+ */
+async function checkOwner(hubId: string, ownerId: string | null) {
+  if (ownerId) await assertActiveMember(hubId, ownerId);
+}
+
 function data(d: z.infer<typeof createSchema>) {
   const costCents = dollarsToCents(d.cost);
   if (costCents == null || costCents < 0) throw new Error("Cost must be a positive number");
@@ -54,35 +63,48 @@ function data(d: z.infer<typeof createSchema>) {
 export async function createSubscription(fd: FormData) {
   const { user, hub } = await requireHub();
   const d = data(parse(createSchema, fd));
+  await checkOwner(hub.id, d.ownerId);
+  await assertVentureInHub(hub.id, d.ventureId);
   await withHub(user.id, (tx) => tx.subscription.create({ data: { ...d, hubId: hub.id } }));
   revalidateContent();
 }
 
 export async function updateSubscription(fd: FormData) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const d = parse(updateSchema, fd);
-  await withHub(user.id, (tx) =>
-    tx.subscription.update({ where: { id: d.id }, data: data(d) }),
-  );
+  const values = data(d);
+  await checkOwner(hub.id, values.ownerId);
+  await assertVentureInHub(hub.id, values.ventureId);
+  // Pinned to this hub in app code as well as by RLS.
+  await withHub(user.id, async (tx) => {
+    const { count } = await tx.subscription.updateMany({ where: { id: d.id, hubId: hub.id }, data: values });
+    if (count === 0) throw new Error("Not found.");
+  });
   revalidateContent(`/subscriptions/${d.id}`);
   redirect("/subscriptions");
 }
 
 export async function setSubscriptionStatus(fd: FormData) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const schema = z.object({
     id: z.string().cuid(),
     status: z.enum(["ACTIVE", "CANCELLED"]),
   });
   const { id, status } = schema.parse({ id: fd.get("id"), status: fd.get("status") });
-  await withHub(user.id, (tx) => tx.subscription.update({ where: { id }, data: { status } }));
+  await withHub(user.id, async (tx) => {
+    const { count } = await tx.subscription.updateMany({ where: { id, hubId: hub.id }, data: { status } });
+    if (count === 0) throw new Error("Not found.");
+  });
   revalidateContent(`/subscriptions/${id}`);
 }
 
 export async function deleteSubscription(fd: FormData) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
-  await withHub(user.id, (tx) => tx.subscription.delete({ where: { id } }));
+  await withHub(user.id, async (tx) => {
+    const { count } = await tx.subscription.deleteMany({ where: { id, hubId: hub.id } });
+    if (count === 0) throw new Error("Not found.");
+  });
   revalidateContent();
   redirect("/subscriptions");
 }

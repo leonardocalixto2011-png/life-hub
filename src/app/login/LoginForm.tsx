@@ -21,7 +21,7 @@ export function LoginForm({ open }: { open: boolean }) {
             : t("If that address has access, a sign-in link is on its way. It expires in 24 hours.")}
         </p>
         <p className="mt-3 text-xs text-[var(--color-text-dim)]">
-          Running locally with no email key? The link is printed in the dev server console.
+          {t("Running locally with no email key? The link is printed in the dev server console.")}
         </p>
       </div>
     );
@@ -43,7 +43,7 @@ export function LoginForm({ open }: { open: boolean }) {
         className="field mt-2"
       />
       {state.error && (
-        <p className="mt-2 text-sm text-[var(--color-danger)]">{state.error}</p>
+        <p className="mt-2 text-sm text-[var(--color-danger)]">{t(state.error)}</p>
       )}
       <button type="submit" disabled={pending} className="btn btn-primary mt-3 w-full">
         {pending ? t("Sending…") : t("Send sign-in link")}

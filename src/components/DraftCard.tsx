@@ -43,6 +43,7 @@ export function DraftCard({
         <select
           value={draft.kind}
           onChange={(e) => onChange({ kind: e.target.value as DraftKind })}
+          aria-label={t("Type")}
           className="chip"
           style={{ background: "var(--color-primary)", borderColor: "var(--color-primary)", color: "#fff" }}
           disabled={isNeedsReply}

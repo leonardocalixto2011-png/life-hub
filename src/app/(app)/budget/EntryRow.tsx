@@ -10,8 +10,21 @@ import { useLang, useT } from "@/components/I18nProvider";
 import { deleteEntry } from "./actions";
 import { EntryForm } from "./EntryForm";
 import type { BudgetEntryWithRefs } from "@/lib/data";
+import { SubmitButton } from "@/components/SubmitButton";
 
 type Member = { id: string; name: string | null; email: string | null };
+
+/**
+ * Descriptions the app itself writes (settle-up and debt-payment rows) are
+ * stored in English; translate those at render. Anything else is the
+ * person's own text and is shown as typed — running it through t() could
+ * turn a note that happens to match a UI key into something else.
+ */
+function describe(description: string, t: (k: string, v?: Record<string, string>) => string): string {
+  if (description === "Debt payment" || description === "Paid back") return t(description);
+  const paidBack = /^Paid back (.+)$/.exec(description);
+  return paidBack ? t("Paid back {name}", { name: paidBack[1] }) : description;
+}
 
 export function EntryRow({
   e,
@@ -64,7 +77,7 @@ export function EntryRow({
         <div className="mt-0.5 text-xs text-[var(--color-text-dim)]">
           {fmtShort(new Date(e.date), lang)}
           {payerName && members.length > 1 ? ` · ${t("paid by {name}", { name: payerName })}` : ""}
-          {e.description ? ` · ${e.description}` : ""}
+          {e.description ? ` · ${describe(e.description, t)}` : ""}
         </div>
       </div>
       <div className="text-right">
@@ -93,9 +106,9 @@ export function EntryRow({
           )}
           <form action={deleteEntry}>
             <input type="hidden" name="id" value={e.id} />
-            <button className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline">
+            <SubmitButton className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline" pendingLabel="…">
               {t("delete")}
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </div>

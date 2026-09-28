@@ -87,7 +87,7 @@ export function QuickAdd({
         reset();
         router.refresh();
       } catch (err) {
-        setMsg(err instanceof Error ? err.message : t("Could not add"));
+        setMsg(err instanceof Error ? t(err.message) : t("Could not add"));
       }
     });
   }

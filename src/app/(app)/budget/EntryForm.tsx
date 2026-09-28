@@ -66,7 +66,7 @@ export function EntryForm({
         }
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : t("Could not save"));
+        setError(err instanceof Error ? t(err.message) : t("Could not save"));
       }
     });
   }
@@ -113,7 +113,7 @@ export function EntryForm({
           />
           <datalist id="budget-categories">
             {BUDGET_CATEGORIES.map((c) => (
-              <option key={c} value={t(c)} />
+              <option key={c} value={c} label={t(c)} />
             ))}
           </datalist>
         </label>

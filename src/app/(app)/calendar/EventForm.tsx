@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { createEvent, deleteEvent, deleteEventSeries, updateEvent } from "./actions";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
+import { SubmitButton } from "@/components/SubmitButton";
 import { useT } from "@/components/I18nProvider";
 import type { T } from "@/lib/i18n";
 
@@ -169,23 +170,21 @@ export function EventForm({
         <form action={updateEvent} className="card space-y-3 p-4">
           <input type="hidden" name="id" value={existing.id} />
           <Fields ventures={ventures} members={members} existing={existing} t={t} />
-          <button type="submit" className="btn btn-primary w-full">
-            {t("Save")}
-          </button>
+          <SubmitButton className="btn btn-primary w-full">{t("Save")}</SubmitButton>
         </form>
         <form action={deleteEvent}>
           <input type="hidden" name="id" value={existing.id} />
-          <button type="submit" className="btn w-full text-[var(--color-danger)]">
+          <SubmitButton className="btn w-full text-[var(--color-danger)]" pendingLabel={t("Deleting…")}>
             {existing.recurrenceGroupId ? t("Delete just this one") : t("Delete event")}
-          </button>
+          </SubmitButton>
         </form>
         {existing.recurrenceGroupId && (
           <form action={deleteEventSeries}>
             <input type="hidden" name="recurrenceGroupId" value={existing.recurrenceGroupId} />
             <input type="hidden" name="fromDate" value={existing.startAt} />
-            <button type="submit" className="btn w-full text-[var(--color-danger)]">
+            <SubmitButton className="btn w-full text-[var(--color-danger)]" pendingLabel={t("Deleting…")}>
               {t("Delete this and future")}
-            </button>
+            </SubmitButton>
           </form>
         )}
       </div>
@@ -213,7 +212,7 @@ export function EventForm({
         if (prefill) router.replace("/calendar");
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : t("Could not save"));
+        setError(err instanceof Error ? t(err.message) : t("Could not save"));
       }
     });
   }

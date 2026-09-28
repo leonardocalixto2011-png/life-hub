@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { bearerMatches } from "@/lib/bearer";
 
-import { reportError } from "@/lib/observability";
+import { monitored } from "@/lib/observability";
 
 import { pollAllMailAccounts } from "@/lib/mail/poll";
 
@@ -21,6 +21,6 @@ export async function GET(req: Request) {
   if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const result = await pollAllMailAccounts();
+  const result = await monitored("mail.poll", {}, pollAllMailAccounts);
   return NextResponse.json({ ok: true, ...result, ranAt: new Date().toISOString() });
 }

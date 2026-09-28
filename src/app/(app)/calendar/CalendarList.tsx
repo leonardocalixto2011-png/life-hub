@@ -47,7 +47,7 @@ function EventBody({ e, members, lang }: { e: EventWithRefs; members: Member[]; 
   return (
     <>
       <div className="flex items-start justify-between gap-2">
-        <span className="font-medium">{e.title}</span>
+        <span className="min-w-0 font-medium">{e.title}</span>
         <span className="shrink-0 text-xs font-semibold text-[var(--color-text-dim)]">
           {eventTimeRange(e.startAt, e.endAt, lang)}
         </span>
@@ -151,6 +151,7 @@ export function CalendarList({ days, members }: { days: Day[]; members: Member[]
                   <button
                     key={e.id}
                     onClick={() => toggle(e.id)}
+                    aria-pressed={selected.has(e.id)}
                     className="card flex w-full items-start gap-3 p-3 text-left"
                     style={
                       selected.has(e.id)
@@ -158,7 +159,17 @@ export function CalendarList({ days, members }: { days: Day[]; members: Member[]
                         : undefined
                     }
                   >
-                    <input type="checkbox" checked={selected.has(e.id)} readOnly className="mt-0.5 shrink-0" />
+                    <span
+                      aria-hidden
+                      className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border text-[0.65rem] text-[var(--color-surface)]"
+                      style={
+                        selected.has(e.id)
+                          ? { background: "var(--color-primary)", borderColor: "var(--color-primary)" }
+                          : { borderColor: "var(--color-border)" }
+                      }
+                    >
+                      {selected.has(e.id) ? "✓" : ""}
+                    </span>
                     <div className="min-w-0 flex-1">
                       <EventBody e={e} members={members} lang={lang} />
                     </div>

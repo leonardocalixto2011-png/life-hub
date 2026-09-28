@@ -3,6 +3,8 @@ import { formatDistanceToNow } from "date-fns";
 
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getLang, getT } from "@/lib/i18n-server";
+import { dateLocale } from "@/lib/i18n";
 import { googleOAuthConfigured } from "@/lib/mail/google";
 import { microsoftOAuthConfigured } from "@/lib/mail/microsoft";
 import { addressFor, inboundDomain } from "@/lib/inbound-address";
@@ -16,6 +18,7 @@ import {
   removeTrustedSender,
   unmuteThisSender,
 } from "./actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +28,14 @@ const STATUS_LABEL: Record<string, string> = {
   REVOKED: "Revoked",
 };
 
+/** ReviewCategory → a readable, translatable label. */
+const CATEGORY_LABEL: Record<string, string> = {
+  BILL_PAYMENT: "bill payment",
+  SUBSCRIPTION_RENEWAL: "subscription renewal",
+  APPOINTMENT_EVENT: "appointment / event",
+  NEEDS_REPLY: "needs reply",
+};
+
 export default async function MailPage({
   searchParams,
 }: {
@@ -32,6 +43,7 @@ export default async function MailPage({
 }) {
   const sp = await searchParams;
   const { user, hub } = await requireHub();
+  const [t, lang] = await Promise.all([getT(), getLang()]);
 
   const [accounts, trustedSenders, mutedSenders] = await withHub(user.id, (tx) =>
     Promise.all([
@@ -56,61 +68,66 @@ export default async function MailPage({
 
   const configured = googleOAuthConfigured();
   const microsoftConfigured = microsoftOAuthConfigured();
+  const fieldLabel = "block text-[0.68rem] font-semibold text-[var(--color-text-dim)]";
 
   return (
     <div className="space-y-4 p-3">
       <div>
         <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
-          ← Today
+          ← {t("Today")}
         </Link>
-        <h1 className="mt-1 text-lg font-bold">Connected mailboxes</h1>
+        <h1 className="mt-1 text-lg font-bold">{t("Connected mailboxes")}</h1>
         <p className="text-xs text-[var(--color-text-dim)]">
-          Read-only access — Life Hub never sends, deletes, or modifies anything in a
-          connected inbox. New mail is classified and either filed automatically or sent
-          to your <Link href="/inbox" className="underline">review inbox</Link>.
+          {t(
+            "Read-only access — Life Hub never sends, deletes, or modifies anything in a connected inbox. New mail is classified and either filed automatically or sent to your review inbox.",
+          )}{" "}
+          <Link href="/inbox" className="underline">
+            {t("Open the review inbox")}
+          </Link>
         </p>
       </div>
 
       {sp.error && (
-        <div className="card border-[var(--color-danger)] p-3 text-xs text-[var(--color-danger)]">
-          {sp.error}
+        <div role="alert" className="card border-[var(--color-danger)] p-3 text-xs text-[var(--color-danger)]">
+          {t(sp.error)}
         </div>
       )}
       {sp.connected && (
         <div className="card border-[var(--color-ok)] p-3 text-xs text-[var(--color-ok)]">
-          Connected {sp.connected}.
+          {t("Connected {email}.", { email: sp.connected })}
         </div>
       )}
 
-
       <div className="card divide-y divide-[var(--color-border)] p-0">
         {accounts.length === 0 ? (
-          <p className="p-4 text-center text-sm text-[var(--color-text-dim)]">
-            No mailboxes connected yet.
-          </p>
+          <p className="p-4 text-center text-sm text-[var(--color-text-dim)]">{t("No mailboxes connected yet.")}</p>
         ) : (
           accounts.map((a) => (
             <div key={a.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">{a.emailAddress}</div>
                 <div className="text-[0.68rem] text-[var(--color-text-dim)]">
-                  {STATUS_LABEL[a.status] ?? a.status}
+                  {STATUS_LABEL[a.status] ? t(STATUS_LABEL[a.status]) : a.status}
+                  {" · "}
                   {a.lastSyncedAt
-                    ? ` · synced ${formatDistanceToNow(a.lastSyncedAt, { addSuffix: true })}`
-                    : " · not synced yet"}
+                    ? t("synced {when}", {
+                        when: formatDistanceToNow(a.lastSyncedAt, { addSuffix: true, locale: dateLocale(lang) }),
+                      })
+                    : t("not synced yet")}
                   {a.status === "ERROR" && a.lastError ? ` — ${a.lastError}` : ""}
                 </div>
                 <div className="text-[0.65rem] text-[var(--color-text-dim)]">
-                  connected by {a.user.name ?? a.user.email}
+                  {t("connected by {name}", { name: a.user.name ?? a.user.email ?? "" })}
                 </div>
               </div>
               <form action={disconnectMailAccount.bind(null, a.id)}>
-                <button
-                  type="submit"
+                <SubmitButton
                   className="shrink-0 text-[0.68rem] font-semibold text-[var(--color-danger)] underline"
+                  pendingLabel="…"
+                  aria-label={t("Disconnect {email}", { email: a.emailAddress })}
                 >
-                  disconnect
-                </button>
+                  {t("disconnect")}
+                </SubmitButton>
               </form>
             </div>
           ))
@@ -121,72 +138,57 @@ export default async function MailPage({
 
       <form action={connectImapAccount} className="card space-y-2 p-3">
         <input type="hidden" name="provider" value="GMAIL_IMAP" />
-        <div className="text-xs font-semibold">Connect Gmail</div>
+        <div className="text-xs font-semibold">{t("Connect Gmail")}</div>
         <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-          Turn on 2-step verification, then create an app password at{" "}
-          <span className="font-medium">myaccount.google.com → Security → App passwords</span> and
-          paste it below. This avoids Google&apos;s sign-in screen entirely, which otherwise makes
-          you reconnect every week.
+          {t(
+            "Turn on 2-step verification, then create an app password at {path} and paste it below. This avoids Google's sign-in screen entirely, which otherwise makes you reconnect every week.",
+            { path: "myaccount.google.com → Security → App passwords" },
+          )}
         </p>
-        <input
-          type="email"
-          name="email"
-          placeholder="you@gmail.com"
-          required
-          className="field w-full"
-        />
-        <input
-          type="password"
-          name="appPassword"
-          placeholder="App password"
-          required
-          className="field w-full"
-        />
-        <button type="submit" className="btn btn-primary w-full">
-          + Connect Gmail
-        </button>
+        <label className={fieldLabel}>
+          {t("Gmail address")}
+          <input type="email" name="email" placeholder="you@gmail.com" required className="field mt-1 w-full" />
+        </label>
+        <label className={fieldLabel}>
+          {t("App password")}
+          <input type="password" name="appPassword" required className="field mt-1 w-full" />
+        </label>
+        <SubmitButton className="btn btn-primary w-full" pendingLabel={t("Connecting…")}>
+          {t("+ Connect Gmail")}
+        </SubmitButton>
       </form>
 
       <form action={connectImapAccount} className="card space-y-2 p-3">
         <input type="hidden" name="provider" value="YAHOO" />
-        <div className="text-xs font-semibold">Connect Yahoo Mail</div>
+        <div className="text-xs font-semibold">{t("Connect Yahoo Mail")}</div>
         <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-          Yahoo Account Security → External connections → Create app password
-          (needs two-step verification on first).
+          {t(
+            "Yahoo Account Security → External connections → Create app password (needs two-step verification on first).",
+          )}
         </p>
-        <input
-          type="email"
-          name="email"
-          placeholder="you@yahoo.com"
-          required
-          className="field w-full"
-        />
-        <input
-          type="password"
-          name="appPassword"
-          placeholder="App password"
-          required
-          className="field w-full"
-        />
-        <button type="submit" className="btn btn-primary w-full">
-          + Connect Yahoo
-        </button>
+        <label className={fieldLabel}>
+          {t("Yahoo address")}
+          <input type="email" name="email" placeholder="you@yahoo.com" required className="field mt-1 w-full" />
+        </label>
+        <label className={fieldLabel}>
+          {t("App password")}
+          <input type="password" name="appPassword" required className="field mt-1 w-full" />
+        </label>
+        <SubmitButton className="btn btn-primary w-full" pendingLabel={t("Connecting…")}>
+          {t("+ Connect Yahoo")}
+        </SubmitButton>
       </form>
 
       <div className="space-y-1.5">
         <form action={startMicrosoftConnect}>
-          <button
-            type="submit"
-            disabled={!microsoftConfigured}
-            className="btn btn-primary w-full"
-          >
-            + Connect Outlook
-          </button>
+          <SubmitButton disabled={!microsoftConfigured} className="btn btn-primary w-full" pendingLabel={t("Connecting…")}>
+            {t("+ Connect Outlook")}
+          </SubmitButton>
         </form>
         <p className="text-[0.65rem] text-[var(--color-text-dim)]">
-          A personal/household Outlook account should connect without issue. A
-          work or school account may be blocked by your employer&apos;s own
-          security policy — there&apos;s no way to know until you try.
+          {t(
+            "A personal/household Outlook account should connect without issue. A work or school account may be blocked by your employer's own security policy — there's no way to know until you try.",
+          )}
         </p>
       </div>
 
@@ -195,18 +197,18 @@ export default async function MailPage({
           in "Testing", so new connections should use the app-password form above. */}
       <details className="text-[0.68rem] text-[var(--color-text-dim)]">
         <summary className="cursor-pointer font-semibold text-[var(--color-primary)]">
-          Connect Gmail the old way (Google sign-in)
+          {t("Connect Gmail the old way (Google sign-in)")}
         </summary>
         <div className="mt-2 space-y-1.5">
           <p>
-            Needs you to be on the app&apos;s Google test-user list, and stops working
-            about once a week until Google verifies the app — use the app-password
-            form above instead.
+            {t(
+              "Needs you to be on the app's Google test-user list, and stops working about once a week until Google verifies the app — use the app-password form above instead.",
+            )}
           </p>
           <form action={startGoogleConnect}>
-            <button type="submit" disabled={!configured} className="btn w-full">
-              Sign in with Google
-            </button>
+            <SubmitButton disabled={!configured} className="btn w-full" pendingLabel={t("Connecting…")}>
+              {t("Sign in with Google")}
+            </SubmitButton>
           </form>
         </div>
       </details>
@@ -214,23 +216,22 @@ export default async function MailPage({
       {mutedSenders.length > 0 && (
         <section>
           <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Muted senders
+            {t("Muted senders")}
           </h2>
           <p className="mb-1.5 text-[0.65rem] text-[var(--color-text-dim)]">
-            Mail from these never reaches the assistant, so it costs nothing and
-            never appears in the review inbox.
+            {t("Mail from these never reaches the assistant, so it costs nothing and never appears in the review inbox.")}
           </p>
           <div className="card divide-y divide-[var(--color-border)]">
             {mutedSenders.map((m) => (
               <div key={m.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
                 <span className="truncate text-sm">{m.fromAddress}</span>
                 <form action={unmuteThisSender.bind(null, m.fromAddress)}>
-                  <button
-                    type="submit"
+                  <SubmitButton
                     className="shrink-0 text-[0.68rem] font-semibold text-[var(--color-text-dim)] underline"
+                    pendingLabel="…"
                   >
-                    unmute
-                  </button>
+                    {t("unmute")}
+                  </SubmitButton>
                 </form>
               </div>
             ))}
@@ -241,7 +242,7 @@ export default async function MailPage({
       {trustedSenders.length > 0 && (
         <section>
           <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Trusted senders
+            {t("Trusted senders")}
           </h2>
           <div className="card divide-y divide-[var(--color-border)]">
             {trustedSenders.map((s) => (
@@ -249,17 +250,18 @@ export default async function MailPage({
                 <div className="min-w-0">
                   <div className="truncate text-sm">{s.fromAddress}</div>
                   <div className="text-[0.65rem] text-[var(--color-text-dim)]">
-                    {s.category ? s.category.replaceAll("_", " ").toLowerCase() : "all categories"}{" "}
-                    auto-filed, no review
+                    {t("{category} auto-filed, no review", {
+                      category: t(s.category ? (CATEGORY_LABEL[s.category] ?? s.category) : "all categories"),
+                    })}
                   </div>
                 </div>
                 <form action={removeTrustedSender.bind(null, s.id)}>
-                  <button
-                    type="submit"
+                  <SubmitButton
                     className="shrink-0 text-[0.68rem] font-semibold text-[var(--color-text-dim)] underline"
+                    pendingLabel="…"
                   >
-                    remove
-                  </button>
+                    {t("remove")}
+                  </SubmitButton>
                 </form>
               </div>
             ))}

@@ -24,10 +24,19 @@ export function bearerMatches(req: Request, secret: string | undefined): boolean
   const header = req.headers.get("authorization");
   if (!header) return false;
 
-  const expected = Buffer.from(`Bearer ${secret}`, "utf8");
-  const actual = Buffer.from(header, "utf8");
+  return secretMatches(header, `Bearer ${secret}`);
+}
+
+/**
+ * Constant-time string equality for a shared secret carried somewhere other
+ * than `Authorization` (e.g. `/api/inbound`'s `x-inbound-secret` header).
+ * Only compares — callers must reject an unset expected secret themselves.
+ */
+export function secretMatches(provided: string, expected: string): boolean {
+  const e = Buffer.from(expected, "utf8");
+  const a = Buffer.from(provided, "utf8");
   // timingSafeEqual throws on a length mismatch, so length is compared first
   // and does leak. That is unavoidable and uninteresting: the length of the
-  // expected header is not the secret.
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
+  // expected value is not the secret.
+  return a.length === e.length && timingSafeEqual(a, e);
 }

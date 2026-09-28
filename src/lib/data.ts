@@ -753,7 +753,9 @@ export async function dashboard(tx: HubTx, hubId: string, userId: string) {
     tx.debt.findMany({
       // Own debts only, same reasoning as upcomingSummary. DEFAULT still
       // counts — it has a payment due and arguably needs the reminder more.
-      where: { ownerId: userId, hubId, status: { not: "PAID_OFF" }, dueDate: { gte: todayStart, lte: soon } },
+      // No lower bound: an unpaid debt past its due date is the one that most
+      // needs showing, not one that should silently drop off.
+      where: { ownerId: userId, hubId, status: { not: "PAID_OFF" }, dueDate: { lte: soon } },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { dueDate: "asc" },
     }),

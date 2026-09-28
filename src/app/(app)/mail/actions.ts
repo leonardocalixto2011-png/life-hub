@@ -140,16 +140,23 @@ export async function connectImapAccount(formData: FormData) {
 }
 
 export async function disconnectMailAccount(id: string) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const parsedId = z.string().cuid().parse(id);
-  await withHub(user.id, (tx) => tx.mailAccount.delete({ where: { id: parsedId } }));
+  // Pinned to the current hub in app code as well as by RLS.
+  await withHub(user.id, async (tx) => {
+    const { count } = await tx.mailAccount.deleteMany({ where: { id: parsedId, hubId: hub.id } });
+    if (count === 0) throw new Error("Not found.");
+  });
   revalidatePath("/mail");
 }
 
 export async function removeTrustedSender(id: string) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const parsedId = z.string().cuid().parse(id);
-  await withHub(user.id, (tx) => tx.trustedSender.delete({ where: { id: parsedId } }));
+  await withHub(user.id, async (tx) => {
+    const { count } = await tx.trustedSender.deleteMany({ where: { id: parsedId, hubId: hub.id } });
+    if (count === 0) throw new Error("Not found.");
+  });
   revalidatePath("/mail");
 }
 

@@ -44,6 +44,11 @@ export function makeT(lang: Lang): T {
 
 const DATE_LOCALE: Record<Lang, Locale> = { en: enCA, fr: frCA };
 
+/** For date-fns helpers that take a locale directly (formatDistanceToNow…). */
+export function dateLocale(lang: Lang): Locale {
+  return DATE_LOCALE[lang];
+}
+
 export function fmt(date: Date, pattern: string, lang: Lang): string {
   return formatDate(date, pattern, { locale: DATE_LOCALE[lang] });
 }

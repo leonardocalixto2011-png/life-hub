@@ -9,6 +9,7 @@ import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { revalidateContent } from "@/lib/revalidate";
+import { visibleTo } from "@/lib/visibility";
 
 const MAX_DAYS = 120;
 const MAX_SHIFTS = 200;
@@ -92,27 +93,39 @@ export async function createShifts(fd: FormData) {
 }
 
 export async function deleteShift(fd: FormData) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
-  await withHub(user.id, (tx) => tx.event.deleteMany({ where: { id, kind: "SHIFT" } }));
+  // Hub + privacy pinned in app code too, not left to RLS alone.
+  await withHub(user.id, async (tx) => {
+    const { count } = await tx.event.deleteMany({
+      where: { id, kind: "SHIFT", hubId: hub.id, ...visibleTo(user.id) },
+    });
+    if (count === 0) throw new Error("Not found.");
+  });
   revalidateContent("/schedule");
 }
 
 /** This shift and every later one generated with it. */
 export async function deleteShiftSeries(fd: FormData) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const { groupId, id } = z
     .object({ groupId: z.string().min(1), id: z.string().cuid() })
     .parse({ groupId: fd.get("groupId"), id: fd.get("id") });
 
   await withHub(user.id, async (tx) => {
     const anchor = await tx.event.findFirst({
-      where: { id, kind: "SHIFT", recurrenceGroupId: groupId },
+      where: { id, kind: "SHIFT", recurrenceGroupId: groupId, hubId: hub.id, ...visibleTo(user.id) },
       select: { startAt: true },
     });
-    if (!anchor) return;
+    if (!anchor) throw new Error("Not found.");
     await tx.event.deleteMany({
-      where: { kind: "SHIFT", recurrenceGroupId: groupId, startAt: { gte: anchor.startAt } },
+      where: {
+        kind: "SHIFT",
+        recurrenceGroupId: groupId,
+        startAt: { gte: anchor.startAt },
+        hubId: hub.id,
+        ...visibleTo(user.id),
+      },
     });
   });
   revalidateContent("/schedule");

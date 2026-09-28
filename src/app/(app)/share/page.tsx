@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { requireHub } from "@/lib/session";
 import { hubChrome } from "@/lib/data";
+import { getT } from "@/lib/i18n-server";
 import { ShareCapture } from "./ShareCapture";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ export default async function SharePage({
 }) {
   const { user, hub } = await requireHub();
   const sp = await searchParams;
+  const t = await getT();
   const { ventures } = await hubChrome(user.id, hub.id);
 
   const shared = [sp.title, sp.text, sp.url]
@@ -27,11 +29,11 @@ export default async function SharePage({
     <div className="space-y-4 p-3">
       <div>
         <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
-          ← Today
+          ← {t("Today")}
         </Link>
-        <h1 className="mt-1 text-lg font-bold">Capture</h1>
+        <h1 className="mt-1 text-lg font-bold">{t("Capture")}</h1>
         <p className="text-xs text-[var(--color-text-dim)]">
-          Shared from another app. Turn it into tasks, events, deadlines or budget entries.
+          {t("Shared from another app. Turn it into tasks, events, deadlines or budget entries.")}
         </p>
       </div>
 

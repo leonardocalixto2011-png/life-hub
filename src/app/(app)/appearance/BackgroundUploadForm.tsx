@@ -3,9 +3,11 @@
 import { useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 
+import { useT } from "@/components/I18nProvider";
 import { setBackgroundImage } from "./actions";
 
 export function BackgroundUploadForm() {
+  const t = useT();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -23,7 +25,7 @@ export function BackgroundUploadForm() {
       });
       await setBackgroundImage(blob.url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed — try again.");
+      setError(err instanceof Error ? t(err.message) : t("Upload failed — try again."));
     } finally {
       setPending(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -39,8 +41,9 @@ export function BackgroundUploadForm() {
         disabled={pending}
         onChange={handleChange}
         className="field w-full"
+        aria-label={t("Choose a background photo")}
       />
-      {pending && <p className="text-xs text-[var(--color-text-dim)]">Uploading…</p>}
+      {pending && <p className="text-xs text-[var(--color-text-dim)]">{t("Uploading…")}</p>}
       {error && <p className="text-xs text-[var(--color-danger)]">{error}</p>}
     </div>
   );

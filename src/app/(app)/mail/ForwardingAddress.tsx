@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 
+import { useT } from "@/components/I18nProvider";
 import { revealInboundAddress, rotateInbound } from "./actions";
 
 /**
@@ -10,6 +11,7 @@ import { revealInboundAddress, rotateInbound } from "./actions";
  * copyable in one tap, and revocable.
  */
 export function ForwardingAddress({ initial }: { initial: string | null }) {
+  const t = useT();
   const [address, setAddress] = useState<string | null>(initial);
   const [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -19,7 +21,7 @@ export function ForwardingAddress({ initial }: { initial: string | null }) {
   }
 
   function rotate() {
-    if (!confirm("Issue a new address? Anything still forwarding to the old one will stop arriving.")) return;
+    if (!confirm(t("Issue a new address? Anything still forwarding to the old one will stop arriving."))) return;
     startTransition(async () => {
       setAddress(await rotateInbound());
       setCopied(false);
@@ -39,11 +41,11 @@ export function ForwardingAddress({ initial }: { initial: string | null }) {
 
   return (
     <div className="card space-y-2 p-3">
-      <div className="text-xs font-semibold">Forward mail to this hub</div>
+      <div className="text-xs font-semibold">{t("Forward mail to this hub")}</div>
       <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-        Forward a bill or confirmation to this address and it lands in this
-        hub&apos;s review inbox. Treat it like a password — anyone who has it can
-        put items in here.
+        {t(
+          "Forward a bill or confirmation to this address and it lands in this hub's review inbox. Treat it like a password — anyone who has it can put items in here.",
+        )}
       </p>
 
       {address ? (
@@ -51,7 +53,7 @@ export function ForwardingAddress({ initial }: { initial: string | null }) {
           <div className="flex items-center gap-2">
             <code className="field flex-1 truncate text-[0.7rem]">{address}</code>
             <button type="button" onClick={copy} className="btn shrink-0 text-[0.7rem]">
-              {copied ? "copied" : "copy"}
+              {copied ? t("copied") : t("copy")}
             </button>
           </div>
           <button
@@ -60,12 +62,12 @@ export function ForwardingAddress({ initial }: { initial: string | null }) {
             disabled={pending}
             className="text-[0.65rem] font-semibold text-[var(--color-danger)] underline disabled:opacity-60"
           >
-            Issue a new address
+            {t("Issue a new address")}
           </button>
         </>
       ) : (
         <button type="button" onClick={reveal} disabled={pending} className="btn w-full">
-          {pending ? "…" : "Show forwarding address"}
+          {pending ? "…" : t("Show forwarding address")}
         </button>
       )}
     </div>

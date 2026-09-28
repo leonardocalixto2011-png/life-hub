@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { getT } from "@/lib/i18n-server";
 import { deleteMyAccount } from "./actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -66,9 +67,9 @@ export default async function AccountPage({
               placeholder={user.email}
             />
           </label>
-          <button type="submit" className="btn w-full text-[var(--color-danger)]">
+          <SubmitButton className="btn w-full text-[var(--color-danger)]" pendingLabel={t("Deleting…")}>
             {t("Delete my account permanently")}
-          </button>
+          </SubmitButton>
         </form>
       </section>
     </div>

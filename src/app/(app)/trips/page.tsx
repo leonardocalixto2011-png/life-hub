@@ -38,7 +38,9 @@ export default async function TripsPage() {
     const planned = (
       lines.length > 0 ? lines : trip.items.filter((i) => i.kind !== "SAVE" && i.kind !== "STOP" && i.kind !== "TIP")
     ).reduce((n, i) => n + (i.costCents ?? 0), 0);
-    const ongoing = trip.startDate <= today && trip.endDate >= today;
+    // startOfDay: start is stored at local noon, so compare its day, not its
+    // hour, or the first morning of a trip reads as a countdown.
+    const ongoing = startOfDay(trip.startDate) <= today && trip.endDate >= today;
     return (
       <Link href={`/trips/${trip.id}`} className="card block p-3">
         <div className="flex items-start justify-between gap-2">

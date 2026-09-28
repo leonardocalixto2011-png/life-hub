@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createDebt, deleteDebt, updateDebt } from "./actions";
 import { useT } from "@/components/I18nProvider";
 import type { T } from "@/lib/i18n";
+import { SubmitButton } from "@/components/SubmitButton";
 
 type Opt = { id: string; name: string | null; email?: string | null };
 
@@ -162,15 +163,15 @@ export function DebtForm({
         <form action={updateDebt} className="card space-y-3 p-4">
           <input type="hidden" name="id" value={existing.id} />
           <Fields ventures={ventures} existing={existing} t={t} />
-          <button type="submit" className="btn btn-primary w-full">
+          <SubmitButton className="btn btn-primary w-full">
             {t("Save")}
-          </button>
+          </SubmitButton>
         </form>
         <form action={deleteDebt}>
           <input type="hidden" name="id" value={existing.id} />
-          <button type="submit" className="btn w-full text-[var(--color-danger)]">
+          <SubmitButton className="btn w-full text-[var(--color-danger)]" pendingLabel={t("Deleting…")}>
             {t("Delete debt")}
-          </button>
+          </SubmitButton>
         </form>
       </div>
     );
@@ -195,7 +196,7 @@ export function DebtForm({
         setOpen(false);
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : t("Could not save"));
+        setError(err instanceof Error ? t(err.message) : t("Could not save"));
       }
     });
   }

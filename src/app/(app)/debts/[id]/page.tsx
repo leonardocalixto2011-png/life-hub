@@ -9,6 +9,7 @@ import { toDateInput } from "@/lib/format";
 import { basisPointsToInput, centsToInput } from "@/lib/money";
 import { DebtForm } from "../DebtForm";
 import { logDebtPayment } from "../actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -88,9 +89,9 @@ export default async function DebtDetailPage({
               />
             </label>
           </div>
-          <button type="submit" className="btn btn-primary w-full">
+          <SubmitButton className="btn btn-primary w-full">
             {t("Log payment")}
-          </button>
+          </SubmitButton>
         </form>
       )}
     </div>

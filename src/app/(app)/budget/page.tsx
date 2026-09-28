@@ -14,6 +14,7 @@ import { BudgetTrend } from "@/components/viz/BudgetTrend";
 import { EntryForm } from "./EntryForm";
 import { EntryRow } from "./EntryRow";
 import { deleteBudgetTarget, setBudgetTarget, settleUp } from "./actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -75,7 +76,13 @@ export default async function BudgetPage({
   const creditor = balances.find((b) => b.netCents > 0);
   const debtor = balances.find((b) => b.netCents < 0);
 
-  const spentBy = new Map(data.categories.map((c) => [c.category.toLowerCase(), c.cents]));
+  // Summed, not assigned: "Food" and "food" are separate categories in the
+  // data but fold to one key here, and the second must not overwrite the first.
+  const spentBy = new Map<string, number>();
+  for (const c of data.categories) {
+    const key = c.category.toLowerCase();
+    spentBy.set(key, (spentBy.get(key) ?? 0) + c.cents);
+  }
   const activeChip = { background: "var(--color-primary)", borderColor: "var(--color-primary)", color: "#fff" };
 
   return (
@@ -93,11 +100,11 @@ export default async function BudgetPage({
       </div>
 
       <div className="flex items-center justify-between">
-        <Link href={href(subMonths(month, 1), sp.venture)} className="btn btn-ghost px-2">
+        <Link href={href(subMonths(month, 1), sp.venture)} className="btn btn-ghost px-2" aria-label={t("Previous month")}>
           ‹
         </Link>
         <span className="text-sm font-semibold capitalize">{fmt(month, "MMMM yyyy", lang)}</span>
-        <Link href={href(addMonths(month, 1), sp.venture)} className="btn btn-ghost px-2">
+        <Link href={href(addMonths(month, 1), sp.venture)} className="btn btn-ghost px-2" aria-label={t("Next month")}>
           ›
         </Link>
       </div>
@@ -158,9 +165,9 @@ export default async function BudgetPage({
                     className="field w-28"
                     aria-label={t("Amount paid back")}
                   />
-                  <button type="submit" className="btn btn-primary flex-1 text-xs">
+                  <SubmitButton className="btn btn-primary flex-1 text-xs">
                     {t("Mark as paid back")}
-                  </button>
+                  </SubmitButton>
                 </form>
               </>
             ) : (
@@ -242,9 +249,13 @@ export default async function BudgetPage({
                     </span>
                     <form action={deleteBudgetTarget}>
                       <input type="hidden" name="id" value={tg.id} />
-                      <button aria-label={t("Remove {category} budget", { category: tg.category })} className="text-[var(--color-text-dim)]">
+                      <SubmitButton
+                        aria-label={t("Remove {category} budget", { category: t(tg.category) })}
+                        className="-m-2 p-2 text-[var(--color-text-dim)]"
+                        pendingLabel="✕"
+                      >
                         ✕
-                      </button>
+                      </SubmitButton>
                     </form>
                   </span>
                 </div>
@@ -253,7 +264,7 @@ export default async function BudgetPage({
                     className="h-full rounded-full"
                     style={{
                       width: `${Math.max(3, Math.min(100, pct * 100))}%`,
-                      background: over ? "var(--color-danger)" : pct > 0.85 ? "#d97706" : "var(--color-ok)",
+                      background: over ? "var(--color-danger)" : pct > 0.85 ? "var(--color-warn)" : "var(--color-ok)",
                     }}
                   />
                 </div>
@@ -261,16 +272,33 @@ export default async function BudgetPage({
             );
           })}
           <form action={setBudgetTarget} className="grid grid-cols-[1fr_6rem_auto] gap-2 pt-1">
-            <input name="category" required list="budget-target-categories" placeholder={t("Category")} className="field" />
+            <input
+              name="category"
+              required
+              list="budget-target-categories"
+              placeholder={t("Category")}
+              aria-label={t("Category")}
+              className="field"
+            />
             <datalist id="budget-target-categories">
               {BUDGET_CATEGORIES.map((c) => (
-                <option key={c} value={t(c)} />
+                <option key={c} value={c} label={t(c)} />
               ))}
             </datalist>
-            <input name="amount" type="number" step="0.01" min="0" inputMode="decimal" required placeholder={t("/month")} className="field" />
-            <button type="submit" className="btn">
+            <input
+              name="amount"
+              type="number"
+              step="0.01"
+              min="0"
+              inputMode="decimal"
+              required
+              placeholder={t("/month")}
+              aria-label={t("Monthly limit")}
+              className="field"
+            />
+            <SubmitButton className="btn">
               {t("Set")}
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </section>

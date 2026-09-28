@@ -11,14 +11,31 @@ import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
 import { notifyAssignment } from "@/lib/notify";
 import { revalidateContent } from "@/lib/revalidate";
+import { assertActiveMember, assertVentureInHub } from "@/lib/membership";
+import { visibleTo } from "@/lib/visibility";
+
+/**
+ * Every write below goes by a client-supplied id. RLS already limits that to
+ * the viewer's hubs and visible rows, but — as everywhere in this app — the
+ * same rule is mirrored in app code so a missing/misconfigured app role can't
+ * turn a bare id into access to another hub's (or someone's private) task.
+ */
+function scoped(id: string, hubId: string, userId: string) {
+  return { id, hubId, ...visibleTo(userId) };
+}
+
+async function findScopedTask(tx: HubTx, id: string, hubId: string, userId: string) {
+  const task = await tx.task.findFirst({ where: scoped(id, hubId, userId) });
+  if (!task) throw new Error("Not found.");
+  return task;
+}
 
 /**
  * Marking a recurring task done spawns its next occurrence: same fields, due date
  * advanced by the recurrence interval (from the old due date, or today).
  */
-async function completeTask(tx: HubTx, id: string) {
-  const task = await tx.task.findUnique({ where: { id } });
-  if (!task) return;
+async function completeTask(tx: HubTx, id: string, hubId: string, userId: string) {
+  const task = await findScopedTask(tx, id, hubId, userId);
 
   await tx.task.update({
     where: { id },
@@ -77,6 +94,8 @@ function parse<T extends z.ZodTypeAny>(schema: T, formData: FormData): z.infer<T
 export async function createTask(formData: FormData) {
   const { user, hub } = await requireHub();
   const data = parse(createSchema, formData);
+  if (data.assignedToId) await assertActiveMember(hub.id, data.assignedToId);
+  await assertVentureInHub(hub.id, data.ventureId);
 
   const task = await withHub(user.id, (tx) =>
     tx.task.create({
@@ -105,11 +124,13 @@ export async function createTask(formData: FormData) {
 }
 
 export async function updateTask(formData: FormData) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const data = parse(updateSchema, formData);
+  if (data.assignedToId) await assertActiveMember(hub.id, data.assignedToId);
+  await assertVentureInHub(hub.id, data.ventureId);
 
   const [before, after] = await withHub(user.id, async (tx) => {
-    const before = await tx.task.findUnique({ where: { id: data.id }, select: { assignedToId: true } });
+    const before = await findScopedTask(tx, data.id, hub.id, user.id);
     const after = await tx.task.update({
       where: { id: data.id },
       data: {
@@ -145,28 +166,38 @@ const toggleSchema = z.object({
   done: z.preprocess((v) => v === "true" || v === true || v === "on", z.boolean()),
 });
 
+/** Done → spawn the next occurrence if recurring; not done → reopen. */
+async function applyDone(tx: HubTx, id: string, done: boolean, hubId: string, userId: string) {
+  if (done) {
+    await completeTask(tx, id, hubId, userId);
+    return;
+  }
+  const { count } = await tx.task.updateMany({
+    where: scoped(id, hubId, userId),
+    data: { status: "OPEN", completedAt: null },
+  });
+  if (count === 0) throw new Error("Not found.");
+}
+
 export async function toggleTask(formData: FormData) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const { id, done } = toggleSchema.parse({
     id: formData.get("id"),
     done: formData.get("done"),
   });
 
-  await withHub(user.id, async (tx) => {
-    if (done) {
-      await completeTask(tx, id);
-    } else {
-      await tx.task.update({ where: { id }, data: { status: "OPEN", completedAt: null } });
-    }
-  });
+  await withHub(user.id, (tx) => applyDone(tx, id, done, hub.id, user.id));
 
   revalidateContent();
 }
 
 export async function deleteTask(formData: FormData) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const id = z.string().cuid().parse(formData.get("id"));
-  await withHub(user.id, (tx) => tx.task.delete({ where: { id } }));
+  await withHub(user.id, async (tx) => {
+    const { count } = await tx.task.deleteMany({ where: scoped(id, hub.id, user.id) });
+    if (count === 0) throw new Error("Not found.");
+  });
 
   revalidateContent();
   redirect("/tasks");
@@ -180,15 +211,9 @@ function refreshTaskPaths() {
 
 /** Toggle done from JS (no FormData). Returns nothing; undo = call with !done. */
 export async function setTaskDone(id: string, done: boolean) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   z.string().cuid().parse(id);
-  await withHub(user.id, async (tx) => {
-    if (done) {
-      await completeTask(tx, id);
-    } else {
-      await tx.task.update({ where: { id }, data: { status: "OPEN", completedAt: null } });
-    }
-  });
+  await withHub(user.id, (tx) => applyDone(tx, id, done, hub.id, user.id));
   refreshTaskPaths();
 }
 
@@ -202,23 +227,27 @@ const patchSchema = z.object({
 });
 
 export async function makeRecurring(id: string, recurrence: "weekly" | "monthly") {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   z.string().cuid().parse(id);
-  await withHub(user.id, (tx) =>
-    tx.task.update({ where: { id }, data: { isRecurring: true, recurrence } }),
-  );
+  const r = z.enum(["weekly", "monthly"]).parse(recurrence);
+  await withHub(user.id, async (tx) => {
+    const { count } = await tx.task.updateMany({
+      where: scoped(id, hub.id, user.id),
+      data: { isRecurring: true, recurrence: r },
+    });
+    if (count === 0) throw new Error("Not found.");
+  });
   refreshTaskPaths();
 }
 
 export async function setTaskFields(input: z.infer<typeof patchSchema>) {
-  const { user } = await requireHub();
+  const { user, hub } = await requireHub();
   const p = patchSchema.parse(input);
+  if (p.assignedToId) await assertActiveMember(hub.id, p.assignedToId);
+  await assertVentureInHub(hub.id, p.ventureId);
 
   const [before, after] = await withHub(user.id, async (tx) => {
-    const before =
-      p.assignedToId !== undefined
-        ? await tx.task.findUnique({ where: { id: p.id }, select: { assignedToId: true } })
-        : null;
+    const before = await findScopedTask(tx, p.id, hub.id, user.id);
     const after = await tx.task.update({
       where: { id: p.id },
       data: {

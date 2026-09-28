@@ -7,6 +7,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { ai, aiEnabled, AI_MODEL } from "@/lib/ai";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getLang, getT } from "@/lib/i18n-server";
 import { rateLimit } from "@/lib/rate-limit";
 import { overAiBudget, recordAiSpend, AI_BUDGET_MESSAGE } from "@/lib/ai-budget";
 import { dashboard, listMembers, listVentures } from "@/lib/data";
@@ -40,9 +41,12 @@ const ParsedSchema = z.object({
 export async function parseAndAdd(
   text: string,
 ): Promise<{ ok: boolean; message: string }> {
+  // Messages go straight onto the screen, so they're translated here where
+  // the signed-in person (and so their language) is known.
+  const t = await getT();
   const { user, hub } = await requireHub();
   if (!aiEnabled()) {
-    return { ok: false, message: "Assistant isn’t configured (no ANTHROPIC_API_KEY)." };
+    return { ok: false, message: t("Assistant isn’t configured (no ANTHROPIC_API_KEY).") };
   }
   // Same `ai:<user>` bucket as parseQuickAdd, deliberately: the limit is meant
   // to cap what one account can spend, and a per-entry-point bucket would let
@@ -50,14 +54,14 @@ export async function parseAndAdd(
   // This path had no limit at all, so /assistant was an unmetered door to a
   // paid API for anyone with an account.
   if (!(await rateLimit(`ai:${user.id}`, 60, 3600)).ok) {
-    return { ok: false, message: "You have hit the hourly AI limit. Try again shortly." };
+    return { ok: false, message: t("You have hit the hourly AI limit. Try again shortly.") };
   }
   // The hourly limit caps how often; this caps how much. See ai-budget.ts.
-  if (await overAiBudget(user.id)) return { ok: false, message: AI_BUDGET_MESSAGE };
+  if (await overAiBudget(user.id)) return { ok: false, message: t(AI_BUDGET_MESSAGE) };
   const clean = text.trim();
-  if (!clean) return { ok: false, message: "Type something first." };
+  if (!clean) return { ok: false, message: t("Type something first.") };
   if (clean.length > 4000) {
-    return { ok: false, message: "Too long — keep it under 4000 characters." };
+    return { ok: false, message: t("Too long — keep it under 4000 characters.") };
   }
 
   const [ventures, members] = await withHub(user.id, (tx) =>
@@ -88,10 +92,10 @@ export async function parseAndAdd(
   } catch (err) {
     return {
       ok: false,
-      message: err instanceof Error ? `Assistant error: ${err.message}` : "Assistant error.",
+      message: err instanceof Error ? t("Assistant error: {message}", { message: err.message }) : t("Assistant error."),
     };
   }
-  if (!parsed) return { ok: false, message: "Couldn’t parse that — try rephrasing." };
+  if (!parsed) return { ok: false, message: t("Couldn’t parse that — try rephrasing.") };
 
   const vByName = new Map(ventures.map((v) => [v.name.toLowerCase(), v.id]));
   const mByName = new Map<string, string>();
@@ -154,25 +158,33 @@ export async function parseAndAdd(
   revalidateContent();
 
   const total = tasks.length + events.length;
-  if (total === 0) return { ok: true, message: "Nothing actionable in that." };
-  const bits: string[] = [];
-  if (tasks.length) bits.push(`${tasks.length} task${tasks.length === 1 ? "" : "s"}`);
-  if (events.length) bits.push(`${events.length} event${events.length === 1 ? "" : "s"}`);
-  const titles = [...tasks.map((t) => t.title), ...events.map((e) => e.title)].join("; ");
-  return { ok: true, message: `Added ${bits.join(" and ")} — ${titles}` };
+  if (total === 0) return { ok: true, message: t("Nothing actionable in that.") };
+  const titles = [...tasks.map((x) => x.title), ...events.map((e) => e.title)].join("; ");
+  return {
+    ok: true,
+    message: t(
+      events.length === 0
+        ? "Added {tasks} task(s) — {titles}"
+        : tasks.length === 0
+          ? "Added {events} event(s) — {titles}"
+          : "Added {tasks} task(s) and {events} event(s) — {titles}",
+      { tasks: tasks.length, events: events.length, titles },
+    ),
+  };
 }
 
 export async function weeklyBriefing(): Promise<{ ok: boolean; text: string }> {
   const { user, hub } = await requireHub();
+  const [t, lang] = await Promise.all([getT(), getLang()]);
   if (!aiEnabled()) {
-    return { ok: false, text: "Assistant isn’t configured (no ANTHROPIC_API_KEY)." };
+    return { ok: false, text: t("Assistant isn’t configured (no ANTHROPIC_API_KEY).") };
   }
   // A briefing sends the whole dashboard as context, so it is the most
   // expensive call in the app — the last one that should have been unmetered.
   if (!(await rateLimit(`ai:${user.id}`, 60, 3600)).ok) {
-    return { ok: false, text: "You have hit the hourly AI limit. Try again shortly." };
+    return { ok: false, text: t("You have hit the hourly AI limit. Try again shortly.") };
   }
-  if (await overAiBudget(user.id)) return { ok: false, text: AI_BUDGET_MESSAGE };
+  if (await overAiBudget(user.id)) return { ok: false, text: t(AI_BUDGET_MESSAGE) };
 
   const d = await withHub(user.id, (tx) => dashboard(tx, hub.id, user.id));
   const lines: string[] = [];
@@ -201,7 +213,8 @@ export async function weeklyBriefing(): Promise<{ ok: boolean; text: string }> {
       max_tokens: 1024,
       output_config: { effort: "low" },
       system:
-        "Write a short plain briefing for a small crew running several small businesses plus personal life. 4–6 sentences, lead with what's most urgent, no bullet points, no preamble, no sign-off. If there's almost nothing, say it's a quiet week.",
+        "Write a short plain briefing for a small crew running several small businesses plus personal life. 4–6 sentences, lead with what's most urgent, no bullet points, no preamble, no sign-off. If there's almost nothing, say it's a quiet week." +
+        (lang === "fr" ? " Write it in Québec French, informal (tu)." : ""),
       messages: [
         {
           role: "user",
@@ -214,11 +227,11 @@ export async function weeklyBriefing(): Promise<{ ok: boolean; text: string }> {
       .map((b) => (b.type === "text" ? b.text : ""))
       .join("")
       .trim();
-    return { ok: true, text: text || "No briefing generated." };
+    return { ok: true, text: text || t("No briefing generated.") };
   } catch (err) {
     return {
       ok: false,
-      text: err instanceof Error ? `Assistant error: ${err.message}` : "Assistant error.",
+      text: err instanceof Error ? t("Assistant error: {message}", { message: err.message }) : t("Assistant error."),
     };
   }
 }

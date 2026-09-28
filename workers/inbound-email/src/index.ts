@@ -11,7 +11,7 @@ export interface Env {
  * rejects the message — a forwarding failure shouldn't bounce the sender's mail.
  */
 export default {
-  async email(message: ForwardableEmailMessage, env: Env, _ctx: ExecutionContext) {
+  async email(message: ForwardableEmailMessage, env: Env) {
     try {
       const email = await PostalMime.parse(message.raw);
 

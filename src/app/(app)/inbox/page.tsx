@@ -3,6 +3,7 @@ import Link from "next/link";
 import { hubChrome, listPendingReviews } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { getT } from "@/lib/i18n-server";
 import type { Draft } from "@/lib/parse";
 import { ReviewCard } from "./ReviewCard";
 
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function InboxPage() {
   const { user, hub } = await requireHub();
+  const t = await getT();
   const [items, { ventures }] = await Promise.all([
     withHub(user.id, (tx) => listPendingReviews(tx, user.id)),
     hubChrome(user.id, hub.id),
@@ -20,15 +22,13 @@ export default async function InboxPage() {
     <div className="space-y-4 p-3">
       <div>
         <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
-          ← Today
+          ← {t("Today")}
         </Link>
         <h1 className="display mt-1 text-2xl">
-          {items.length === 0
-            ? "Nothing to review."
-            : `${items.length} to review`}
+          {items.length === 0 ? t("Nothing to review.") : t("{n} to review", { n: items.length })}
         </h1>
         <p className="text-xs text-[var(--color-text-dim)]">
-          Parsed from forwarded emails. Nothing here is live until you accept it.
+          {t("Parsed from forwarded emails. Nothing here is live until you accept it.")}
         </p>
       </div>
 
@@ -38,14 +38,13 @@ export default async function InboxPage() {
         // there is none.
         <div className="card p-6 text-center">
           <p className="mx-auto max-w-[34ch] text-sm text-[var(--color-text-dim)]">
-            Forward a bill, renewal notice or booking to this hub&apos;s address and it lands
-            here as a draft for you to check.
+            {t("Forward a bill, renewal notice or booking to this hub's address and it lands here as a draft for you to check.")}
           </p>
           <Link
             href="/mail"
             className="mt-3 inline-block text-xs font-semibold text-[var(--color-primary)]"
           >
-            Find the address →
+            {t("Find the address →")}
           </Link>
         </div>
       ) : (

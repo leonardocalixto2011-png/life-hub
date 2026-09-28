@@ -36,9 +36,7 @@ export default async function NotificationsPage() {
 
       {!pushConfigured && (
         <div className="card border-[var(--color-danger)] p-4 text-xs text-[var(--color-danger)]">
-          Push isn’t configured on the server (no VAPID key). Run{" "}
-          <code>npm run gen:vapid</code> and add the keys to the environment. The
-          email digest still works.
+          {t("Push isn’t configured on the server (no VAPID key). Run {cmd} and add the keys to the environment. The email digest still works.", { cmd: "npm run gen:vapid" })}
         </div>
       )}
 

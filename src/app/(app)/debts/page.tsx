@@ -23,6 +23,7 @@ import { LogPaymentButton } from "./LogPaymentButton";
 import { ShareControls } from "./ShareControls";
 import { moveMyDebtsHere } from "./actions";
 import { perMonth } from "@/lib/money";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -196,9 +197,9 @@ export default async function DebtsPage() {
           <span className="text-[var(--color-text-dim)]">
             {t("{n} of your debts live in another hub, so they aren't shown here.", { n: elsewhere })}
           </span>
-          <button type="submit" className="btn btn-primary shrink-0 px-3 py-1.5 text-xs">
+          <SubmitButton className="btn btn-primary shrink-0 px-3 py-1.5 text-xs" pendingLabel="…">
             {t("Move here")}
-          </button>
+          </SubmitButton>
         </form>
       )}
 

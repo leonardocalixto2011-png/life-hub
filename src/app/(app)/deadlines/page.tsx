@@ -10,6 +10,7 @@ import { Countdown } from "@/components/Countdown";
 import { VentureChip } from "@/components/VentureChip";
 import { DeadlineForm } from "./DeadlineForm";
 import { toggleDeadlineDone } from "./actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -20,17 +21,17 @@ function Row({ d, t, lang }: { d: DeadlineWithRefs; t: T; lang: Lang }) {
       <form action={toggleDeadlineDone}>
         <input type="hidden" name="id" value={d.id} />
         <input type="hidden" name="done" value={String(!done)} />
-        <button
-          type="submit"
+        <SubmitButton
           aria-label={done ? t("Mark not done") : t("Mark done")}
-          className="mt-0.5 grid h-5 w-5 place-items-center rounded-full border text-white"
+          pendingLabel={done ? "✓" : ""}
+          className="hit mt-0.5 grid h-5 w-5 place-items-center rounded-full border text-[var(--color-surface)]"
           style={{
             borderColor: done ? "var(--color-ok)" : "var(--color-border)",
             background: done ? "var(--color-ok)" : "transparent",
           }}
         >
           {done ? "✓" : ""}
-        </button>
+        </SubmitButton>
       </form>
 
       <div className="min-w-0 flex-1">

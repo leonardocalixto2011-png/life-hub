@@ -1,9 +1,10 @@
 "use server";
 
-import { del } from "@vercel/blob";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { blobUrlSchema } from "@/lib/blob-url";
+import { deleteBlobIfUnreferenced } from "@/lib/blob-delete";
+import { rateLimit } from "@/lib/rate-limit";
 import { isCurrency } from "@/lib/locales";
 import { revalidateContent } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
@@ -84,6 +85,12 @@ export async function inviteMember(hubId: string, formData: FormData) {
 
   await requireHubOwner(hubId, user.id, "invite people");
 
+  // Every invite sends an email from our domain to an address the inviter
+  // chose — without a cap, an owner account is a free spam relay.
+  if (!(await rateLimit(`invite:${user.id}`, 20, 3600)).ok) {
+    throw new Error("You've sent a lot of invites this hour. Try again later.");
+  }
+
   const hub = await prisma.hub.findUniqueOrThrow({ where: { id: hubId } });
 
   const invited = await prisma.$transaction(async (tx) => {
@@ -118,15 +125,19 @@ export async function inviteMember(hubId: string, formData: FormData) {
       // No devices yet is the normal case for a brand-new address.
     }
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    // Hub and display names are free text chosen by the inviter; unescaped they
+    // could inject markup/links into an email that arrives from our domain.
+    const hubNameHtml = escapeHtml(hub.name);
+    const inviterHtml = escapeHtml(user.name ?? user.email ?? "");
     await sendEmail({
       to: email,
       subject: `You're invited to "${hub.name}" on Life Hub`,
       text: `${user.name ?? user.email} invited you to join "${hub.name}" on Life Hub. Sign in at ${appUrl}/login with this email address, then open ${appUrl}/hubs/invites to accept.`,
       html: `
         <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-          <h1 style="font-size:18px;margin:0 0 12px">You're invited to "${hub.name}"</h1>
+          <h1 style="font-size:18px;margin:0 0 12px">You're invited to "${hubNameHtml}"</h1>
           <p style="color:#444;font-size:14px;line-height:1.5;margin:0 0 20px">
-            ${user.name ?? user.email} invited you to join their Life Hub. Sign in with this email address, then accept the invite.
+            ${inviterHtml} invited you to join their Life Hub. Sign in with this email address, then accept the invite.
           </p>
           <p style="margin:0 0 12px">
             <a href="${appUrl}/login" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:600">
@@ -167,13 +178,17 @@ export async function declineInvite(hubId: string) {
  * Cleans up a departing member's footprint in one hub before the membership
  * row itself is removed: unassign (don't delete) items assigned to them,
  * delete their PRIVATE items in that hub. Shared items they created stay —
- * createdById is a historical record, not a live permission. Runs while the
- * subject is still an active member so RLS still recognizes the hub as
- * theirs; `actorId` just needs to be *some* active member of the same hub
- * (Task/Deadline/Event RLS only checks hub membership, not whose row it is).
+ * createdById is a historical record, not a live permission.
+ *
+ * Trusted client, not `withHub`: the RLS privacy clause hides another
+ * person's PRIVATE rows from the actor, so when an owner removed someone the
+ * deletes below matched nothing in production and silently left the departed
+ * member's private items behind. Authorization is the callers' job (leaveHub
+ * is self, removeMember is owner-checked), and every statement here is pinned
+ * to this hub *and* this subject, so the bypass can't reach anything else.
  */
-async function cleanupDepartingMember(actorId: string, hubId: string, subjectUserId: string) {
-  await withHub(actorId, async (tx) => {
+async function cleanupDepartingMember(hubId: string, subjectUserId: string) {
+  await prisma.$transaction(async (tx) => {
     await tx.task.updateMany({
       where: { hubId, assignedToId: subjectUserId },
       data: { assignedToId: null },
@@ -190,10 +205,10 @@ async function cleanupDepartingMember(actorId: string, hubId: string, subjectUse
   });
 }
 
-/** Self-removal. Fully self-scoped, so it runs entirely through app_user/RLS. */
+/** Self-removal. The membership delete is self-scoped, so it goes through app_user/RLS. */
 export async function leaveHub(hubId: string) {
   const user = await requireUser();
-  await cleanupDepartingMember(user.id, hubId, user.id);
+  await cleanupDepartingMember(hubId, user.id);
   await withHub(user.id, (tx) =>
     tx.hubMembership.delete({ where: { hubId_userId: { hubId, userId: user.id } } }),
   );
@@ -213,7 +228,7 @@ export async function removeMember(hubId: string, targetUserId: string) {
     throw new Error("Use \"Leave hub\" to remove yourself.");
   }
 
-  await cleanupDepartingMember(user.id, hubId, targetUserId);
+  await cleanupDepartingMember(hubId, targetUserId);
   await prisma.hubMembership.delete({ where: { hubId_userId: { hubId, userId: targetUserId } } });
 
   revalidatePath(`/hubs/${hubId}/members`);
@@ -250,11 +265,7 @@ export async function setHubCover(hubId: string, url: string) {
 
   await requireHubOwner(hubId, user.id, "change the cover photo");
 
-  await deletePreviousCover(hubId);
-  await prisma.hub.update({
-    where: { id: hubId },
-    data: { coverImageUrl: parsedUrl, coverById: user.id },
-  });
+  await replaceCover(hubId, parsedUrl, user.id);
   revalidateContent(`/hubs/${hubId}/members`, "/hubs/invites");
 }
 
@@ -264,11 +275,7 @@ export async function removeHubCover(hubId: string) {
 
   await requireHubOwner(hubId, user.id, "change the cover photo");
 
-  await deletePreviousCover(hubId);
-  await prisma.hub.update({
-    where: { id: hubId },
-    data: { coverImageUrl: null, coverById: null },
-  });
+  await replaceCover(hubId, null, null);
   revalidateContent(`/hubs/${hubId}/members`, "/hubs/invites");
 }
 
@@ -337,16 +344,28 @@ export async function setShowOccasions(hubId: string, show: boolean) {
   revalidateContent(`/hubs/${hubId}/members`, "/calendar/dates");
 }
 
-/** One cover blob per hub, so changing the photo doesn't orphan the old file. */
-async function deletePreviousCover(hubId: string) {
+/**
+ * One cover blob per hub, so changing the photo doesn't orphan the old file.
+ * Row first, then the old URL is deleted only if nothing else references it —
+ * the stored URL came from the client and may be someone's background photo.
+ */
+async function replaceCover(hubId: string, next: string | null, coverById: string | null) {
   const existing = await prisma.hub.findUnique({
     where: { id: hubId },
     select: { coverImageUrl: true },
   });
-  if (!existing?.coverImageUrl) return;
-  try {
-    await del(existing.coverImageUrl);
-  } catch {
-    // Already gone or unreachable — not worth failing the request over.
+  await prisma.hub.update({ where: { id: hubId }, data: { coverImageUrl: next, coverById } });
+  if (existing?.coverImageUrl && existing.coverImageUrl !== next) {
+    await deleteBlobIfUnreferenced(existing.coverImageUrl);
   }
+}
+
+/** Anything a person typed (hub name, display name) before it goes into email HTML. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }

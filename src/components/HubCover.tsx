@@ -1,3 +1,5 @@
+import { Tr } from "@/components/Tr";
+
 /**
  * The hub's shared cover — the same image for everyone in the hub.
  *
@@ -54,7 +56,7 @@ export function HubCover({
       )}
       {by && (
         <span className="absolute bottom-3 right-3 z-10 text-[0.62rem] font-semibold text-white/85">
-          shared by {by}
+          <Tr k="shared by {name}" vars={{ name: by }} />
         </span>
       )}
     </div>

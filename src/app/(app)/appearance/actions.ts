@@ -1,27 +1,28 @@
 "use server";
 
-import { del } from "@vercel/blob";
 import { revalidatePath } from "next/cache";
 
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { blobUrlSchema } from "@/lib/blob-url";
+import { deleteBlobIfUnreferenced } from "@/lib/blob-delete";
 import { isThemeId } from "@/lib/themes";
 import { isLocale } from "@/lib/locales";
 
 /**
- * Deletes whatever was already stored before persisting the new one, so a
- * user only ever has one background blob at a time — no orphaned files
- * accumulating in storage every time someone changes their photo.
+ * Points the user's row at `next` (a new URL, or null), then cleans up the
+ * old blob so a user only ever has one background file at a time.
+ *
+ * Row first, delete second, and only if nothing else still references the old
+ * URL: the stored value came from the client, so it may be someone else's
+ * file (the hub cover, another member's background) — "remove" must never
+ * delete that.
  */
-async function deletePreviousBlob(userId: string) {
+async function replaceBackground(userId: string, next: string | null) {
   const existing = await prisma.user.findUnique({ where: { id: userId }, select: { backgroundImageUrl: true } });
-  if (existing?.backgroundImageUrl) {
-    try {
-      await del(existing.backgroundImageUrl);
-    } catch {
-      // Already gone or otherwise unreachable — not worth failing the request over.
-    }
+  await prisma.user.update({ where: { id: userId }, data: { backgroundImageUrl: next } });
+  if (existing?.backgroundImageUrl && existing.backgroundImageUrl !== next) {
+    await deleteBlobIfUnreferenced(existing.backgroundImageUrl);
   }
 }
 
@@ -29,8 +30,7 @@ export async function setBackgroundImage(url: string) {
   const user = await requireUser();
   const parsedUrl = blobUrlSchema.parse(url);
 
-  await deletePreviousBlob(user.id);
-  await prisma.user.update({ where: { id: user.id }, data: { backgroundImageUrl: parsedUrl } });
+  await replaceBackground(user.id, parsedUrl);
 
   revalidatePath("/", "layout");
 }
@@ -38,8 +38,7 @@ export async function setBackgroundImage(url: string) {
 export async function removeBackgroundImage() {
   const user = await requireUser();
 
-  await deletePreviousBlob(user.id);
-  await prisma.user.update({ where: { id: user.id }, data: { backgroundImageUrl: null } });
+  await replaceBackground(user.id, null);
 
   revalidatePath("/", "layout");
 }

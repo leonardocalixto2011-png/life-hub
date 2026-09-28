@@ -10,6 +10,7 @@ import {
   type Draft,
 } from "@/app/(app)/quick-actions";
 import { DraftCard } from "@/components/DraftCard";
+import { useT } from "@/components/I18nProvider";
 
 export function ShareCapture({
   initialText,
@@ -21,6 +22,7 @@ export function ShareCapture({
   aiEnabled: boolean;
 }) {
   const router = useRouter();
+  const t = useT();
   const [text, setText] = useState(initialText);
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -34,17 +36,16 @@ export function ShareCapture({
     start(async () => {
       const r = await parseQuickAdd(initialText);
       if (r.ok) setDrafts(r.drafts);
-      else setMsg(r.error);
+      else setMsg(t(r.error));
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiEnabled, initialText]);
+  }, [aiEnabled, initialText, t]);
 
   function parse() {
     setMsg(null);
     start(async () => {
       const r = await parseQuickAdd(text);
       if (r.ok) setDrafts(r.drafts);
-      else setMsg(r.error);
+      else setMsg(t(r.error));
     });
   }
 
@@ -53,13 +54,13 @@ export function ShareCapture({
     start(async () => {
       const r = await commitDrafts(drafts);
       if (r.ok) router.replace("/today");
-      else setMsg(r.error ?? "Could not save");
+      else setMsg(t(r.error ?? "Could not save"));
     });
   }
 
   function saveAsTask() {
     const fd = new FormData();
-    fd.set("title", text.trim().slice(0, 200) || "Shared note");
+    fd.set("title", text.trim().slice(0, 200) || t("Shared note"));
     fd.set("priority", "MED");
     fd.set("isRecurring", "false");
     start(async () => {
@@ -75,18 +76,18 @@ export function ShareCapture({
         onChange={(e) => setText(e.target.value)}
         rows={4}
         className="field"
-        aria-label="Shared content"
+        aria-label={t("Shared content")}
       />
 
       {!drafts && (
         <div className="flex gap-2">
           {aiEnabled && (
             <button onClick={parse} disabled={pending} className="btn btn-primary flex-1">
-              {pending ? "Reading…" : "Parse"}
+              {pending ? t("Reading…") : t("Parse")}
             </button>
           )}
           <button onClick={saveAsTask} disabled={pending} className="btn flex-1">
-            Save as task
+            {t("Save as task")}
           </button>
         </div>
       )}
@@ -94,7 +95,7 @@ export function ShareCapture({
       {drafts && (
         <div className="space-y-2">
           <p className="text-xs font-semibold text-[var(--color-text-dim)]">
-            Review before saving:
+            {t("Review before saving:")}
           </p>
           {drafts.map((d, i) => (
             <DraftCard
@@ -114,10 +115,10 @@ export function ShareCapture({
           ))}
           <div className="flex gap-2">
             <button onClick={saveDrafts} disabled={pending} className="btn btn-primary flex-1">
-              {pending ? "Saving…" : `Save ${drafts.length}`}
+              {pending ? t("Saving…") : t("Save {n}", { n: drafts.length })}
             </button>
             <button onClick={() => setDrafts(null)} disabled={pending} className="btn">
-              Back
+              {t("Back")}
             </button>
           </div>
         </div>

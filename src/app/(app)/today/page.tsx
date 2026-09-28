@@ -7,7 +7,7 @@ import { listShifts, planHref, planItemsBetween } from "@/lib/plans";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { getLang, getT } from "@/lib/i18n-server";
-import { fmt, fmtDay, fmtTime } from "@/lib/i18n";
+import { fmt, fmtTime } from "@/lib/i18n";
 import { countdownLabel, eventTimeRange, money } from "@/lib/format";
 import { TaskListCard } from "@/components/TaskListCard";
 import { VentureChip } from "@/components/VentureChip";
@@ -234,21 +234,31 @@ export default async function DashboardPage() {
         <section>
           <SectionHead title={t("Payments due")} href="/debts" cta={t("All debts")} />
           <div className="card divide-y divide-[var(--color-border)]">
-            {d.debts.map((x) => (
-              <Link
-                key={x.id}
-                href={`/debts/${x.id}`}
-                className="flex items-center justify-between px-3 py-2.5"
-              >
-                <span className="truncate">{x.name}</span>
-                <span className="shrink-0 text-xs font-semibold text-[var(--color-text-dim)]">
-                  {x.actualPaymentCents ?? x.minimumPaymentCents
-                    ? `${money(x.actualPaymentCents ?? x.minimumPaymentCents!, currency, locale)} · `
-                    : ""}
-                  {countdownLabel(x.dueDate!, lang)}
-                </span>
-              </Link>
-            ))}
+            {d.debts.map((x) => {
+              // The query has no lower bound, so a missed payment stays here —
+              // flagged, rather than quietly dropping off the day after.
+              const overdue = x.dueDate! < todayStart;
+              return (
+                <Link
+                  key={x.id}
+                  href={`/debts/${x.id}`}
+                  className="flex items-center justify-between px-3 py-2.5"
+                >
+                  <span className="truncate">{x.name}</span>
+                  <span
+                    className={`shrink-0 text-xs font-semibold ${
+                      overdue ? "text-[var(--color-danger)]" : "text-[var(--color-text-dim)]"
+                    }`}
+                  >
+                    {x.actualPaymentCents ?? x.minimumPaymentCents
+                      ? `${money(x.actualPaymentCents ?? x.minimumPaymentCents!, currency, locale)} · `
+                      : ""}
+                    {overdue ? `${t("Overdue")} · ` : ""}
+                    {countdownLabel(x.dueDate!, lang)}
+                  </span>
+                </Link>
+              );
+            })}
           </div>
         </section>
       )}

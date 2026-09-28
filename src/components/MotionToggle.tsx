@@ -3,6 +3,7 @@
 import { useCallback, useSyncExternalStore } from "react";
 
 import { REDUCE_MOTION_KEY as KEY } from "@/lib/motion";
+import { useT } from "@/components/I18nProvider";
 
 /**
  * The `calm` class on <html> and the OS media query are both external stores,
@@ -34,6 +35,7 @@ function subscribeToMediaQuery(callback: () => void) {
  * the right way round for a comfort setting.
  */
 export function MotionToggle() {
+  const t = useT();
   // Version counter forces a re-read after the class is flipped locally.
   const subscribeToClass = useCallback((callback: () => void) => {
     const observer = new MutationObserver(callback);
@@ -69,7 +71,7 @@ export function MotionToggle() {
   return (
     <div className="card space-y-1.5 p-3">
       <label className="flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold">Reduce motion</span>
+        <span className="text-xs font-semibold">{t("Reduce motion")}</span>
         <input
           type="checkbox"
           checked={on}
@@ -79,8 +81,8 @@ export function MotionToggle() {
       </label>
       <p className="text-[0.65rem] text-[var(--color-text-dim)]">
         {osReduces
-          ? "Your device already asks for reduced motion, so this is on everywhere. Nothing here animates."
-          : "Turns off the small animations — ticking a task, joining a hub, clearing a debt. Everything still works exactly the same, just instantly."}
+          ? t("Your device already asks for reduced motion, so this is on everywhere. Nothing here animates.")
+          : t("Turns off the small animations — ticking a task, joining a hub, clearing a debt. Everything still works exactly the same, just instantly.")}
       </p>
     </div>
   );

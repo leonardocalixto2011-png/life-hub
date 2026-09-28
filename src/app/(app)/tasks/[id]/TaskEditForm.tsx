@@ -2,6 +2,7 @@
 
 import { deleteTask, updateTask } from "@/app/(app)/tasks/actions";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
+import { SubmitButton } from "@/components/SubmitButton";
 import { useT } from "@/components/I18nProvider";
 
 type Option = { id: string; name: string | null; email?: string | null };
@@ -99,7 +100,7 @@ export function TaskEditForm({
             <input type="checkbox" name="isRecurring" defaultChecked={task.isRecurring} />
             {t("Recurring")}
           </label>
-          <select name="recurrence" defaultValue={task.recurrence ?? "weekly"} className="field max-w-[8rem]">
+          <select name="recurrence" aria-label={t("Repeats")} defaultValue={task.recurrence ?? "weekly"} className="field max-w-[8rem]">
             <option value="weekly">{t("Weekly")}</option>
             <option value="monthly">{t("Monthly")}</option>
           </select>
@@ -107,16 +108,14 @@ export function TaskEditForm({
 
         <PrivacyToggle defaultValue={task.visibility} />
 
-        <button type="submit" className="btn btn-primary w-full">
-          {t("Save")}
-        </button>
+        <SubmitButton className="btn btn-primary w-full">{t("Save")}</SubmitButton>
       </form>
 
       <form action={deleteTask}>
         <input type="hidden" name="id" value={task.id} />
-        <button type="submit" className="btn w-full text-[var(--color-danger)]">
+        <SubmitButton className="btn w-full text-[var(--color-danger)]" pendingLabel={t("Deleting…")}>
           {t("Delete task")}
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );
