@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { addMonths, addWeeks } from "date-fns";
+import { addWeeks } from "date-fns";
 import { z } from "zod";
 
 import type { HubTx } from "@/lib/hub-context";
@@ -13,6 +13,7 @@ import { notifyAssignment } from "@/lib/notify";
 import { revalidateContent } from "@/lib/revalidate";
 import { assertActiveMember, assertVentureInHub } from "@/lib/membership";
 import { visibleTo } from "@/lib/visibility";
+import { addMonthsOnDay, anchorOf } from "@/lib/recur";
 
 /**
  * Every write below goes by a client-supplied id. RLS already limits that to
@@ -44,8 +45,8 @@ async function completeTask(tx: HubTx, id: string, hubId: string, userId: string
 
   if (task.isRecurring && task.recurrence) {
     const base = task.dueDate ?? new Date();
-    const nextDue =
-      task.recurrence === "weekly" ? addWeeks(base, 1) : addMonths(base, 1);
+    const dueDay = task.recurrence === "weekly" ? null : anchorOf(base, task.dueDay);
+    const nextDue = dueDay == null ? addWeeks(base, 1) : addMonthsOnDay(base, 1, dueDay);
     await tx.task.create({
       data: {
         title: task.title,
@@ -57,6 +58,7 @@ async function completeTask(tx: HubTx, id: string, hubId: string, userId: string
         isRecurring: true,
         recurrence: task.recurrence,
         dueDate: nextDue,
+        dueDay,
         createdById: task.createdById,
         visibility: task.visibility,
       },
@@ -106,6 +108,7 @@ export async function createTask(formData: FormData) {
         ventureId: data.ventureId,
         assignedToId: data.assignedToId,
         dueDate: fromDateInput(data.dueDate),
+        dueDay: null,
         amountCents: dollarsToCents(data.amount),
         priority: data.priority,
         isRecurring: data.isRecurring,
@@ -139,6 +142,7 @@ export async function updateTask(formData: FormData) {
         ventureId: data.ventureId,
         assignedToId: data.assignedToId,
         dueDate: fromDateInput(data.dueDate),
+        dueDay: null,
         amountCents: dollarsToCents(data.amount),
         priority: data.priority,
         isRecurring: data.isRecurring,
@@ -252,7 +256,7 @@ export async function setTaskFields(input: z.infer<typeof patchSchema>) {
       where: { id: p.id },
       data: {
         ...(p.dueDate !== undefined
-          ? { dueDate: p.dueDate ? fromDateInput(p.dueDate) : null }
+          ? { dueDate: p.dueDate ? fromDateInput(p.dueDate) : null, dueDay: null }
           : {}),
         ...(p.ventureId !== undefined ? { ventureId: p.ventureId } : {}),
         ...(p.assignedToId !== undefined ? { assignedToId: p.assignedToId } : {}),

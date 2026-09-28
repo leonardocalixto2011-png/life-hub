@@ -92,10 +92,20 @@ export async function updateTrip(fd: FormData): Promise<ActionResult> {
   return formResult(async () => {
     const { user, hub } = await requireHub();
     const d = parse(z.object({ ...tripFields, id: z.string().cuid() }), fd);
+    // Checkboxes, so read with getAll — `parse` flattens repeated keys. Only
+    // touched when the form rendered the picker (a hub of one has none).
+    const travelerIds = fd.has("travelersShown")
+      ? z.array(z.string().cuid()).parse(fd.getAll("travelerIds"))
+      : undefined;
+    // Plain ids with no FK, so RLS can't vouch for them — same as assignees.
+    for (const id of travelerIds ?? []) await assertActiveMember(hub.id, id);
     await withHub(user.id, async (tx) => {
       const trip = await tx.trip.findFirst({ where: { id: d.id, ...visibleTrip(hub.id, user.id) } });
       if (!trip) throw new Error("Trip not found");
-      await tx.trip.update({ where: { id: d.id }, data: tripData(d) });
+      await tx.trip.update({
+        where: { id: d.id },
+        data: { ...tripData(d), ...(travelerIds ? { travelerIds } : {}) },
+      });
     });
     revalidateContent("/trips", `/trips/${d.id}`);
   });

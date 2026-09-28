@@ -1,5 +1,4 @@
 import {
-  addMonths,
   addWeeks,
   addYears,
   endOfDay,
@@ -16,6 +15,7 @@ import { withHub } from "@/lib/hub-context";
 import { prisma } from "@/lib/prisma";
 import { money } from "@/lib/format";
 import { monthlyCents, perMonth } from "@/lib/money";
+import { addMonthsOnDay, anchorOf } from "@/lib/recur";
 
 /**
  * Rolls any ACTIVE subscription whose `renewalDate` has already passed
@@ -34,22 +34,23 @@ export async function advanceLapsedRenewals(tx: HubTx, hubId: string): Promise<v
       billingCycle: { not: "CUSTOM" },
       renewalDate: { lt: todayStart },
     },
-    select: { id: true, renewalDate: true, billingCycle: true },
+    select: { id: true, renewalDate: true, renewalDay: true, billingCycle: true },
   });
   if (stale.length === 0) return;
 
-  const step = (d: Date, cycle: BillingCycle): Date => {
+  const step = (d: Date, cycle: BillingCycle, day: number): Date => {
     if (cycle === "WEEKLY") return addWeeks(d, 1);
-    if (cycle === "QUARTERLY") return addMonths(d, 3);
+    if (cycle === "QUARTERLY") return addMonthsOnDay(d, 3, day);
     if (cycle === "YEARLY") return addYears(d, 1);
-    return addMonths(d, 1); // MONTHLY
+    return addMonthsOnDay(d, 1, day); // MONTHLY
   };
 
   await Promise.all(
     stale.map((s) => {
+      const day = anchorOf(s.renewalDate, s.renewalDay);
       let next = s.renewalDate;
-      while (next < todayStart) next = step(next, s.billingCycle);
-      return tx.subscription.update({ where: { id: s.id }, data: { renewalDate: next } });
+      while (next < todayStart) next = step(next, s.billingCycle, day);
+      return tx.subscription.update({ where: { id: s.id }, data: { renewalDate: next, renewalDay: day } });
     }),
   );
 }

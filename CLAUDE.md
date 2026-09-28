@@ -1249,3 +1249,17 @@ Remaining, in order:
 7. Note (from couca-app): Vercel Hobby only auto-deploys **public** repos or
    commits authored by the connected GitHub account — the local git email
    `leonardocalixto1998@yahoo.com` resolves to a different GitHub user.
+
+### Audit follow-ups (2026-09-28)
+
+- **Monthly dates keep their day.** `addMonths` clamps and forgets, so a
+  31st drifted to the 28th for good after February. `lib/recur.ts`
+  `addMonthsOnDay` steps to an anchor day; the anchor is `Task.dueDay` /
+  `Debt.dueDay` / `Subscription.renewalDay`, filled on the first roll from
+  the date's own day and **reset to null whenever a person edits the date**
+  (so an edit becomes the new anchor). Use it for any new monthly roll.
+- **Trip "Each" split** divides by `Trip.travelerIds` (plain member ids, picked
+  on the trip's edit form); empty means the whole hub, which is what every
+  older trip meant. Severed with `array_remove` in account deletion.
+- **Adding a known person creates an INVITED membership**, like an email
+  invite. Sharing one hub isn't consent to be placed in another.
