@@ -23,11 +23,11 @@ export const tripPlanSchema = z.object({
   items: z
     .array(
       z.object({
-        kind: z.enum(["BOOK", "TODO", "PACK", "ACTIVITY", "SAVE"]),
+        kind: z.enum(["BOOK", "TODO", "PACK", "ACTIVITY", "SAVE", "BUDGET", "TIP"]),
         title: z.string().trim().min(1).max(160),
         date: day.optional(),
         cost: z.number().nonnegative().optional(),
-        note: z.string().trim().max(500).optional(),
+        note: z.string().trim().max(800).optional(),
       }),
     )
     .max(300)
@@ -75,4 +75,26 @@ export function planRows(plan: TripPlan, tripId: string, hubId: string) {
     })),
   ];
   return rows.map((r, n) => ({ ...r, createdAt: new Date(base + n) }));
+}
+
+/**
+ * Only the rows of a plan the trip doesn't have yet, matched on kind + title,
+ * so importing the same plan twice adds nothing, and importing a newer version
+ * of a plan (new tips, a budget breakdown) adds just what's new. Existing rows
+ * are left as they are: done ticks, edits and assignments survive.
+ */
+export function missingPlanRows(
+  plan: TripPlan,
+  tripId: string,
+  hubId: string,
+  existing: { kind: string; title: string }[],
+) {
+  const have = new Set(existing.map((e) => `${e.kind}|${e.title.trim().toLowerCase()}`));
+  return planRows(plan, tripId, hubId).filter((r) => !have.has(`${r.kind}|${r.title.trim().toLowerCase()}`));
+}
+
+/** The note a plan gives an item, looked up the same way missingPlanRows matches. */
+export function planNote(plan: TripPlan, kind: string, title: string): string | null {
+  const t = title.trim().toLowerCase();
+  return plan.items.find((i) => i.kind === kind && i.title.trim().toLowerCase() === t)?.note ?? null;
 }

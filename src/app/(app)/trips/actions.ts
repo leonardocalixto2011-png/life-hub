@@ -8,7 +8,7 @@ import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
 import { revalidateContent } from "@/lib/revalidate";
-import { planRows, TRIP_TEMPLATES, tripPlanSchema, type TripPlan } from "@/lib/trip-plan";
+import { missingPlanRows, planNote, TRIP_TEMPLATES, tripPlanSchema, type TripPlan } from "@/lib/trip-plan";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the dates");
@@ -83,12 +83,13 @@ export async function deleteTrip(fd: FormData) {
 }
 
 const itemSchema = z.object({
-  kind: z.enum(["BOOK", "TODO", "PACK", "ACTIVITY", "SAVE", "STOP"]).default("TODO"),
+  kind: z.enum(["BOOK", "TODO", "PACK", "ACTIVITY", "SAVE", "STOP", "BUDGET", "TIP"]).default("TODO"),
   title: z.string().trim().min(1, "What needs doing?").max(160),
   cost: z.preprocess(emptyToNull, z.string().nullable()),
   date: z.preprocess(emptyToNull, day.nullable()),
   endDate: z.preprocess(emptyToNull, day.nullable()),
   assignedToId: z.preprocess(emptyToNull, z.string().cuid().nullable()),
+  note: z.preprocess(emptyToNull, z.string().trim().max(800).nullable()),
 });
 
 export async function addTripItem(tripId: string, fd: FormData) {
@@ -101,6 +102,7 @@ export async function addTripItem(tripId: string, fd: FormData) {
   if (d.kind === "STOP" && (!d.endDate || d.endDate <= d.date!)) {
     throw new Error("A stop needs the day you leave, after the day you arrive.");
   }
+  if (d.kind === "BUDGET" && !d.cost) throw new Error("A budget line needs an amount.");
   await withHub(user.id, async (tx) => {
     const trip = await tx.trip.findFirst({
       where: { id: tripId, ...visibleTrip(hub.id, user.id) },
@@ -117,6 +119,7 @@ export async function addTripItem(tripId: string, fd: FormData) {
         date: fromDateInput(d.date),
         endDate: d.kind === "STOP" ? fromDateInput(d.endDate) : null,
         assignedToId: d.assignedToId,
+        note: d.note,
       },
     });
   });
@@ -214,10 +217,17 @@ export async function importTripPlan(tripId: string, fd: FormData) {
   await withHub(user.id, async (tx) => {
     const trip = await tx.trip.findFirst({
       where: { id: tripId, ...visibleTrip(hub.id, user.id) },
-      select: { hubId: true, budgetCents: true },
+      select: { hubId: true, budgetCents: true, items: { select: { id: true, kind: true, title: true, note: true } } },
     });
     if (!trip) throw new Error("Trip not found");
-    await tx.tripItem.createMany({ data: planRows(plan, tripId, trip.hubId) });
+    const rows = missingPlanRows(plan, tripId, trip.hubId, trip.items);
+    if (rows.length > 0) await tx.tripItem.createMany({ data: rows });
+    // Rows already there keep everything, but pick up a note the plan now has.
+    for (const e of trip.items) {
+      if (e.note) continue;
+      const note = planNote(plan, e.kind, e.title);
+      if (note) await tx.tripItem.update({ where: { id: e.id }, data: { note } });
+    }
     if (trip.budgetCents == null && plan.budget != null) {
       await tx.trip.update({ where: { id: tripId }, data: { budgetCents: Math.round(plan.budget * 100) } });
     }
