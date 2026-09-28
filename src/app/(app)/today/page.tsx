@@ -12,6 +12,7 @@ import { countdownLabel, eventTimeRange, money } from "@/lib/format";
 import { TaskListCard } from "@/components/TaskListCard";
 import { VentureChip } from "@/components/VentureChip";
 import { EmptyState, quickAddExamples } from "@/components/EmptyState";
+import { WeekStrip } from "@/components/viz/WeekStrip";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +92,8 @@ export default async function DashboardPage() {
           </Link>
         ))}
       </nav>
+
+      <WeekStrip userId={user.id} hub={hub} lang={lang} />
 
       {nothing && (
         <EmptyState

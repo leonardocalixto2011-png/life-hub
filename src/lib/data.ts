@@ -101,14 +101,15 @@ export async function listMembers(viewerId: string, hubId: string) {
  * the page's call the same call.
  */
 export const hubChrome = cache(async (userId: string, hubId: string) => {
-  return withHub(userId, async (tx) => {
-    const [ventures, members, reviewCount] = await Promise.all([
-      listVentures(tx, hubId),
-      listMembers(userId, hubId),
-      pendingReviewCount(tx, userId),
-    ]);
-    return { ventures, members, reviewCount };
-  });
+  // Members run on the trusted client, so they stay OUT of the transaction:
+  // awaiting a second connection while holding one open deadlocks a
+  // single-connection pool (the local dev database hung here until the 15s
+  // transaction timeout) and needlessly holds a pooled connection in prod.
+  const [[ventures, reviewCount], members] = await Promise.all([
+    withHub(userId, (tx) => Promise.all([listVentures(tx, hubId), pendingReviewCount(tx, userId)])),
+    listMembers(userId, hubId),
+  ]);
+  return { ventures, members, reviewCount };
 });
 
 /**

@@ -10,6 +10,7 @@ import { getLang, getT } from "@/lib/i18n-server";
 import { fmt } from "@/lib/i18n";
 import { money } from "@/lib/format";
 import { centsToInput } from "@/lib/money";
+import { BudgetTrend } from "@/components/viz/BudgetTrend";
 import { EntryForm } from "./EntryForm";
 import { EntryRow } from "./EntryRow";
 import { deleteBudgetTarget, setBudgetTarget, settleUp } from "./actions";
@@ -114,6 +115,16 @@ export default async function BudgetPage({
           <Figure cents={data.net} currency={currency} locale={locale} label={t("net")} tone={data.net < 0 ? "danger" : "ok"} />
         </div>
       </div>
+
+      <BudgetTrend
+        userId={user.id}
+        hubId={hub.id}
+        month={month}
+        ventureSlug={sp.venture}
+        currency={currency}
+        locale={locale}
+        lang={lang}
+      />
 
       {members.length > 1 && (
         <section>

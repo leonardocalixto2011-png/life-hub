@@ -8,7 +8,10 @@
  * Tu, not vous: this is a household app. Québec conventions throughout —
  * "courriel", "cellulaire", "vidange"… where they differ from France.
  */
+import { FR_VIZ } from "@/lib/i18n-fr-viz";
+
 export const FR: Record<string, string> = {
+  ...FR_VIZ,
   // ---- navigation & chrome ------------------------------------------------
   "Today": "Aujourd'hui",
   "Tasks": "Tâches",

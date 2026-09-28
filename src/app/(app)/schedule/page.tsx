@@ -8,6 +8,9 @@ import { requireHub } from "@/lib/session";
 import { getLang, getT } from "@/lib/i18n-server";
 import { fmtDay, fmtShort, fmtTime } from "@/lib/i18n";
 import { Avatar } from "@/components/Avatar";
+import { DayTimeline } from "@/components/viz/DayTimeline";
+import { WeekFreeBars } from "@/components/viz/WeekFreeBars";
+import { peopleOf } from "@/components/viz/people";
 import { ShiftForm } from "./ShiftForm";
 import { deleteShift, deleteShiftSeries } from "./actions";
 
@@ -44,6 +47,11 @@ export default async function SchedulePage({
     s.startAt < addDays(day, 1) && s.endAt > day;
 
   const weekHref = (d: Date) => `/schedule?w=${format(d, "yyyy-MM-dd")}`;
+  const people = peopleOf(members);
+  const freeByDay = days.map((day) => {
+    const free = members.length > 1 ? freeWindows(day, shifts.filter((s) => overlaps(s, day))) : [];
+    return { date: day, free, freeMinutes: free.reduce((n, w) => n + (w.end.getTime() - w.start.getTime()) / 60000, 0) };
+  });
 
   return (
     <div className="space-y-4 p-3">
@@ -69,6 +77,9 @@ export default async function SchedulePage({
         </Link>
       </div>
 
+      {/* With no schedule entered, "free all day, every day" is noise. */}
+      {members.length > 1 && shifts.length > 0 && <WeekFreeBars days={freeByDay} lang={lang} now={now} />}
+
       <ShiftForm
         members={members}
         currentUserId={user.id}
@@ -77,12 +88,15 @@ export default async function SchedulePage({
 
       {days.map((day) => {
         const dayShifts = shifts.filter((s) => overlaps(s, day));
-        const free = members.length > 1 ? freeWindows(day, dayShifts) : [];
+        const free = freeByDay.find((f) => isSameDay(f.date, day))?.free ?? [];
         return (
           <section key={day.toISOString()}>
             <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
               {isSameDay(day, now) ? t("Today") : fmtDay(day, lang)}
             </h2>
+            {dayShifts.length > 0 && (
+              <DayTimeline day={day} people={people} shifts={dayShifts} free={free} lang={lang} now={now} />
+            )}
             <div className="card divide-y divide-[var(--color-border)]">
               {members.map((m) => {
                 const mine = dayShifts.filter((s) => s.personId === m.id);
