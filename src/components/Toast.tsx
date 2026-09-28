@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { useT } from "@/components/I18nProvider";
+
 export type ToastData = {
   message: string;
   actionLabel?: string;
@@ -16,6 +18,7 @@ export function showToast(t: ToastData) {
 }
 
 export function ToastHost() {
+  const t = useT();
   const [toast, setToast] = useState<ToastData | null>(null);
 
   useEffect(() => {
@@ -49,7 +52,7 @@ export function ToastHost() {
             }}
             className="font-bold underline"
           >
-            {toast.actionLabel ?? "Undo"}
+            {toast.actionLabel ?? t("Undo")}
           </button>
         )}
       </div>

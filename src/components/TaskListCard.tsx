@@ -1,5 +1,6 @@
 import { TaskRow, type TaskRowData } from "@/components/TaskRow";
 import type { TaskWithRefs } from "@/lib/data";
+import { Tr } from "@/components/Tr";
 
 type Venture = { id: string; name: string };
 type Member = { id: string; name: string | null; email: string | null };
@@ -25,7 +26,7 @@ export function TaskListCard({
   tasks,
   ventures,
   members,
-  empty = "Nothing here.",
+  empty,
 }: {
   tasks: TaskWithRefs[];
   ventures?: Venture[];
@@ -33,9 +34,9 @@ export function TaskListCard({
   empty?: React.ReactNode;
 }) {
   if (tasks.length === 0) {
-    return typeof empty === "string" ? (
+    return empty == null || typeof empty === "string" ? (
       <p className="px-1 py-8 text-center text-sm text-[var(--color-text-dim)]">
-        {empty}
+        {empty ?? <Tr k="Nothing here." />}
       </p>
     ) : (
       <>{empty}</>

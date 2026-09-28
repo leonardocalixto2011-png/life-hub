@@ -129,7 +129,7 @@ export function TaskRow({
         aria-hidden
       >
         <span style={{ color: "var(--color-ok)", opacity: dx > 12 ? 1 : 0 }}>✓ {t("Done")}</span>
-        <span style={{ color: "#b45309", opacity: dx < -12 ? 1 : 0 }}>{t("Tomorrow")} ⏰</span>
+        <span style={{ color: "var(--color-warn)", opacity: dx < -12 ? 1 : 0 }}>{t("Tomorrow")} ⏰</span>
       </div>
 
       <div
@@ -165,7 +165,7 @@ export function TaskRow({
           >
             {/* Drawn rather than typed. A "✓" character appears all at once;
                 a stroked path can be dashed, so the check writes itself in the
-                same beat the circle fills. Bottom rung of the ladder — 220ms,
+                same beat the circle fills. Routine rung of the ladder — 160ms (--fast),
                 no sound, nothing to dismiss. */}
             <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3 w-3">
               <path d="M3 8.4 6.4 11.8 13 5.2" />

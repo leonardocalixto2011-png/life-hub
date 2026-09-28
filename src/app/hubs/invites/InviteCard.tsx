@@ -57,7 +57,7 @@ export function InviteCard({
         // failure, and put the card back so the invite is still actionable.
         if (e && typeof e === "object" && "digest" in e) throw e;
         setJoining(false);
-        setError(e instanceof Error ? e.message : t("Could not join — try again."));
+        setError(e instanceof Error ? t(e.message) : t("Could not join — try again."));
       }
     });
   }

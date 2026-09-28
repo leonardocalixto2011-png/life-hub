@@ -11,7 +11,7 @@ import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
 import { notifyAssignment } from "@/lib/notify";
 import { revalidateContent } from "@/lib/revalidate";
-import { assertActiveMember } from "@/lib/membership";
+import { assertActiveMember, assertVentureInHub } from "@/lib/membership";
 import { visibleTo } from "@/lib/visibility";
 
 /**
@@ -95,6 +95,7 @@ export async function createTask(formData: FormData) {
   const { user, hub } = await requireHub();
   const data = parse(createSchema, formData);
   if (data.assignedToId) await assertActiveMember(hub.id, data.assignedToId);
+  await assertVentureInHub(hub.id, data.ventureId);
 
   const task = await withHub(user.id, (tx) =>
     tx.task.create({
@@ -126,6 +127,7 @@ export async function updateTask(formData: FormData) {
   const { user, hub } = await requireHub();
   const data = parse(updateSchema, formData);
   if (data.assignedToId) await assertActiveMember(hub.id, data.assignedToId);
+  await assertVentureInHub(hub.id, data.ventureId);
 
   const [before, after] = await withHub(user.id, async (tx) => {
     const before = await findScopedTask(tx, data.id, hub.id, user.id);
@@ -242,6 +244,7 @@ export async function setTaskFields(input: z.infer<typeof patchSchema>) {
   const { user, hub } = await requireHub();
   const p = patchSchema.parse(input);
   if (p.assignedToId) await assertActiveMember(hub.id, p.assignedToId);
+  await assertVentureInHub(hub.id, p.ventureId);
 
   const [before, after] = await withHub(user.id, async (tx) => {
     const before = await findScopedTask(tx, p.id, hub.id, user.id);

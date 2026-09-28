@@ -14,6 +14,8 @@ import { TRIP_TEMPLATES } from "@/lib/trip-plan";
 import { Figure } from "@/components/Figure";
 import { TripForm } from "../TripForm";
 import { addTripItem, addTripSavings, deleteTrip, deleteTripItem, importTripPlan, toggleTripItem } from "../actions";
+import { SubmitButton } from "@/components/SubmitButton";
+import { ActionForm } from "@/components/ActionForm";
 
 export const dynamic = "force-dynamic";
 
@@ -165,21 +167,22 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       <div className="flex items-start gap-2.5 px-3 py-2">
         <form action={toggleTripItem} className="pt-0.5">
           <input type="hidden" name="id" value={i.id} />
-          <button
+          <SubmitButton
             aria-label={i.done ? t("Mark not done") : t("Mark done")}
-            className="grid h-5 w-5 place-items-center rounded border border-[var(--color-border)] text-xs"
+            pendingLabel={i.done ? "✓" : ""}
+            className="hit grid h-5 w-5 place-items-center rounded border border-[var(--color-border)] text-xs"
             style={
               i.done
                 ? {
                     background: "var(--color-ok)",
-                    color: "#fff",
+                    color: "var(--color-surface)",
                     borderColor: "var(--color-ok)",
                   }
                 : undefined
             }
           >
             {i.done ? "✓" : ""}
-          </button>
+          </SubmitButton>
         </form>
         <div className="min-w-0 flex-1">
           <span
@@ -220,9 +223,9 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         )}
         <form action={deleteTripItem}>
           <input type="hidden" name="id" value={i.id} />
-          <button aria-label={t("Delete")} className="text-xs text-[var(--color-text-dim)]">
+          <SubmitButton aria-label={t("Delete")} className="-m-2 p-2 text-xs text-[var(--color-text-dim)]" pendingLabel="✕">
             ✕
-          </button>
+          </SubmitButton>
         </form>
       </div>
     );
@@ -467,7 +470,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                 </tbody>
               </table>
             )}
-            <form action={save} className="grid grid-cols-[1fr_auto] gap-2">
+            <ActionForm action={save} className="grid grid-cols-[1fr_auto] gap-2">
               <input
                 name="amount"
                 type="number"
@@ -478,10 +481,10 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                 placeholder={t("Other amount put aside")}
                 aria-label={t("Other amount put aside")}
               />
-              <button type="submit" className="btn">
+              <SubmitButton className="btn">
                 {t("+ Add to savings")}
-              </button>
-            </form>
+              </SubmitButton>
+            </ActionForm>
             <p className="text-[0.66rem] text-[var(--color-text-dim)]">
               {t("Tick a deposit in the booking calendar when it's done; it counts toward Saved.")}
             </p>
@@ -523,9 +526,9 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                     <span className="w-20 text-right font-semibold tabular-nums">{cash(b.costCents!)}</span>
                     <form action={deleteTripItem}>
                       <input type="hidden" name="id" value={b.id} />
-                      <button aria-label={t("Delete")} className="text-xs text-[var(--color-text-dim)]">
+                      <SubmitButton aria-label={t("Delete")} className="-m-2 p-2 text-xs text-[var(--color-text-dim)]" pendingLabel="✕">
                         ✕
-                      </button>
+                      </SubmitButton>
                     </form>
                   </li>
                 ))}
@@ -597,9 +600,9 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                   <h3 className="text-sm font-semibold">{tip.title}</h3>
                   <form action={deleteTripItem}>
                     <input type="hidden" name="id" value={tip.id} />
-                    <button aria-label={t("Delete")} className="text-xs text-[var(--color-text-dim)]">
+                    <SubmitButton aria-label={t("Delete")} className="-m-2 p-2 text-xs text-[var(--color-text-dim)]" pendingLabel="✕">
                       ✕
-                    </button>
+                    </SubmitButton>
                   </form>
                 </div>
                 {tip.note && (
@@ -612,7 +615,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       )}
 
       {/* ---- add anything ------------------------------------------------ */}
-      <form action={add} className="card space-y-2 p-3">
+      <ActionForm action={add} className="card space-y-2 p-3">
         <h2 className={sectionTitle}>{t("Add to the plan")}</h2>
         <div className="grid grid-cols-[7.5rem_1fr] gap-2">
           <select name="kind" defaultValue="ACTIVITY" className="field" aria-label={t("List")}>
@@ -625,7 +628,13 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
             <option value="BUDGET">{t("Budget line")}</option>
             <option value="TIP">{t("Good to know")}</option>
           </select>
-          <input name="title" required className="field" placeholder={t("Snorkel trip, hotel, sunscreen…")} />
+          <input
+            name="title"
+            required
+            className="field"
+            placeholder={t("Snorkel trip, hotel, sunscreen…")}
+            aria-label={t("Title")}
+          />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <label className="grid gap-0.5 text-[0.62rem] text-[var(--color-text-dim)]">
@@ -647,6 +656,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
             inputMode="decimal"
             className="field"
             placeholder={t("Cost")}
+            aria-label={t("Cost")}
           />
           <select name="assignedToId" defaultValue="" className="field" aria-label={t("Who")}>
             <option value="">{t("Anyone")}</option>
@@ -656,11 +666,11 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
               </option>
             ))}
           </select>
-          <button type="submit" className="btn btn-primary">
+          <SubmitButton className="btn btn-primary">
             {t("Add")}
-          </button>
+          </SubmitButton>
         </div>
-      </form>
+      </ActionForm>
 
       {trip.notes && <p className="card p-3 text-sm whitespace-pre-wrap">{trip.notes}</p>}
 
@@ -669,7 +679,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
           {t("Import a whole plan")}
         </summary>
         <div className="mt-2 space-y-2">
-          <form action={importPlan} className="card space-y-2 p-3">
+          <ActionForm action={importPlan} className="card space-y-2 p-3">
             <p className="text-[0.72rem] text-[var(--color-text-dim)]">
               {t("Adds stops, day-by-day activities, bookings, savings deposits and a packing list in one go.")}
             </p>
@@ -682,12 +692,12 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                   </option>
                 ))}
               </select>
-              <button type="submit" className="btn btn-primary">
+              <SubmitButton className="btn btn-primary">
                 {t("Import")}
-              </button>
+              </SubmitButton>
             </div>
-          </form>
-          <form action={importPlan} className="card space-y-2 p-3">
+          </ActionForm>
+          <ActionForm action={importPlan} className="card space-y-2 p-3">
             <textarea
               name="json"
               rows={4}
@@ -695,10 +705,10 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
               placeholder={t("…or paste a plan as JSON")}
               aria-label={t("Plan as JSON")}
             />
-            <button type="submit" className="btn w-full">
+            <SubmitButton className="btn w-full">
               {t("Import pasted plan")}
-            </button>
-          </form>
+            </SubmitButton>
+          </ActionForm>
         </div>
       </details>
 
@@ -721,9 +731,9 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
           />
           <form action={deleteTrip}>
             <input type="hidden" name="id" value={trip.id} />
-            <button type="submit" className="btn w-full text-[var(--color-danger)]">
+            <SubmitButton className="btn w-full text-[var(--color-danger)]" pendingLabel={t("Deleting…")}>
               {t("Delete trip")}
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </details>

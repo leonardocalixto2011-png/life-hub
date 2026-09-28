@@ -7,7 +7,7 @@ import { listShifts, planHref, planItemsBetween } from "@/lib/plans";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { getLang, getT } from "@/lib/i18n-server";
-import { fmt, fmtDay, fmtTime } from "@/lib/i18n";
+import { fmt, fmtTime } from "@/lib/i18n";
 import { countdownLabel, eventTimeRange, money } from "@/lib/format";
 import { TaskListCard } from "@/components/TaskListCard";
 import { VentureChip } from "@/components/VentureChip";

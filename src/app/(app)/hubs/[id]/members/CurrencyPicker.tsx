@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { CURRENCIES } from "@/lib/locales";
 import { setHubCurrency } from "@/app/(app)/hubs/actions";
+import { useT } from "@/components/I18nProvider";
 
 /**
  * Hub-wide, owner-only. Every total in the app is a sum across rows, so a
@@ -13,6 +14,7 @@ import { setHubCurrency } from "@/app/(app)/hubs/actions";
  */
 export function CurrencyPicker({ hubId, current }: { hubId: string; current: string }) {
   const router = useRouter();
+  const t = useT();
   const [pending, start] = useTransition();
   const [value, setValue] = useState(current);
   const [err, setErr] = useState<string | null>(null);
@@ -28,7 +30,7 @@ export function CurrencyPicker({ hubId, current }: { hubId: string; current: str
         router.refresh();
       } catch (e) {
         setValue(previous);
-        setErr(e instanceof Error ? e.message : "Could not change the currency.");
+        setErr(e instanceof Error ? t(e.message) : t("Could not change the currency."));
       }
     });
   }
@@ -36,7 +38,7 @@ export function CurrencyPicker({ hubId, current }: { hubId: string; current: str
   return (
     <div className="space-y-1.5">
       <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
-        Currency
+        {t("Currency")}
         <select
           value={value}
           disabled={pending}
@@ -51,9 +53,7 @@ export function CurrencyPicker({ hubId, current }: { hubId: string; current: str
         </select>
       </label>
       <p className="text-[0.65rem] text-[var(--color-text-dim)]">
-        Applies to everyone in this hub. It re-labels existing amounts — it does
-        not convert them, so only change this if the figures really are in the
-        new currency.
+        {t("Applies to everyone in this hub. It re-labels existing amounts — it does not convert them, so only change this if the figures really are in the new currency.")}
       </p>
       {err && <p className="text-[0.68rem] text-[var(--color-danger)]">{err}</p>}
     </div>

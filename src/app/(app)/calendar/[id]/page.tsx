@@ -8,6 +8,7 @@ import { getT } from "@/lib/i18n-server";
 import { toDateTimeInput } from "@/lib/format";
 import { EventForm } from "../EventForm";
 import { moveEventToSchedule } from "../actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -65,9 +66,9 @@ export default async function EventDetailPage({
             </option>
           ))}
         </select>
-        <button type="submit" className="btn w-full">
+        <SubmitButton className="btn w-full">
           🕐 {t("Move to Schedules")}
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );

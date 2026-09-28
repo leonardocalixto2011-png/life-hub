@@ -12,6 +12,7 @@ import { VentureChip } from "@/components/VentureChip";
 import { Avatar } from "@/components/Avatar";
 import { SubscriptionForm } from "./SubscriptionForm";
 import { setSubscriptionStatus } from "./actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -64,9 +65,9 @@ function Row({ s, t, lang, locale }: { s: SubscriptionWithRefs; t: T; lang: Lang
         <form action={setSubscriptionStatus} className="mt-1">
           <input type="hidden" name="id" value={s.id} />
           <input type="hidden" name="status" value={cancelled ? "ACTIVE" : "CANCELLED"} />
-          <button type="submit" className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline">
+          <SubmitButton className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline" pendingLabel="…">
             {cancelled ? t("reactivate") : t("mark cancelled")}
-          </button>
+          </SubmitButton>
         </form>
       </div>
     </div>
@@ -126,8 +127,8 @@ export default async function SubscriptionsPage() {
         </div>
       </div>
       {creep && (
-        <div className="card border-[#b45309] p-3 text-xs">
-          <span className="font-semibold" style={{ color: "#b45309" }}>
+        <div className="card border-[var(--color-warn)] p-3 text-xs">
+          <span className="font-semibold" style={{ color: "var(--color-warn)" }}>
             ↑ {t("{amount}/mo added in the last 60 days", { amount: money(creep.monthly, currency, locale) })}
           </span>{" "}
           <span className="text-[var(--color-text-dim)]">

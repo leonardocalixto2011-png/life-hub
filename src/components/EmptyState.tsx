@@ -1,4 +1,5 @@
 import type { Lang } from "@/lib/i18n";
+import { Tr } from "@/components/Tr";
 
 /**
  * Empty state that teaches: a headline in the app's own voice, then the
@@ -22,7 +23,7 @@ export function EmptyState({
 }) {
   return (
     <div className="card p-6 text-center">
-      <p className="display text-xl leading-tight">{headline ?? "Nothing here yet."}</p>
+      <p className="display text-xl leading-tight">{headline ?? <Tr k="Nothing here yet." />}</p>
       <p className="mx-auto mt-1.5 max-w-[34ch] text-sm text-[var(--color-text-dim)]">{title}</p>
       {examples.length > 0 && (
         <ul className="mx-auto mt-4 max-w-xs space-y-1.5 text-left">

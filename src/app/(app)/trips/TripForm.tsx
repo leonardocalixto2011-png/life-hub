@@ -6,6 +6,8 @@ import { createTrip, updateTrip } from "./actions";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
 import { useT } from "@/components/I18nProvider";
 import type { T } from "@/lib/i18n";
+import { SubmitButton } from "@/components/SubmitButton";
+import { ActionForm } from "@/components/ActionForm";
 
 type Existing = {
   id: string;
@@ -77,13 +79,13 @@ export function TripForm({ existing }: { existing?: Existing }) {
 
   if (existing) {
     return (
-      <form action={updateTrip} className="card space-y-3 p-4">
+      <ActionForm action={updateTrip} className="card space-y-3 p-4">
         <input type="hidden" name="id" value={existing.id} />
         <Fields existing={existing} t={t} />
-        <button type="submit" className="btn btn-primary w-full">
+        <SubmitButton className="btn btn-primary w-full">
           {t("Save trip")}
-        </button>
-      </form>
+        </SubmitButton>
+      </ActionForm>
     );
   }
 
@@ -101,11 +103,13 @@ export function TripForm({ existing }: { existing?: Existing }) {
     setError(null);
     startTransition(async () => {
       try {
-        await createTrip(fd); // redirects to the new trip on success
+        // Redirects to the new trip on success; returns { error } otherwise.
+        const res = await createTrip(fd);
+        if (res.error) setError(t(res.error));
       } catch (err) {
         // A redirect is thrown as a special error Next handles itself; only
         // surface real failures.
-        if (err instanceof Error && !err.message.includes("NEXT_REDIRECT")) setError(err.message);
+        if (err instanceof Error && !err.message.includes("NEXT_REDIRECT")) setError(t(err.message));
       }
     });
   }

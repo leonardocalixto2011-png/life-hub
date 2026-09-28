@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { withHub } from "@/lib/hub-context";
+import { assertVentureInHub } from "@/lib/membership";
 import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
@@ -60,6 +61,7 @@ export async function createEntry(fd: FormData) {
   const d = res.data;
   const amountCents = amountOf(d.amount);
   const share = await sharing(hub.id, user.id, d);
+  await assertVentureInHub(hub.id, d.ventureId);
 
   await withHub(user.id, (tx) =>
     tx.budgetEntry.create({
@@ -90,6 +92,7 @@ export async function updateEntry(fd: FormData) {
   const d = res.data;
   const amountCents = amountOf(d.amount);
   const share = await sharing(hub.id, user.id, d);
+  await assertVentureInHub(hub.id, d.ventureId);
 
   // updateMany so the hub is part of the match: an id from another hub the
   // user belongs to must not be editable from this one.

@@ -18,7 +18,7 @@ export function Countdown({
     : d < 0
       ? "var(--color-danger)"
       : d <= 3
-        ? "#b45309"
+        ? "var(--color-warn)"
         : "var(--color-text)";
   const t = (k: string) => translate(lang, k);
 

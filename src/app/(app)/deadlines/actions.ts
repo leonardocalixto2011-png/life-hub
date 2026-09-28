@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { withHub } from "@/lib/hub-context";
+import { assertVentureInHub } from "@/lib/membership";
 import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { revalidateContent } from "@/lib/revalidate";
@@ -46,6 +47,7 @@ function parse<T extends z.ZodTypeAny>(schema: T, fd: FormData): z.infer<T> {
 export async function createDeadline(fd: FormData) {
   const { user, hub } = await requireHub();
   const d = parse(createSchema, fd);
+  await assertVentureInHub(hub.id, d.ventureId);
   await withHub(user.id, (tx) =>
     tx.deadline.create({
       data: {
@@ -66,6 +68,7 @@ export async function createDeadline(fd: FormData) {
 export async function updateDeadline(fd: FormData) {
   const { user, hub } = await requireHub();
   const d = parse(updateSchema, fd);
+  await assertVentureInHub(hub.id, d.ventureId);
   await withHub(user.id, async (tx) => {
     const { count } = await tx.deadline.updateMany({
       where: scoped(d.id, hub.id, user.id),

@@ -12,6 +12,7 @@
   --primary-fg: #ffffff;
   --danger: #dc2626;
   --ok: #15803d;
+  --warn: #b45309;
   --radius: 12px;
 
   /* Semantic washes, mixed from the semantic colour into whatever `--surface`
@@ -46,6 +47,7 @@
     --primary-fg: #ffffff;
     --danger: #f87171;
     --ok: #4ade80;
+    --warn: #fbbf24;
   }
 }
 
@@ -66,6 +68,7 @@ html[data-theme="pink"] {
   --primary-fg: #ffffff;
   --danger: #dc2626;
   --ok: #15803d;
+  --warn: #b45309;
 }
 
 html[data-theme="forest"] {
@@ -79,6 +82,7 @@ html[data-theme="forest"] {
   --primary-fg: #ffffff;
   --danger: #dc2626;
   --ok: #15803d;
+  --warn: #b45309;
 }
 
 html[data-theme="ocean"] {
@@ -92,6 +96,7 @@ html[data-theme="ocean"] {
   --primary-fg: #ffffff;
   --danger: #dc2626;
   --ok: #15803d;
+  --warn: #b45309;
 }
 
 html[data-theme="sunset"] {
@@ -105,6 +110,7 @@ html[data-theme="sunset"] {
   --primary-fg: #ffffff;
   --danger: #dc2626;
   --ok: #15803d;
+  --warn: #b45309;
 }
 
 html[data-theme="mono"] {
@@ -118,6 +124,7 @@ html[data-theme="mono"] {
   --primary-fg: #ffffff;
   --danger: #dc2626;
   --ok: #15803d;
+  --warn: #b45309;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -132,6 +139,7 @@ html[data-theme="mono"] {
     --primary-fg: #ffffff;
     --danger: #f87171;
     --ok: #4ade80;
+    --warn: #fbbf24;
   }
 
   html[data-theme="forest"] {
@@ -145,6 +153,7 @@ html[data-theme="mono"] {
     --primary-fg: #06231a;
     --danger: #f87171;
     --ok: #4ade80;
+    --warn: #fbbf24;
   }
 
   html[data-theme="ocean"] {
@@ -158,6 +167,7 @@ html[data-theme="mono"] {
     --primary-fg: #08131b;
     --danger: #f87171;
     --ok: #4ade80;
+    --warn: #fbbf24;
   }
 
   html[data-theme="sunset"] {
@@ -171,6 +181,7 @@ html[data-theme="mono"] {
     --primary-fg: #1a1109;
     --danger: #f87171;
     --ok: #4ade80;
+    --warn: #fbbf24;
   }
 
   html[data-theme="mono"] {
@@ -184,6 +195,7 @@ html[data-theme="mono"] {
     --primary-fg: #171717;
     --danger: #f87171;
     --ok: #4ade80;
+    --warn: #fbbf24;
   }
 }
 
@@ -197,6 +209,7 @@ html[data-theme="mono"] {
   --color-primary: var(--primary);
   --color-primary-fg: var(--primary-fg);
   --color-danger: var(--danger);
+  --color-warn: var(--warn);
   --color-ok: var(--ok);
   --color-ok-wash: var(--ok-wash);
   --color-danger-wash: var(--danger-wash);
@@ -309,6 +322,8 @@ body {
   font-size: 16px;
   line-height: 1.45;
   overscroll-behavior-y: none;
+  /* A pasted URL or a long creditor name must wrap, not push the page sideways. */
+  overflow-wrap: anywhere;
 }
 
 input,
@@ -431,6 +446,7 @@ button {
      still feels like something happened: the circle fills, the check draws
      itself, and that is all. */
   .tick {
+    position: relative;
     border-color: var(--color-border);
     background: transparent;
     -webkit-tap-highlight-color: transparent;
@@ -441,13 +457,24 @@ button {
   .tick:hover {
     border-color: var(--color-ok);
   }
+  /* The circle is drawn ~22px; the finger needs ~44. An invisible halo keeps
+     the look and grows the target. Shared by every small toggle via .hit. */
+  .tick::before,
+  .hit::before {
+    content: "";
+    position: absolute;
+    inset: -12px;
+  }
+  .hit {
+    position: relative;
+  }
   .tick svg {
     display: block;
     overflow: visible;
   }
   .tick path {
     fill: none;
-    stroke: #fff;
+    stroke: var(--color-surface);
     stroke-width: 2.6;
     stroke-linecap: round;
     stroke-linejoin: round;
@@ -457,10 +484,11 @@ button {
   .tick[data-done] {
     background: var(--color-ok);
     border-color: var(--color-ok);
-    animation: tick-pop var(--base) var(--ease);
+    /* Routine rung of the celebration ladder: --fast (160ms), never more. */
+    animation: tick-pop var(--fast) var(--ease);
   }
   .tick[data-done] path {
-    animation: tick-draw var(--base) var(--ease) forwards;
+    animation: tick-draw var(--fast) var(--ease) forwards;
   }
   @keyframes tick-pop {
     0% {

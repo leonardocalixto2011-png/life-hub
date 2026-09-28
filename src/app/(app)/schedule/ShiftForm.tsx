@@ -56,7 +56,7 @@ export function ShiftForm({
         setOpen(false);
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : t("Could not save"));
+        setError(err instanceof Error ? t(err.message) : t("Could not save"));
       }
     });
   }

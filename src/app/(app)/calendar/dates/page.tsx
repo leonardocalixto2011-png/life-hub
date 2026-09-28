@@ -8,6 +8,7 @@ import { fmtDay } from "@/lib/i18n";
 import { countdownLabel } from "@/lib/format";
 import { SpecialDateForm } from "./SpecialDateForm";
 import { deleteSpecialDate } from "./actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -64,9 +65,9 @@ export default async function SpecialDatesPage() {
                 <span className="text-xs font-semibold">{countdownLabel(next, lang)}</span>
                 <form action={deleteSpecialDate}>
                   <input type="hidden" name="id" value={s.id} />
-                  <button className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline">
+                  <SubmitButton className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline" pendingLabel="…">
                     {t("delete")}
-                  </button>
+                  </SubmitButton>
                 </form>
               </div>
             </div>

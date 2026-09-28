@@ -5,6 +5,7 @@ import { addMonths, addWeeks } from "date-fns";
 import { z } from "zod";
 
 import { withHub } from "@/lib/hub-context";
+import { assertVentureInHub } from "@/lib/membership";
 import { prisma } from "@/lib/prisma";
 import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
@@ -65,13 +66,15 @@ function data(d: z.infer<typeof createSchema>) {
  * policy at all (see the RLS gotcha in CLAUDE.md).
  */
 async function assertOwns(tx: Parameters<Parameters<typeof withHub>[1]>[0], id: string, userId: string) {
-  const row = await tx.debt.findUnique({ where: { id }, select: { ownerId: true } });
+  const row = await tx.debt.findUnique({ where: { id }, select: { ownerId: true, hubId: true } });
   if (!row || row.ownerId !== userId) throw new Error("That debt isn't yours to change.");
+  return row;
 }
 
 export async function createDebt(fd: FormData) {
   const { user, hub } = await requireHub();
   const d = data(parse(createSchema, fd));
+  await assertVentureInHub(hub.id, d.ventureId);
   await withHub(user.id, (tx) =>
     tx.debt.create({ data: { ...d, hubId: hub.id, ownerId: user.id } }),
   );
@@ -82,7 +85,8 @@ export async function updateDebt(fd: FormData) {
   const { user } = await requireHub();
   const d = parse(updateSchema, fd);
   await withHub(user.id, async (tx) => {
-    await assertOwns(tx, d.id, user.id);
+    const { hubId } = await assertOwns(tx, d.id, user.id);
+    await assertVentureInHub(hubId, d.ventureId);
     // Editing confirms the owner, so a backfilled guess stops being flagged.
     await tx.debt.update({ where: { id: d.id }, data: { ...data(d), ownerBackfilled: false } });
   });

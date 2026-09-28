@@ -8,7 +8,7 @@ import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
 import { revalidateContent } from "@/lib/revalidate";
-import { assertActiveMember } from "@/lib/membership";
+import { assertActiveMember, assertVentureInHub } from "@/lib/membership";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -64,6 +64,7 @@ export async function createSubscription(fd: FormData) {
   const { user, hub } = await requireHub();
   const d = data(parse(createSchema, fd));
   await checkOwner(hub.id, d.ownerId);
+  await assertVentureInHub(hub.id, d.ventureId);
   await withHub(user.id, (tx) => tx.subscription.create({ data: { ...d, hubId: hub.id } }));
   revalidateContent();
 }
@@ -73,6 +74,7 @@ export async function updateSubscription(fd: FormData) {
   const d = parse(updateSchema, fd);
   const values = data(d);
   await checkOwner(hub.id, values.ownerId);
+  await assertVentureInHub(hub.id, values.ventureId);
   // Pinned to this hub in app code as well as by RLS.
   await withHub(user.id, async (tx) => {
     const { count } = await tx.subscription.updateMany({ where: { id: d.id, hubId: hub.id }, data: values });

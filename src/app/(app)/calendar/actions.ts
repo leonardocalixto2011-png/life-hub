@@ -9,7 +9,7 @@ import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput, fromDateTimeInput } from "@/lib/format";
 import { revalidateContent } from "@/lib/revalidate";
-import { assertActiveMember } from "@/lib/membership";
+import { assertActiveMember, assertVentureInHub } from "@/lib/membership";
 import { visibleTo } from "@/lib/visibility";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
@@ -85,6 +85,7 @@ function occurrenceOffsets(anchorStart: Date, repeatDays: number[], until: Date)
 export async function createEvent(fd: FormData) {
   const { user, hub } = await requireHub();
   const d = parse(createSchema, fd);
+  await assertVentureInHub(hub.id, d.ventureId);
   const attendeeIds = await readAttendees(fd, hub.id);
   const base = buildData(d, attendeeIds);
 
@@ -127,6 +128,7 @@ export async function createEvent(fd: FormData) {
 export async function updateEvent(fd: FormData) {
   const { user, hub } = await requireHub();
   const d = parse(updateSchema, fd);
+  await assertVentureInHub(hub.id, d.ventureId);
   const attendeeIds = await readAttendees(fd, hub.id);
   const data = buildData(d, attendeeIds);
   await withHub(user.id, async (tx) => {

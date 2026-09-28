@@ -15,6 +15,7 @@ import {
   removeMember,
   setShowOccasions,
 } from "../../actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -117,20 +118,20 @@ export default async function HubMembersPage({
                 {t("Valentine's Day, Mother's Day, Christmas, the seasons… with a week's notice.")}
               </div>
             </div>
-            <button type="submit" className={`btn shrink-0 px-3 py-1.5 text-xs ${hub.showOccasions ? "btn-primary" : ""}`}>
+            <SubmitButton className={`btn shrink-0 px-3 py-1.5 text-xs ${hub.showOccasions ? "btn-primary" : ""}`} pendingLabel="…">
               {hub.showOccasions ? t("On") : t("Off")}
-            </button>
+            </SubmitButton>
           </form>
         </div>
       )}
 
       {isOwner && known.length > 0 && (
         <form action={addKnownMember.bind(null, hubId)} className="card space-y-2 p-4">
-          <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+          <label htmlFor="add-known-member" className="block text-xs font-semibold text-[var(--color-text-dim)]">
             {t("Add someone already on Life Hub")}
           </label>
           <div className="flex gap-2">
-            <select name="userId" required className="field flex-1" defaultValue="">
+            <select id="add-known-member" name="userId" required className="field flex-1" defaultValue="">
               <option value="" disabled>
                 {t("Pick a person…")}
               </option>
@@ -140,9 +141,9 @@ export default async function HubMembersPage({
                 </option>
               ))}
             </select>
-            <button type="submit" className="btn btn-primary shrink-0">
+            <SubmitButton className="btn btn-primary shrink-0" pendingLabel="…">
               {t("Add")}
-            </button>
+            </SubmitButton>
           </div>
           <p className="text-[0.68rem] text-[var(--color-text-dim)]">
             {t("They're added right away and get a notification.")}
@@ -152,14 +153,21 @@ export default async function HubMembersPage({
 
       {isOwner && (
         <form action={inviteMember.bind(null, hubId)} className="card space-y-2 p-4">
-          <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+          <label htmlFor="invite-email" className="block text-xs font-semibold text-[var(--color-text-dim)]">
             {t("Invite someone new by email")}
           </label>
           <div className="flex gap-2">
-            <input name="email" type="email" required placeholder="someone@example.com" className="input flex-1" />
-            <button type="submit" className="btn btn-primary shrink-0">
+            <input
+              id="invite-email"
+              name="email"
+              type="email"
+              required
+              placeholder="someone@example.com"
+              className="input flex-1"
+            />
+            <SubmitButton className="btn btn-primary shrink-0" pendingLabel="…">
               {t("Invite")}
-            </button>
+            </SubmitButton>
           </div>
           <p className="text-[0.68rem] text-[var(--color-text-dim)]">
             {t("They'll get an email to sign in and accept — works even if they've never used Life Hub before.")}
@@ -182,9 +190,9 @@ export default async function HubMembersPage({
             </div>
             {isOwner && m.user.id !== user.id && (
               <form action={removeMember.bind(null, hubId, m.user.id)}>
-                <button type="submit" className="shrink-0 text-[0.68rem] font-semibold text-[var(--color-text-dim)] underline">
+                <SubmitButton className="shrink-0 text-[0.68rem] font-semibold text-[var(--color-text-dim)] underline" pendingLabel="…">
                   {t("remove")}
-                </button>
+                </SubmitButton>
               </form>
             )}
           </div>
@@ -193,9 +201,9 @@ export default async function HubMembersPage({
 
       {!isOwner && (
         <form action={leaveHub.bind(null, hubId)}>
-          <button type="submit" className="text-xs font-semibold text-[var(--color-danger)] underline">
+          <SubmitButton className="text-xs font-semibold text-[var(--color-danger)] underline" pendingLabel="…">
             {t("Leave this hub")}
-          </button>
+          </SubmitButton>
         </form>
       )}
     </div>

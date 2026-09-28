@@ -1,6 +1,7 @@
 import type { HubTx } from "@/lib/hub-context";
 import { fromDateInput, fromDateTimeInput } from "@/lib/format";
 import type { Draft } from "@/lib/parse";
+import { assertVentureInHub } from "@/lib/membership";
 
 function toCents(s: string | null): number | null {
   if (!s) return null;
@@ -28,6 +29,17 @@ export async function commitDraftsCore(
   drafts: Draft[],
 ): Promise<CommitResult> {
   const created: string[] = [];
+
+  // A draft's ventureId comes from the client (quick-add, review inbox) or a
+  // classifier; either way it must name a venture of *this* hub before
+  // anything is written.
+  for (const d of drafts) {
+    try {
+      await assertVentureInHub(hubId, d.ventureId);
+    } catch (e) {
+      return { ok: false, created, error: e instanceof Error ? e.message : "Invalid draft data." };
+    }
+  }
 
   for (const d of drafts) {
     if (d.kind === "needs_reply") {

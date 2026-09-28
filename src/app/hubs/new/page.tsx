@@ -4,6 +4,7 @@ import { requireUser, listMyHubs } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { createHub } from "@/app/(app)/hubs/actions";
 import { getT } from "@/lib/i18n-server";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -35,10 +36,11 @@ export default async function NewHubPage() {
 
       <form action={createHub} className="card space-y-3 p-4">
         <div>
-          <label className="mb-1 block text-xs font-semibold text-[var(--color-text-dim)]">
+          <label htmlFor="hub-name" className="mb-1 block text-xs font-semibold text-[var(--color-text-dim)]">
             {t("Hub name")}
           </label>
           <input
+            id="hub-name"
             name="name"
             required
             maxLength={80}
@@ -47,9 +49,9 @@ export default async function NewHubPage() {
             autoFocus
           />
         </div>
-        <button type="submit" className="btn btn-primary w-full">
+        <SubmitButton className="btn btn-primary w-full">
           {t("Create hub")}
-        </button>
+        </SubmitButton>
       </form>
 
       {hubs.length > 0 && (
