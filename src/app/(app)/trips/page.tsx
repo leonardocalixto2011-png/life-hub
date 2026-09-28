@@ -29,12 +29,15 @@ export default async function TripsPage() {
     `${fmtShort(start, lang)} – ${fmt(end, lang === "fr" ? "d MMM yyyy" : "MMM d, yyyy", lang)}`;
 
   const Card = ({ trip }: { trip: (typeof trips)[number] }) => {
-    // Stops aren't to-dos, and savings deposits aren't spending.
-    const checkable = trip.items.filter((i) => i.kind !== "STOP");
+    // Stops, budget lines and tips aren't to-dos, and savings deposits aren't
+    // spending. A budget breakdown, when there is one, is the planned total
+    // (same rule as the trip page).
+    const checkable = trip.items.filter((i) => i.kind !== "STOP" && i.kind !== "BUDGET" && i.kind !== "TIP");
     const done = checkable.filter((i) => i.done).length;
-    const planned = trip.items
-      .filter((i) => i.kind !== "SAVE" && i.kind !== "STOP")
-      .reduce((n, i) => n + (i.costCents ?? 0), 0);
+    const lines = trip.items.filter((i) => i.kind === "BUDGET");
+    const planned = (
+      lines.length > 0 ? lines : trip.items.filter((i) => i.kind !== "SAVE" && i.kind !== "STOP" && i.kind !== "TIP")
+    ).reduce((n, i) => n + (i.costCents ?? 0), 0);
     const ongoing = trip.startDate <= today && trip.endDate >= today;
     return (
       <Link href={`/trips/${trip.id}`} className="card block p-3">

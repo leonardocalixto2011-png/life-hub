@@ -1129,6 +1129,17 @@ upcoming event including holidays.
   Thailand plan lives in `src/lib/trip-plans/thailand-2027.ts`, shared with the
   seed. `planRows` staggers `createdAt` by 1ms because the page orders a day's
   items by it and a bulk insert would otherwise shuffle them.
+- **Visual pass (2026-09-28)** (migration `20260928030000_trip_budget_tips`):
+  `TripItemKind` gained `BUDGET` (an estimate line; when a trip has any, their
+  sum *is* "planned", on both the trip page and `/trips`) and `TIP` (a "good to
+  know" card, title + `note`). The page now opens with a hero in the stop
+  colours plus a route line, four progress rings, a "where the money goes"
+  stacked bar, a deposit table, and shows `note` under every item.
+  **Importing is now merge-only** (`missingPlanRows`, matched on kind + title,
+  case-insensitive): re-importing a template adds only what's new and fills
+  notes on rows that have none, so an updated template can be re-applied to a
+  live trip without duplicates or losing ticks. Keep template titles stable,
+  since the title is the match key.
 
 ### Ordered queue (as of 2026-09-07)
 

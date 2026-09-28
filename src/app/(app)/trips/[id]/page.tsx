@@ -13,19 +13,15 @@ import { centsToInput } from "@/lib/money";
 import { TRIP_TEMPLATES } from "@/lib/trip-plan";
 import { Figure } from "@/components/Figure";
 import { TripForm } from "../TripForm";
-import {
-  addTripItem,
-  addTripSavings,
-  deleteTrip,
-  deleteTripItem,
-  importTripPlan,
-  toggleTripItem,
-} from "../actions";
+import { addTripItem, addTripSavings, deleteTrip, deleteTripItem, importTripPlan, toggleTripItem } from "../actions";
 
 export const dynamic = "force-dynamic";
 
 /** Stop colours, in itinerary order. Travel days (no stop) are neutral. */
 const STOP_COLORS = ["#D9821A", "#0E7C7B", "#C0392B", "#6D4FB3", "#2F7D4F", "#2563EB"];
+
+/** Budget breakdown segments: distinct, and readable on light and dark. */
+const MONEY_COLORS = ["#7C8B8C", "#0E7C7B", "#D9821A", "#C0392B", "#4B5B5C", "#6FB3AE", "#D8B07A", "#6D4FB3"];
 
 const CHECKLISTS = [
   { kind: "BOOK", title: "To book", hint: "Flights, hotel, car, tickets" },
@@ -48,6 +44,7 @@ type Item = {
   endDate: Date | null;
   done: boolean;
   assignedToId: string | null;
+  note: string | null;
 };
 
 const dayKey = (d: Date) => format(d, "yyyy-MM-dd");
@@ -65,7 +62,9 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
           hubId: hub.id,
           OR: [{ visibility: "SHARED" }, { createdById: user.id }],
         },
-        include: { items: { orderBy: [{ date: "asc" }, { createdAt: "asc" }] } },
+        include: {
+          items: { orderBy: [{ date: "asc" }, { createdAt: "asc" }] },
+        },
       }),
     ),
     hubChrome(user.id, hub.id),
@@ -75,6 +74,11 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
   const currency = hub.currency;
   const locale = user.locale ?? "en-CA";
   const cash = (c: number) => money(c, currency, locale);
+  const shortMoney = (c: number) =>
+    new Intl.NumberFormat(locale, {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(c / 100);
   const today = startOfDay(new Date());
   const nights = differenceInCalendarDays(trip.endDate, trip.startDate);
   const status =
@@ -89,22 +93,36 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
   const stops = items.filter((i) => i.kind === "STOP" && i.date && i.endDate);
   const activities = items.filter((i) => i.kind === "ACTIVITY" && i.date);
   const deposits = items.filter((i) => i.kind === "SAVE");
+  const budgetLines = items.filter((i) => i.kind === "BUDGET" && i.costCents);
+  const tips = items.filter((i) => i.kind === "TIP");
+  const tasks = items.filter((i) => i.kind === "BOOK" || i.kind === "TODO");
+  const packing = items.filter((i) => i.kind === "PACK");
   const dated = items.filter((i) => (i.kind === "BOOK" || i.kind === "TODO" || i.kind === "SAVE") && i.date);
 
-  // Money: SAVE rows are money set aside, never spending, so they stay out of "planned".
-  const planned = items
-    .filter((i) => i.kind !== "SAVE" && i.kind !== "STOP")
-    .reduce((n, i) => n + (i.costCents ?? 0), 0);
+  // Money. With a budget breakdown, "planned" is its total; without one, the
+  // sum of what the checklists cost. SAVE rows are money set aside, never
+  // spending, so they stay out either way.
+  const planned =
+    budgetLines.length > 0
+      ? budgetLines.reduce((n, i) => n + (i.costCents ?? 0), 0)
+      : items
+          .filter((i) => i.kind !== "SAVE" && i.kind !== "STOP" && i.kind !== "TIP")
+          .reduce((n, i) => n + (i.costCents ?? 0), 0);
+  const booked = tasks.filter((i) => i.done).reduce((n, i) => n + (i.costCents ?? 0), 0);
   const saved = trip.savedCents + deposits.filter((d) => d.done).reduce((n, d) => n + (d.costCents ?? 0), 0);
   const savedPct =
     trip.budgetCents && trip.budgetCents > 0 ? Math.min(100, Math.round((saved / trip.budgetCents) * 100)) : null;
   const next = dated.find((i) => !i.done);
+  const daysToGo = differenceInCalendarDays(startOfDay(trip.startDate), today);
+  const heads = Math.max(1, members.length);
 
   // Day strip + day by day.
   const colorOf = new Map(stops.map((s, n) => [s.id, STOP_COLORS[n % STOP_COLORS.length]]));
-  const days = eachDayOfInterval({ start: startOfDay(trip.startDate), end: startOfDay(trip.endDate) });
-  const stopOn = (d: Date) =>
-    stops.find((s) => startOfDay(s.date!) <= d && d < startOfDay(s.endDate!)) ?? null;
+  const days = eachDayOfInterval({
+    start: startOfDay(trip.startDate),
+    end: startOfDay(trip.endDate),
+  });
+  const stopOn = (d: Date) => stops.find((s) => startOfDay(s.date!) <= d && d < startOfDay(s.endDate!)) ?? null;
   const activitiesOn = new Map<string, Item[]>();
   for (const a of activities) {
     const k = dayKey(a.date!);
@@ -117,6 +135,16 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
     const k = format(i.date!, "yyyy-MM");
     months.set(k, [...(months.get(k) ?? []), i]);
   }
+
+  const routeColors = stops.map((s) => colorOf.get(s.id)!);
+  const heroBg =
+    routeColors.length > 1
+      ? `linear-gradient(120deg, ${routeColors.join(", ")})`
+      : (routeColors[0] ?? "var(--color-primary)");
+  const count = (list: Item[]) => ({
+    done: list.filter((i) => i.done).length,
+    total: list.length,
+  });
 
   const memberName = new Map(members.map((m) => [m.id, m]));
   const add = addTripItem.bind(null, trip.id);
@@ -133,7 +161,15 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
           <button
             aria-label={i.done ? t("Mark not done") : t("Mark done")}
             className="grid h-5 w-5 place-items-center rounded border border-[var(--color-border)] text-xs"
-            style={i.done ? { background: "var(--color-ok)", color: "#fff", borderColor: "var(--color-ok)" } : undefined}
+            style={
+              i.done
+                ? {
+                    background: "var(--color-ok)",
+                    color: "#fff",
+                    borderColor: "var(--color-ok)",
+                  }
+                : undefined
+            }
           >
             {i.done ? "✓" : ""}
           </button>
@@ -141,10 +177,18 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         <div className="min-w-0 flex-1">
           <span
             className="text-sm"
-            style={i.done ? { textDecoration: "line-through", color: "var(--color-text-dim)" } : undefined}
+            style={
+              i.done
+                ? {
+                    textDecoration: "line-through",
+                    color: "var(--color-text-dim)",
+                  }
+                : undefined
+            }
           >
             {i.title}
           </span>
+          {i.note && <p className="mt-0.5 text-[0.7rem] leading-snug text-[var(--color-text-dim)]">{i.note}</p>}
           {(tag || (showDate && i.date)) && (
             <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[0.66rem] text-[var(--color-text-dim)]">
               {tag && (
@@ -183,67 +227,104 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         ← {t("Trips")}
       </Link>
 
-      <div>
-        <h1 className="display text-2xl">{trip.title}</h1>
-        <p className="text-xs text-[var(--color-text-dim)]">
-          {trip.destination ? `${trip.destination} · ` : ""}
-          {fmt(trip.startDate, dayFmt, lang)} – {fmt(trip.endDate, `${dayFmt} yyyy`, lang)}
-          {nights > 0 ? ` · ${nights === 1 ? t("1 night") : t("{n} nights", { n: nights })}` : ""}
-        </p>
-        <span className="chip mt-2">{status}</span>
+      {/* ---- hero: where, when, and the route ---------------------------- */}
+      <div className="card overflow-hidden p-0">
+        <div className="p-4 text-white" style={{ background: heroBg }}>
+          <div className="text-[0.62rem] font-bold uppercase tracking-[0.14em] opacity-90">
+            {fmt(trip.startDate, dayFmt, lang)} – {fmt(trip.endDate, `${dayFmt} yyyy`, lang)}
+            {nights > 0 ? ` · ${nights === 1 ? t("1 night") : t("{n} nights", { n: nights })}` : ""}
+          </div>
+          <h1 className="display mt-1 text-[1.7rem] leading-tight">{trip.title}</h1>
+          {trip.destination && <p className="text-sm opacity-90">{trip.destination}</p>}
+          <div className="mt-3 flex items-end justify-between gap-3">
+            {daysToGo > 0 ? (
+              <div>
+                <div className="text-4xl font-bold leading-none tabular-nums tracking-[-0.03em]">{daysToGo}</div>
+                <div className="text-[0.7rem] font-semibold uppercase tracking-wide opacity-90">
+                  {daysToGo === 1 ? t("day to go") : t("days to go")}
+                </div>
+              </div>
+            ) : (
+              <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold">{status}</span>
+            )}
+            {savedPct != null && (
+              <div className="text-right">
+                <div className="text-2xl font-bold leading-none tabular-nums">{savedPct}%</div>
+                <div className="text-[0.7rem] font-semibold uppercase tracking-wide opacity-90">{t("saved")}</div>
+              </div>
+            )}
+          </div>
+        </div>
+        {stops.length > 0 && (
+          <ol className="flex items-start overflow-x-auto px-3 py-3" aria-label={t("Route")}>
+            <RouteStop label="✈" color="var(--color-text-dim)" name={t("Home")} />
+            {stops.map((s) => {
+              const n = differenceInCalendarDays(s.endDate!, s.date!);
+              return (
+                <RouteStop
+                  key={s.id}
+                  label={String(n)}
+                  color={colorOf.get(s.id)!}
+                  name={s.title}
+                  sub={n === 1 ? t("1 night") : t("{n} nights", { n })}
+                />
+              );
+            })}
+            <RouteStop label="✈" color="var(--color-text-dim)" name={t("Home")} last />
+          </ol>
+        )}
       </div>
 
-      {/* ---- the four facts ---------------------------------------------- */}
-      <div className="card grid grid-cols-2 divide-[var(--color-border)] p-0 [&>*]:border-[var(--color-border)]">
-        <div className="border-b border-r p-3">
-          <Fact label={t("Budget")}>
-            {trip.budgetCents != null ? cash(trip.budgetCents) : "—"}
-          </Fact>
-          <p className="text-[0.66rem] text-[var(--color-text-dim)]">
-            {t("planned")} {cash(planned)}
-          </p>
-        </div>
-        <div className="border-b p-3">
-          <Fact label={t("Saved")}>{cash(saved)}</Fact>
-          {savedPct != null && (
-            <div
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={savedPct}
-              aria-label={t("Saved for this trip")}
-              className="mt-1 h-2 overflow-hidden rounded-full bg-[var(--color-surface-2)]"
-            >
-              <div className="h-full rounded-full bg-[var(--color-ok)]" style={{ width: `${savedPct}%` }} />
+      {/* ---- progress rings ---------------------------------------------- */}
+      <div className="grid grid-cols-4 gap-2">
+        <Ring label={t("Activities")} {...count(activities)} color={routeColors[0] ?? "var(--color-primary)"} />
+        <Ring label={t("To book")} {...count(tasks)} color="#D9821A" />
+        <Ring
+          label={t("Saved")}
+          done={savedPct ?? 0}
+          total={100}
+          color="var(--color-ok)"
+          text={savedPct != null ? `${savedPct}%` : "—"}
+        />
+        <Ring label={t("Packed")} {...count(packing)} color={routeColors[1] ?? "var(--color-primary)"} />
+      </div>
+
+      {next && (
+        <div className="card flex items-center gap-3 border-l-4 p-3" style={{ borderLeftColor: TAG[next.kind]?.color }}>
+          <div className="min-w-0 flex-1">
+            <div className="text-[0.6rem] font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+              {t("Next up")}
+            </div>
+            <div className="text-sm font-semibold leading-snug">{next.title}</div>
+          </div>
+          {next.date && (
+            <div className="shrink-0 text-right">
+              <div className="text-sm font-bold">{countdownLabel(next.date, lang)}</div>
+              <div className="text-[0.66rem] text-[var(--color-text-dim)]">{fmt(next.date, dayFmt, lang)}</div>
             </div>
           )}
         </div>
-        <div className="border-r p-3">
-          <Fact label={t("Leaving")}>{countdownLabel(trip.startDate, lang)}</Fact>
-          <p className="text-[0.66rem] text-[var(--color-text-dim)]">{fmt(trip.startDate, dayFmt, lang)}</p>
-        </div>
-        <div className="p-3">
-          <Fact label={t("Next up")}>
-            <span className="text-sm leading-snug">{next ? next.title : t("All caught up")}</span>
-          </Fact>
-          {next?.date && (
-            <p className="text-[0.66rem] text-[var(--color-text-dim)]">{fmt(next.date, dayFmt, lang)}</p>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* ---- day strip --------------------------------------------------- */}
       {stops.length > 0 && days.length <= 60 && (
         <section>
           <h2 className={sectionTitle}>{t("At a glance")}</h2>
-          <div className="grid gap-[3px]" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
+          <div
+            className="grid gap-[3px]"
+            style={{
+              gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))`,
+            }}
+          >
             {days.map((d) => {
               const s = stopOn(d);
               return (
                 <div key={dayKey(d)} className="grid gap-1 text-center">
                   <span
                     className="block h-8 rounded"
-                    style={{ background: s ? colorOf.get(s.id) : "var(--color-surface-2)" }}
+                    style={{
+                      background: s ? colorOf.get(s.id) : "var(--color-surface-2)",
+                    }}
                     title={s?.title ?? t("Travel")}
                   />
                   <span className="text-[0.55rem] leading-tight text-[var(--color-text-dim)]">{format(d, "d")}</span>
@@ -273,26 +354,39 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
             {activities.length > 0 ? ` · ${activities.filter((a) => a.done).length}/${activities.length}` : ""}
           </h2>
           <div className="space-y-2">
-            {days.map((d) => {
+            {days.map((d, n) => {
               const s = stopOn(d);
               const list = activitiesOn.get(dayKey(d)) ?? [];
+              const allDone = list.length > 0 && list.every((a) => a.done);
               return (
                 <div
                   key={dayKey(d)}
                   className="card overflow-hidden border-l-4 p-0"
-                  style={{ borderLeftColor: s ? colorOf.get(s.id) : "var(--color-border)" }}
+                  style={{
+                    borderLeftColor: s ? colorOf.get(s.id) : "var(--color-border)",
+                  }}
                 >
                   <div className="flex items-baseline justify-between gap-2 px-3 pt-2">
-                    <span className="text-sm font-semibold">{fmt(d, dayFmt, lang)}</span>
+                    <span className="text-sm font-semibold">
+                      <span className="mr-1.5 text-[0.62rem] font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+                        {t("Day {n}", { n: n + 1 })}
+                      </span>
+                      {fmt(d, dayFmt, lang)}
+                      {allDone && <span className="ml-1.5 text-[var(--color-ok)]">✓</span>}
+                    </span>
                     <span
                       className="text-[0.62rem] font-bold uppercase tracking-wide"
-                      style={{ color: s ? colorOf.get(s.id) : "var(--color-text-dim)" }}
+                      style={{
+                        color: s ? colorOf.get(s.id) : "var(--color-text-dim)",
+                      }}
                     >
                       {s?.title ?? t("Travel")}
                     </span>
                   </div>
                   {list.length === 0 ? (
-                    <p className="px-3 pb-2 pt-1 text-[0.72rem] text-[var(--color-text-dim)]">{t("Nothing planned yet")}</p>
+                    <p className="px-3 pb-2 pt-1 text-[0.72rem] text-[var(--color-text-dim)]">
+                      {t("Nothing planned yet")}
+                    </p>
                   ) : (
                     <div className="divide-y divide-[var(--color-border)]">
                       {list.map((a) => (
@@ -333,7 +427,39 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         <section>
           <h2 className={sectionTitle}>{t("Savings plan")}</h2>
           <div className="card space-y-3 p-3">
-            {deposits.length > 0 && <SavingsChart deposits={deposits} dated={dated} t={t} lang={lang} />}
+            {deposits.length > 0 && (
+              <SavingsChart deposits={deposits} dated={dated} t={t} lang={lang} short={(c) => shortMoney(c)} />
+            )}
+            {deposits.length > 0 && (
+              <table className="w-full text-[0.78rem] tabular-nums">
+                <thead>
+                  <tr className="text-left text-[0.6rem] uppercase tracking-wide text-[var(--color-text-dim)]">
+                    <th className="pb-1 font-bold">{t("Month")}</th>
+                    {heads > 1 && <th className="pb-1 text-right font-bold">{t("Each")}</th>}
+                    <th className="pb-1 text-right font-bold">{t("Together")}</th>
+                    <th className="pb-1 text-right font-bold">{t("Total")}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {deposits.map((d, n) => {
+                    const total = deposits.slice(0, n + 1).reduce((x, i) => x + (i.costCents ?? 0), 0);
+                    return (
+                      <tr key={d.id} style={d.done ? { color: "var(--color-ok)" } : undefined}>
+                        <td className="py-1 capitalize">
+                          {d.done ? "✓ " : ""}
+                          {d.date ? fmt(d.date, "MMM yyyy", lang) : "—"}
+                        </td>
+                        {heads > 1 && (
+                          <td className="py-1 text-right">{cash(Math.round((d.costCents ?? 0) / heads))}</td>
+                        )}
+                        <td className="py-1 text-right font-semibold">{cash(d.costCents ?? 0)}</td>
+                        <td className="py-1 text-right">{cash(total)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
             <form action={save} className="grid grid-cols-[1fr_auto] gap-2">
               <input
                 name="amount"
@@ -356,30 +482,73 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         </section>
       )}
 
-      {/* ---- budget ------------------------------------------------------ */}
-      <div className="card grid grid-cols-3 divide-x divide-[var(--color-border)] p-0">
-        <div className="p-3">
-          {trip.budgetCents != null ? (
-            <Figure cents={trip.budgetCents} currency={currency} locale={locale} label={t("budget")} />
-          ) : (
-            <div className="text-[0.68rem] text-[var(--color-text-dim)]">{t("No budget set")}</div>
+      {/* ---- where the money goes ---------------------------------------- */}
+      <section>
+        <h2 className={sectionTitle}>{t("Where the money goes")}</h2>
+        <div className="card space-y-3 p-3">
+          {budgetLines.length > 0 && (
+            <>
+              <div className="flex h-4 overflow-hidden rounded-full" role="img" aria-label={t("Where the money goes")}>
+                {budgetLines.map((b, n) => (
+                  <span
+                    key={b.id}
+                    title={`${b.title} · ${cash(b.costCents!)}`}
+                    style={{
+                      width: `${(b.costCents! / planned) * 100}%`,
+                      background: MONEY_COLORS[n % MONEY_COLORS.length],
+                    }}
+                  />
+                ))}
+              </div>
+              <ul className="space-y-1.5">
+                {budgetLines.map((b, n) => (
+                  <li key={b.id} className="flex items-center gap-2 text-[0.8rem]">
+                    <i
+                      className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+                      style={{
+                        background: MONEY_COLORS[n % MONEY_COLORS.length],
+                      }}
+                    />
+                    <span className="min-w-0 flex-1">{b.title}</span>
+                    <span className="tabular-nums text-[var(--color-text-dim)]">
+                      {Math.round((b.costCents! / planned) * 100)}%
+                    </span>
+                    <span className="w-20 text-right font-semibold tabular-nums">{cash(b.costCents!)}</span>
+                    <form action={deleteTripItem}>
+                      <input type="hidden" name="id" value={b.id} />
+                      <button aria-label={t("Delete")} className="text-xs text-[var(--color-text-dim)]">
+                        ✕
+                      </button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          <div className="grid grid-cols-3 divide-x divide-[var(--color-border)] border-t border-[var(--color-border)] pt-3">
+            <div className="pr-2">
+              {trip.budgetCents != null ? (
+                <Figure cents={trip.budgetCents} currency={currency} locale={locale} label={t("budget")} />
+              ) : (
+                <div className="text-[0.68rem] text-[var(--color-text-dim)]">{t("No budget set")}</div>
+              )}
+            </div>
+            <div className="px-2">
+              <Figure cents={planned} currency={currency} locale={locale} label={t("planned")} />
+            </div>
+            <div className="pl-2">
+              <Figure cents={booked} currency={currency} locale={locale} label={t("booked")} tone="ok" />
+            </div>
+          </div>
+          {trip.budgetCents != null && planned > trip.budgetCents && (
+            <p className="text-[0.7rem] font-semibold text-[var(--color-danger)]">
+              {t("Planned is {n} over budget.", {
+                n: cash(planned - trip.budgetCents),
+              })}
+            </p>
           )}
         </div>
-        <div className="p-3">
-          <Figure cents={planned} currency={currency} locale={locale} label={t("planned")} />
-        </div>
-        <div className="p-3">
-          {trip.budgetCents != null && (
-            <Figure
-              cents={trip.budgetCents - planned}
-              currency={currency}
-              locale={locale}
-              label={t("left")}
-              tone={trip.budgetCents - planned < 0 ? "danger" : "ok"}
-            />
-          )}
-        </div>
-      </div>
+      </section>
 
       {/* ---- undated checklists ------------------------------------------ */}
       {CHECKLISTS.map((sec) => {
@@ -404,6 +573,37 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         );
       })}
 
+      {/* ---- good to know ----------------------------------------------- */}
+      {tips.length > 0 && (
+        <section>
+          <h2 className={sectionTitle}>{t("Good to know")}</h2>
+          <div className="space-y-2">
+            {tips.map((tip, n) => (
+              <div
+                key={tip.id}
+                className="card border-t-4 p-3"
+                style={{
+                  borderTopColor: routeColors[n % Math.max(1, routeColors.length)] ?? "var(--color-primary)",
+                }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="text-sm font-semibold">{tip.title}</h3>
+                  <form action={deleteTripItem}>
+                    <input type="hidden" name="id" value={tip.id} />
+                    <button aria-label={t("Delete")} className="text-xs text-[var(--color-text-dim)]">
+                      ✕
+                    </button>
+                  </form>
+                </div>
+                {tip.note && (
+                  <p className="mt-1 text-[0.8rem] leading-relaxed text-[var(--color-text-dim)]">{tip.note}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* ---- add anything ------------------------------------------------ */}
       <form action={add} className="card space-y-2 p-3">
         <h2 className={sectionTitle}>{t("Add to the plan")}</h2>
@@ -415,6 +615,8 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
             <option value="SAVE">{t("Savings deposit")}</option>
             <option value="PACK">{t("To pack")}</option>
             <option value="STOP">{t("Where we sleep")}</option>
+            <option value="BUDGET">{t("Budget line")}</option>
+            <option value="TIP">{t("Good to know")}</option>
           </select>
           <input name="title" required className="field" placeholder={t("Snorkel trip, hotel, sunscreen…")} />
         </div>
@@ -428,6 +630,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
             <input name="endDate" type="date" className="field" />
           </label>
         </div>
+        <input name="note" className="field" placeholder={t("Details (optional)")} aria-label={t("Details")} />
         <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
           <input
             name="cost"
@@ -521,11 +724,80 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
   );
 }
 
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+function RouteStop({
+  label,
+  color,
+  name,
+  sub,
+  last,
+}: {
+  label: string;
+  color: string;
+  name: string;
+  sub?: string;
+  last?: boolean;
+}) {
   return (
-    <div>
-      <div className="text-[0.6rem] uppercase tracking-wide text-[var(--color-text-dim)]">{label}</div>
-      <div className="text-lg font-bold leading-tight tabular-nums tracking-[-0.02em]">{children}</div>
+    <li className="relative flex min-w-[4.2rem] flex-1 flex-col items-center text-center">
+      {!last && <span aria-hidden className="absolute left-1/2 top-3 h-0.5 w-full bg-[var(--color-border)]" />}
+      <span
+        className="relative grid h-6 w-6 place-items-center rounded-full text-[0.65rem] font-bold text-white"
+        style={{ background: color }}
+      >
+        {label}
+      </span>
+      <span className="mt-1 text-[0.7rem] font-semibold leading-tight">{name}</span>
+      {sub && <span className="text-[0.6rem] text-[var(--color-text-dim)]">{sub}</span>}
+    </li>
+  );
+}
+
+/** A small completion ring: done out of total, with the count in the middle. */
+function Ring({
+  label,
+  done,
+  total,
+  color,
+  text,
+}: {
+  label: string;
+  done: number;
+  total: number;
+  color: string;
+  text?: string;
+}) {
+  const r = 20;
+  const c = 2 * Math.PI * r;
+  const f = total > 0 ? Math.min(1, done / total) : 0;
+  return (
+    <div className="card flex flex-col items-center gap-1 p-2">
+      <svg viewBox="0 0 48 48" className="h-12 w-12" role="img" aria-label={`${label}: ${text ?? `${done}/${total}`}`}>
+        <circle cx="24" cy="24" r={r} fill="none" strokeWidth="5" style={{ stroke: "var(--color-surface-2)" }} />
+        {f > 0 && (
+          <circle
+            cx="24"
+            cy="24"
+            r={r}
+            fill="none"
+            strokeWidth="5"
+            strokeLinecap="round"
+            strokeDasharray={`${c * f} ${c}`}
+            transform="rotate(-90 24 24)"
+            style={{ stroke: color }}
+          />
+        )}
+        <text
+          x="24"
+          y="27.5"
+          textAnchor="middle"
+          style={{ fill: "var(--color-text)", fontSize: 10.5, fontWeight: 700 }}
+        >
+          {text ?? `${done}/${total}`}
+        </text>
+      </svg>
+      <span className="text-center text-[0.6rem] font-semibold uppercase leading-tight tracking-wide text-[var(--color-text-dim)]">
+        {label}
+      </span>
     </div>
   );
 }
@@ -535,7 +807,19 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
  * point is one glance: the green line should stay above the orange one, i.e.
  * the money is there before each bill lands.
  */
-function SavingsChart({ deposits, dated, t, lang }: { deposits: Item[]; dated: Item[]; t: T; lang: "en" | "fr" }) {
+function SavingsChart({
+  deposits,
+  dated,
+  t,
+  lang,
+  short,
+}: {
+  deposits: Item[];
+  dated: Item[];
+  t: T;
+  lang: "en" | "fr";
+  short: (cents: number) => string;
+}) {
   const payments = dated.filter((i) => i.kind !== "SAVE" && i.costCents);
   const all = [...deposits, ...payments].filter((i) => i.date);
   if (all.length === 0) return null;
@@ -547,18 +831,16 @@ function SavingsChart({ deposits, dated, t, lang }: { deposits: Item[]; dated: I
   if (months.length < 2) return null;
 
   const upTo = (list: Item[], m: Date) =>
-    list
-      .filter((i) => i.date && startOfMonth(i.date) <= m)
-      .reduce((n, i) => n + (i.costCents ?? 0), 0);
+    list.filter((i) => i.date && startOfMonth(i.date) <= m).reduce((n, i) => n + (i.costCents ?? 0), 0);
   const savedLine = months.map((m) => upTo(deposits, m));
   const paidLine = months.map((m) => upTo(payments, m));
   const max = Math.max(...savedLine, ...paidLine, 1);
 
   const W = 320,
-    H = 150,
+    H = 160,
     L = 8,
     R = 8,
-    T = 14,
+    T = 22,
     B = 22;
   const x = (n: number) => L + ((W - L - R) * n) / (months.length - 1);
   const y = (v: number) => T + (H - T - B) * (1 - v / max);
@@ -576,6 +858,23 @@ function SavingsChart({ deposits, dated, t, lang }: { deposits: Item[]; dated: I
         />
         <polyline points={pts(paidLine)} fill="none" style={{ stroke: "#D9821A", strokeWidth: 2.5 }} />
         <polyline points={pts(savedLine)} fill="none" style={{ stroke: "var(--color-ok)", strokeWidth: 2.5 }} />
+        {savedLine.map((v, n) => (
+          <g key={n}>
+            <circle cx={x(n)} cy={y(v)} r={3} style={{ fill: "var(--color-ok)" }} />
+            <text
+              x={x(n)}
+              y={y(v) - 6}
+              textAnchor={n === 0 ? "start" : n === months.length - 1 ? "end" : "middle"}
+              style={{
+                fill: "var(--color-text)",
+                fontSize: 9,
+                fontWeight: 600,
+              }}
+            >
+              {short(v)}
+            </text>
+          </g>
+        ))}
         {months.map((m, n) => (
           <text
             key={n}

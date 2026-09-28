@@ -741,6 +741,10 @@ enum TripItemKind {
   ACTIVITY
   SAVE
   STOP
+  /// An estimated budget line ("Hotels, 10 nights  C$1,350"); feeds the money breakdown, never a checklist.
+  BUDGET
+  /// A "good to know" note: entry rules, safety, local advice.
+  TIP
 }
 
 /// Carries its own `hubId` so the policy can check membership without a join;

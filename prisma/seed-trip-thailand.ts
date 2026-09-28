@@ -11,13 +11,12 @@
  * belong to exactly one active hub.
  *
  * The plan itself lives in src/lib/trip-plans/thailand-2027.ts, shared with
- * the "Import a whole plan" form on the trip page. Idempotent: a trip with this
- * title that already has stops is left alone; one made by hand without them
- * gets the plan filled in.
+ * the "Import a whole plan" form on the trip page. Idempotent: re-running adds only the plan items the trip is
+ * missing, matched on kind + title.
  */
 import { PrismaClient } from "@prisma/client";
 
-import { planRows } from "../src/lib/trip-plan";
+import { missingPlanRows, planRows } from "../src/lib/trip-plan";
 import { thailand2027 } from "../src/lib/trip-plans/thailand-2027";
 
 const prisma = new PrismaClient();
@@ -152,20 +151,24 @@ async function main() {
 
   const hub = await pickHub(user.id);
 
-  // A trip made by hand under the same title gets the plan filled in, once.
+  // Re-running adds only what the trip is missing (a newer version of the
+  // plan, or a trip made by hand under the same title). Deadlines are written
+  // once, with the trip.
   const existing = await prisma.trip.findFirst({
     where: { hubId: hub.id, title: TITLE },
-    include: { _count: { select: { items: { where: { kind: "STOP" } } } } },
+    include: { items: { select: { kind: true, title: true } } },
   });
-  if (existing && existing._count.items > 0) {
-    console.log(`· "${TITLE}" already has its itinerary in ${hub.name}; nothing written.`);
-    return;
+  if (existing) {
+    const rows = missingPlanRows(thailand2027, existing.id, hub.id, existing.items);
+    const hadPlan = existing.items.some((i) => i.kind === "STOP");
+    await prisma.tripItem.createMany({ data: rows });
+    console.log(`✔ "${TITLE}" in ${hub.name}: added ${rows.length} missing plan items`);
+    if (hadPlan) return;
   }
 
   await prisma.$transaction(async (tx) => {
-    const trip =
-      existing ??
-      (await tx.trip.create({
+    if (!existing) {
+      const trip = await tx.trip.create({
         data: {
           hubId: hub.id,
           title: TITLE,
@@ -177,8 +180,9 @@ async function main() {
             "Bangkok 3 nights, Krabi/Railay 4 nights, Hoi An 3 nights. Budget is for two; keep about $500 extra for tailoring and extras.",
           createdById: user.id,
         },
-      }));
-    await tx.tripItem.createMany({ data: planRows(thailand2027, trip.id, hub.id) });
+      });
+      await tx.tripItem.createMany({ data: planRows(thailand2027, trip.id, hub.id) });
+    }
     await tx.deadline.createMany({
       data: [
         ...SAVINGS.map(([due, total]) => ({
