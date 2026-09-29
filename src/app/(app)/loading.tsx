@@ -23,7 +23,7 @@ function Bar({ w, h = "h-4" }: { w: string; h?: string }) {
 
 export default function Loading() {
   return (
-    <div className="space-y-4 p-3">
+    <div className="page">
       <span className="sr-only" role="status" aria-live="polite">
         …
       </span>
@@ -35,7 +35,7 @@ export default function Loading() {
         <Bar w="w-1/2" h="h-3" />
       </div>
 
-      <div className="card divide-y divide-[var(--color-border)] p-0">
+      <div className="list">
         {[0, 1, 2].map((i) => (
           <div key={i} className="flex items-start gap-3 px-3 py-3">
             <div className="sk mt-0.5 h-5 w-5 shrink-0 rounded-full" aria-hidden />

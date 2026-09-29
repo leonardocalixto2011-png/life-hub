@@ -85,10 +85,10 @@ export default async function HubMembersPage({
   const activeCount = members.filter((m) => m.status === "ACTIVE").length;
 
   return (
-    <div className="space-y-4 p-3">
+    <div className="page">
       <div>
-        <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
-          ← {t("Today")}
+        <Link href="/today" className="back-link">
+          {t("Today")}
         </Link>
         <p className="mt-2 text-xs text-[var(--color-text-dim)]">
           {activeCount === 1 ? t("1 member") : t("{n} members", { n: activeCount })}
@@ -175,9 +175,9 @@ export default async function HubMembersPage({
         </form>
       )}
 
-      <div className="card divide-y divide-[var(--color-border)]">
+      <div className="list">
         {members.map((m) => (
-          <div key={m.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+          <div key={m.id} className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="flex min-w-0 items-center gap-2.5">
               <Avatar name={m.user.name} email={m.user.email} size={28} />
               <div className="min-w-0">

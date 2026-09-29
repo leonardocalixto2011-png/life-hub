@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 function Row({ d, t, lang }: { d: DeadlineWithRefs; t: T; lang: Lang }) {
   const done = Boolean(d.doneAt);
   return (
-    <div className="flex items-start gap-3 px-3 py-3">
+    <div className="flex items-start gap-3 px-4 py-3.5">
       <form action={toggleDeadlineDone}>
         <input type="hidden" name="id" value={d.id} />
         <input type="hidden" name="done" value={String(!done)} />
@@ -81,13 +81,13 @@ export default async function DeadlinesPage() {
   ];
 
   return (
-    <div className="space-y-4 p-3">
-      <h1 className="text-lg font-bold">{t("Deadlines")}</h1>
+    <div className="page">
+      <h1 className="page-title">{t("Deadlines")}</h1>
 
       <DeadlineForm ventures={ventures.map((v) => ({ id: v.id, name: v.name }))} />
 
       {deadlines.length === 0 && (
-        <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
+        <p className="card px-5 py-8 text-center text-sm text-[var(--color-text-dim)]">
           {t("No deadlines yet. Add filings, renewals, permits — anything with a hard date.")}
         </p>
       )}
@@ -96,10 +96,10 @@ export default async function DeadlinesPage() {
         (s) =>
           s.items.length > 0 && (
             <section key={s.title}>
-              <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+              <h2 className="section-title">
                 {s.title} · {s.items.length}
               </h2>
-              <div className="card divide-y divide-[var(--color-border)]">
+              <div className="list">
                 {s.items.map((d) => (
                   <Row key={d.id} d={d} t={t} lang={lang} />
                 ))}

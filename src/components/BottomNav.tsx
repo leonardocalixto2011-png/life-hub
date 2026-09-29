@@ -4,14 +4,16 @@ import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 
+import { CalendarClock, CircleCheckBig, Repeat, Sun, Wallet, type LucideIcon } from "lucide-react";
+
 import { useT } from "@/components/I18nProvider";
 
-const ITEMS = [
-  { href: "/today", label: "Today", icon: "☀️" },
-  { href: "/tasks", label: "Tasks", icon: "✓" },
-  { href: "/deadlines", label: "Deadlines", icon: "⏳" },
-  { href: "/subscriptions", label: "Subs", icon: "🔁" },
-  { href: "/budget", label: "Budget", icon: "💳" },
+const ITEMS: { href: string; label: string; Icon: LucideIcon }[] = [
+  { href: "/today", label: "Today", Icon: Sun },
+  { href: "/tasks", label: "Tasks", Icon: CircleCheckBig },
+  { href: "/deadlines", label: "Deadlines", Icon: CalendarClock },
+  { href: "/subscriptions", label: "Subs", Icon: Repeat },
+  { href: "/budget", label: "Budget", Icon: Wallet },
 ];
 
 /**
@@ -41,24 +43,32 @@ function PendingDot() {
   );
 }
 
-export function BottomNav() {
-  const pathname = usePathname();
+export function BottomNav({ current }: { current?: string } = {}) {
+  // `current` only overrides the detected route (used by a static preview);
+  // in the app it is always left unset.
+  const detected = usePathname();
+  const pathname = current ?? detected;
   const t = useT();
 
   return (
-    <nav className="safe-b sticky bottom-0 z-20 grid grid-cols-5 border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur">
-      {ITEMS.map((it) => {
-        const active = pathname === it.href || pathname.startsWith(it.href + "/");
+    <nav
+      aria-label={t("Main")}
+      className="opaque safe-b sticky bottom-0 z-20 grid grid-cols-5 border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 px-1 backdrop-blur"
+    >
+      {ITEMS.map(({ href, label, Icon }) => {
+        const active = pathname === href || pathname.startsWith(href + "/");
         return (
           <Link
-            key={it.href}
-            href={it.href}
-            className="relative flex flex-col items-center gap-0.5 py-2 text-[0.66rem] font-medium transition-colors active:bg-[var(--color-surface-2)]"
-            style={{ color: active ? "var(--color-primary)" : "var(--color-text-dim)" }}
+            key={href}
+            href={href}
+            className="tabbar-item"
+            aria-current={active ? "page" : undefined}
           >
             <PendingDot />
-            <span className="text-base leading-none">{it.icon}</span>
-            {t(it.label)}
+            <span className="tabbar-icon" aria-hidden>
+              <Icon size={22} strokeWidth={active ? 2.25 : 1.9} />
+            </span>
+            <span className="max-w-full truncate px-0.5">{t(label)}</span>
           </Link>
         );
       })}

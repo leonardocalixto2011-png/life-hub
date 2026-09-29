@@ -32,15 +32,7 @@ function Chip({
   children: React.ReactNode;
 }) {
   return (
-    <Link
-      href={href}
-      className="chip"
-      style={
-        active
-          ? { background: "var(--color-primary)", borderColor: "var(--color-primary)", color: "#fff" }
-          : undefined
-      }
-    >
+    <Link href={href} className="chip chip-filter" data-active={active ? "" : undefined} aria-current={active ? "true" : undefined}>
       {children}
     </Link>
   );
@@ -74,14 +66,14 @@ export default async function TasksPage({
   ]);
 
   return (
-    <div className="space-y-3 p-3">
-      <h1 className="text-lg font-bold">{t("Tasks")}</h1>
+    <div className="page page-tight">
+      <h1 className="page-title px-1">{t("Tasks")}</h1>
 
       {noFilters && suggestions.length > 0 && (
         <RecurringNudge suggestions={suggestions} />
       )}
 
-      <div className="flex flex-wrap gap-1.5">
+      <div className="no-scrollbar -mx-3 flex gap-2 overflow-x-auto px-3">
         <Chip href={qs(sp, { venture: undefined })} active={!sp.venture}>
           {t("All")}
         </Chip>
@@ -96,7 +88,7 @@ export default async function TasksPage({
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-2">
         <Chip href={qs(sp, { mine: mine ? undefined : "1" })} active={mine}>
           {t("Mine")}
         </Chip>

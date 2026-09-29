@@ -43,7 +43,7 @@ export function TaskListCard({
     );
   }
   return (
-    <div className="card divide-y divide-[var(--color-border)]">
+    <div className="list">
       {tasks.map((t) => (
         <TaskRow key={t.id} task={toRowData(t)} ventures={ventures} members={members} />
       ))}

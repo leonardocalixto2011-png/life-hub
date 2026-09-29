@@ -71,12 +71,12 @@ export default async function MailPage({
   const fieldLabel = "block text-[0.68rem] font-semibold text-[var(--color-text-dim)]";
 
   return (
-    <div className="space-y-4 p-3">
+    <div className="page">
       <div>
-        <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
-          ← {t("Today")}
+        <Link href="/today" className="back-link">
+          {t("Today")}
         </Link>
-        <h1 className="mt-1 text-lg font-bold">{t("Connected mailboxes")}</h1>
+        <h1 className="page-title">{t("Connected mailboxes")}</h1>
         <p className="text-xs text-[var(--color-text-dim)]">
           {t(
             "Read-only access — Life Hub never sends, deletes, or modifies anything in a connected inbox. New mail is classified and either filed automatically or sent to your review inbox.",
@@ -98,12 +98,12 @@ export default async function MailPage({
         </div>
       )}
 
-      <div className="card divide-y divide-[var(--color-border)] p-0">
+      <div className="list">
         {accounts.length === 0 ? (
           <p className="p-4 text-center text-sm text-[var(--color-text-dim)]">{t("No mailboxes connected yet.")}</p>
         ) : (
           accounts.map((a) => (
-            <div key={a.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+            <div key={a.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">{a.emailAddress}</div>
                 <div className="text-[0.68rem] text-[var(--color-text-dim)]">
@@ -215,15 +215,15 @@ export default async function MailPage({
 
       {mutedSenders.length > 0 && (
         <section>
-          <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+          <h2 className="section-title">
             {t("Muted senders")}
           </h2>
           <p className="mb-1.5 text-[0.65rem] text-[var(--color-text-dim)]">
             {t("Mail from these never reaches the assistant, so it costs nothing and never appears in the review inbox.")}
           </p>
-          <div className="card divide-y divide-[var(--color-border)]">
+          <div className="list">
             {mutedSenders.map((m) => (
-              <div key={m.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+              <div key={m.id} className="flex items-center justify-between gap-3 px-4 py-3">
                 <span className="truncate text-sm">{m.fromAddress}</span>
                 <form action={unmuteThisSender.bind(null, m.fromAddress)}>
                   <SubmitButton
@@ -241,12 +241,12 @@ export default async function MailPage({
 
       {trustedSenders.length > 0 && (
         <section>
-          <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+          <h2 className="section-title">
             {t("Trusted senders")}
           </h2>
-          <div className="card divide-y divide-[var(--color-border)]">
+          <div className="list">
             {trustedSenders.map((s) => (
-              <div key={s.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+              <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">
                   <div className="truncate text-sm">{s.fromAddress}</div>
                   <div className="text-[0.65rem] text-[var(--color-text-dim)]">

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CalendarDays, ChevronDown, ChevronUp, CircleCheck, Wallet } from "lucide-react";
 
 import { requireHub } from "@/lib/session";
 import { hubChrome } from "@/lib/data";
@@ -11,7 +12,7 @@ import { createFavorite, deleteFavorite, moveFavorite, updateFavorite } from "./
 
 export const dynamic = "force-dynamic";
 
-const KIND_ICON = { BUDGET: "💸", TASK: "✅", EVENT: "📅" } as const;
+const KIND_ICON = { BUDGET: Wallet, TASK: CircleCheck, EVENT: CalendarDays } as const;
 
 export default async function FavoritesPage() {
   const { user, hub } = await requireHub();
@@ -19,31 +20,34 @@ export default async function FavoritesPage() {
   // Same cached lookup the layout already made for the chip row.
   const { favorites, ventures } = await hubChrome(user.id, hub.id);
   const label = "block text-xs font-semibold text-[var(--color-text-dim)]";
-  const small = "text-[0.68rem] font-semibold text-[var(--color-text-dim)]";
+  const small = "inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-text-dim)]";
 
   return (
-    <div className="space-y-4 p-3">
+    <div className="page">
       <div>
-        <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
-          ← {t("Today")}
+        <Link href="/today" className="back-link">
+          {t("Today")}
         </Link>
-        <h1 className="mt-1 text-lg font-bold">{t("Favourites")}</h1>
-        <p className="text-xs text-[var(--color-text-dim)]">
+        <h1 className="page-title">{t("Favourites")}</h1>
+        <p className="page-sub">
           {t("Things you log all the time. One tap under the quick-add box adds them for today. Only you see yours.")}
         </p>
       </div>
 
       {favorites.length === 0 ? (
-        <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
+        <p className="card px-5 py-8 text-center text-sm text-[var(--color-text-dim)]">
           {t("No favourites yet. Add one below, or tap “⭐ Save as favourite” after a quick-add.")}
         </p>
       ) : (
-        <ul className="card divide-y divide-[var(--color-border)] p-0">
+        <ul className="list">
           {favorites.map((f, i) => (
-            <li key={f.id} className="space-y-1.5 px-3 py-2.5">
+            <li key={f.id} className="space-y-2 px-4 py-3">
               <div className="flex items-center justify-between gap-2">
                 <span className={small}>
-                  {KIND_ICON[f.kind]}{" "}
+                  {(() => {
+                    const Icon = KIND_ICON[f.kind];
+                    return <Icon size={14} strokeWidth={2} aria-hidden />;
+                  })()}
                   {f.kind === "BUDGET"
                     ? f.entryType === "INCOME"
                       ? t("Income")
@@ -56,25 +60,25 @@ export default async function FavoritesPage() {
                   <form action={moveFavorite}>
                     <input type="hidden" name="id" value={f.id} />
                     <input type="hidden" name="dir" value="up" />
-                    <SubmitButton className="btn btn-ghost px-2 py-1 text-xs" disabled={i === 0} pendingLabel="…" aria-label={t("Move up")}>
-                      ↑
+                    <SubmitButton className="btn btn-ghost btn-sm btn-icon w-9" disabled={i === 0} pendingLabel="…" aria-label={t("Move up")}>
+                      <ChevronUp size={18} strokeWidth={2.25} aria-hidden />
                     </SubmitButton>
                   </form>
                   <form action={moveFavorite}>
                     <input type="hidden" name="id" value={f.id} />
                     <input type="hidden" name="dir" value="down" />
                     <SubmitButton
-                      className="btn btn-ghost px-2 py-1 text-xs"
+                      className="btn btn-ghost btn-sm btn-icon w-9"
                       disabled={i === favorites.length - 1}
                       pendingLabel="…"
                       aria-label={t("Move down")}
                     >
-                      ↓
+                      <ChevronDown size={18} strokeWidth={2.25} aria-hidden />
                     </SubmitButton>
                   </form>
                   <form action={deleteFavorite}>
                     <input type="hidden" name="id" value={f.id} />
-                    <SubmitButton className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline" pendingLabel="…">
+                    <SubmitButton className="btn btn-ghost btn-sm text-[var(--color-danger)]" pendingLabel="…">
                       {t("delete")}
                     </SubmitButton>
                   </form>
@@ -114,9 +118,9 @@ export default async function FavoritesPage() {
             <label className={label}>
               {t("Kind")}
               <select name="kind" defaultValue="BUDGET" className="field mt-1">
-                <option value="BUDGET">💸 {t("Budget entry")}</option>
-                <option value="TASK">✅ {t("Task")}</option>
-                <option value="EVENT">📅 {t("Event")}</option>
+                <option value="BUDGET">{t("Budget entry")}</option>
+                <option value="TASK">{t("Task")}</option>
+                <option value="EVENT">{t("Event")}</option>
               </select>
             </label>
             <label className={label}>

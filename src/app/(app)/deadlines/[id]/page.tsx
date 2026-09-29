@@ -25,9 +25,9 @@ export default async function DeadlineDetailPage({
   if (!deadline) notFound();
 
   return (
-    <div className="space-y-3 p-3">
-      <Link href="/deadlines" className="text-xs font-semibold text-[var(--color-text-dim)]">
-        ← {t("Deadlines")}
+    <div className="page page-tight">
+      <Link href="/deadlines" className="back-link">
+        {t("Deadlines")}
       </Link>
       <DeadlineForm
         ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}

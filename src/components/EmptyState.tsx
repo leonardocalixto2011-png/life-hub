@@ -22,15 +22,15 @@ export function EmptyState({
   examples: string[];
 }) {
   return (
-    <div className="card p-6 text-center">
-      <p className="display text-xl leading-tight">{headline ?? <Tr k="Nothing here yet." />}</p>
-      <p className="mx-auto mt-1.5 max-w-[34ch] text-sm text-[var(--color-text-dim)]">{title}</p>
+    <div className="card px-5 py-8 text-center">
+      <p className="display text-[1.375rem] leading-tight">{headline ?? <Tr k="Nothing here yet." />}</p>
+      <p className="mx-auto mt-2 max-w-[34ch] text-sm text-[var(--color-text-dim)]">{title}</p>
       {examples.length > 0 && (
-        <ul className="mx-auto mt-4 max-w-xs space-y-1.5 text-left">
+        <ul className="mx-auto mt-5 max-w-xs space-y-2 text-left">
           {examples.map((e) => (
             <li
               key={e}
-              className="rounded-lg bg-[var(--color-surface-2)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)]"
+              className="rounded-xl bg-[var(--color-surface-2)] px-3.5 py-2.5 text-sm text-[var(--color-text-dim)]"
             >
               “{e}”
             </li>

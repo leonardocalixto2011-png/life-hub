@@ -13,7 +13,47 @@
   --danger: #dc2626;
   --ok: #15803d;
   --warn: #b45309;
-  --radius: 12px;
+
+  /* ------------------------------------------------------------ the scale
+     Spacing, radius, elevation and type, each a short named ladder so a page
+     picks a step instead of inventing a number. Namespaced `--sp-*`, `--r-*`,
+     `--elev-*`, `--fs-*` on purpose: Tailwind v4 publishes its own
+     `--radius-lg`, `--text-xs`, `--shadow-md` as theme variables, and an
+     unlayered :root declaration with those names would silently resize every
+     `rounded-lg` / `text-xs` utility already in the app. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  --r-sm: 8px;   /* chips inside rows, small tiles */
+  --r-md: 12px;  /* inputs, buttons, menu items */
+  --r-lg: 16px;  /* cards, sheets */
+  --r-full: 999px;
+  --radius: var(--r-lg);
+
+  /* Elevation is mostly the border's job; the shadow only lifts a surface a
+     hair off the page. A warm near-black at low alpha reads right under all
+     six light palettes; the dark block below swaps in heavier values, since
+     a 5% shadow on #131313 is invisible. The theme blocks don't touch these,
+     so every themed dark variant inherits the dark set. */
+  --elev-1: 0 1px 2px rgb(20 20 18 / 0.05), 0 1px 1px rgb(20 20 18 / 0.03);
+  --elev-2: 0 4px 14px rgb(20 20 18 / 0.07), 0 1px 3px rgb(20 20 18 / 0.05);
+  --elev-3: 0 14px 36px rgb(20 20 18 / 0.16), 0 3px 8px rgb(20 20 18 / 0.08);
+
+  /* Type: 11 · 12 · 14 · 15 · 16 · 18 · 22 · 28. Body copy in lists is 15px —
+     one step under the 16px inputs, which must stay 16px or iOS zooms. */
+  --fs-2xs: 0.6875rem;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.875rem;
+  --fs-row: 0.9375rem;
+  --fs-base: 1rem;
+  --fs-lg: 1.125rem;
+  --fs-xl: 1.375rem;
+  --fs-2xl: 1.75rem;
 
   /* Semantic washes, mixed from the semantic colour into whatever `--surface`
      is. Two reasons for color-mix rather than literals: they follow all six
@@ -48,6 +88,13 @@
     --danger: #f87171;
     --ok: #4ade80;
     --warn: #fbbf24;
+
+    /* On a dark page a soft shadow disappears; what separates a card is its
+       border and a slightly lighter surface. Keep a shadow for the floating
+       things (menus, toasts) where depth still reads. */
+    --elev-1: 0 1px 2px rgb(0 0 0 / 0.3);
+    --elev-2: 0 4px 14px rgb(0 0 0 / 0.35), 0 1px 3px rgb(0 0 0 / 0.3);
+    --elev-3: 0 14px 36px rgb(0 0 0 / 0.55), 0 3px 8px rgb(0 0 0 / 0.4);
   }
 }
 
@@ -260,8 +307,10 @@ html[data-theme="mono"] {
 
 /* Only text sitting *directly* on the photo needs the halo. Anything inside a
    card already has an opaque surface under it, and haloed text on a white
-   card looks smudged — hence the `:not(.card *)`. */
-[data-photo] :is(h1, h2, p, a, span):not(.card *):not(.chip):not(.btn) {
+   card looks smudged — hence the `:not(.card *)`. `.list`, `.menu` and
+   `.opaque` (the header, tab bar and quick-add bar) are opaque surfaces too. */
+[data-photo]
+  :is(h1, h2, p, a, span):not(:is(.card, .list, .menu, .opaque) *):not(.chip):not(.btn) {
   text-shadow:
     0 1px 2px color-mix(in srgb, var(--bg) 75%, transparent),
     0 0 10px color-mix(in srgb, var(--bg) 60%, transparent);
@@ -342,6 +391,13 @@ button {
   outline-offset: 2px;
   border-radius: 6px;
 }
+/* Inputs draw their own focus: `.field` gets a border + soft ring, and the
+   quick-add composer rings its whole well via :focus-within. Without this the
+   unlayered outline above would stack a second ring on top of either. */
+.field:focus-visible,
+.composer > input:focus-visible {
+  outline: none;
+}
 
 /* Keep iOS from zooming the viewport on input focus */
 @supports (-webkit-touch-callout: none) {
@@ -354,10 +410,58 @@ button {
 
 /* --------------------------------------------------------------- components */
 @layer components {
+  /* ---- surfaces ---------------------------------------------------------
+     One card: 16px radius, hairline border, a whisper of shadow. Everything
+     rectangular in the app is this or sits inside it, which is most of what
+     makes the screens read as one product. */
   .card {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius);
+    border-radius: var(--r-lg);
+    box-shadow: var(--elev-1);
+  }
+
+  /* Floating surfaces — menus, popovers. Same card, lifted. */
+  .menu {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--elev-3);
+    padding: var(--sp-1);
+    animation: menu-in var(--fast) var(--ease-out);
+    transform-origin: top;
+  }
+  @keyframes menu-in {
+    from {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.98);
+    }
+  }
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    width: 100%;
+    min-height: 44px;
+    padding: 0 var(--sp-3);
+    border-radius: var(--r-md);
+    font-size: var(--fs-row);
+    text-align: left;
+    -webkit-tap-highlight-color: transparent;
+    transition: background var(--fast) var(--ease);
+  }
+  .menu-item:hover,
+  .menu-item:active {
+    background: var(--color-surface-2);
+  }
+  .menu-item > svg {
+    flex-shrink: 0;
+    color: var(--color-text-dim);
+  }
+  .menu-sep {
+    height: 1px;
+    margin: var(--sp-1) calc(var(--sp-1) * -1);
+    background: var(--color-border);
   }
 
   /* The app's voice. Reserved for the handful of places Life Hub speaks to a
@@ -372,17 +476,187 @@ button {
     text-wrap: balance;
   }
 
+  /* ---- page rhythm ------------------------------------------------------
+     Every screen's root: 12px side gutter (the cards carry their own inner
+     16px), breathing room above the title and below the last card so it
+     clears the tab bar, and one vertical step between blocks. Margins, like
+     the space-y utilities they replace, so no child changes box behaviour. */
+  .page {
+    padding: var(--sp-4) var(--sp-3) var(--sp-8);
+  }
+  .page > * + * {
+    margin-top: var(--sp-5);
+  }
+  .page-tight > * + * {
+    margin-top: 14px;
+  }
+
+  /* ---- type roles ------------------------------------------------------
+     Page title: the sans, heavy and tight — operational, so never .display.
+     Section title: the small-caps label over every card. One definition
+     instead of the same five utilities pasted into twenty files. */
+  .page-title {
+    font-size: var(--fs-xl);
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+  .page-sub {
+    margin-top: 2px;
+    font-size: var(--fs-sm);
+    color: var(--color-text-dim);
+  }
+  /* "‹ Today" above a sub-page's title. The chevron is a CSS mask filled with
+     currentColor, so it follows the theme without every page importing an
+     icon component for one glyph. */
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    margin-left: -6px;
+    padding-right: var(--sp-2);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--color-primary);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .back-link::before {
+    content: "";
+    width: 20px;
+    height: 20px;
+    background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 18-6-6 6-6'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 18-6-6 6-6'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+  }
+
+  .section-title {
+    margin-bottom: var(--sp-2);
+    padding-inline: var(--sp-1);
+    font-size: var(--fs-2xs);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-dim);
+  }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-2);
+    padding-inline: var(--sp-1);
+  }
+  .section-head .section-title {
+    margin-bottom: 0;
+    padding-inline: 0;
+  }
+  .section-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+
+  /* ---- list rows -------------------------------------------------------
+     `.list` is a card whose children are rows split by hairlines; `.row` is
+     one line of it — 52px tall at minimum, so it is a comfortable thumb
+     target even when it holds a single line. Primary text left, a quiet
+     second line under it, the amount or date right-aligned in tabular
+     figures so a column of them lines up. */
+  .list {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--elev-1);
+    overflow: hidden;
+  }
+  .list > * + * {
+    border-top: 1px solid var(--color-border);
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    min-height: 52px;
+    padding: 13px var(--sp-4);
+    -webkit-tap-highlight-color: transparent;
+    transition: background var(--fast) var(--ease);
+  }
+  a.row:active {
+    background: var(--color-surface-2);
+  }
+  .row-main {
+    min-width: 0;
+    flex: 1;
+  }
+  .row-title {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-row);
+    font-weight: 500;
+    line-height: 1.3;
+  }
+  .row-sub {
+    display: block;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-xs);
+    color: var(--color-text-dim);
+  }
+  .row-end {
+    flex-shrink: 0;
+    text-align: right;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-dim);
+  }
+  .row-amount {
+    font-size: var(--fs-row);
+    font-weight: 700;
+    color: var(--color-text);
+    letter-spacing: -0.01em;
+  }
+  /* A small tinted tile holding a line icon — the "kind" marker at the start
+     of agenda rows. Tinted from the theme accent so it follows all six
+     palettes. */
+  .icon-tile {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--r-sm);
+    background: var(--primary-wash);
+    color: var(--color-primary);
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+
+  /* ---- buttons ---------------------------------------------------------
+     Default is the secondary look (surface + border). Variants change
+     colour only; sizes change height only. 44px default is the touch floor. */
   .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.4rem;
-    padding: 0.6rem 0.95rem;
-    border-radius: 10px;
+    gap: var(--sp-2);
+    min-height: 44px;
+    padding: 0 var(--sp-4);
+    border-radius: var(--r-md);
     border: 1px solid var(--color-border);
     background: var(--color-surface);
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: var(--fs-sm);
+    line-height: 1.2;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     transition:
@@ -402,26 +676,68 @@ button {
     background: var(--color-primary);
     border-color: var(--color-primary);
     color: var(--color-primary-fg);
+    box-shadow: var(--elev-1);
+  }
+  .btn-secondary {
+    background: var(--color-surface-2);
+    border-color: transparent;
   }
   .btn-ghost {
     background: transparent;
     border-color: transparent;
+  }
+  .btn-ghost:hover {
+    background: var(--color-surface-2);
+  }
+  .btn-danger {
+    background: var(--danger-wash);
+    border-color: color-mix(in srgb, var(--color-danger) 30%, var(--color-border));
+    color: var(--color-danger);
+  }
+  .btn-sm {
+    min-height: 36px;
+    padding: 0 var(--sp-3);
+    font-size: var(--fs-xs);
+    border-radius: 10px;
+  }
+  .btn-lg {
+    min-height: 52px;
+    padding: 0 var(--sp-5);
+    font-size: var(--fs-base);
+  }
+  /* Square icon button: exactly the 44px target, icon centred. */
+  .btn-icon {
+    width: 44px;
+    padding: 0;
+    flex-shrink: 0;
   }
   .btn:disabled {
     opacity: 0.55;
     cursor: not-allowed;
   }
 
+  /* ---- inputs ----------------------------------------------------------
+     16px text always (not only on iOS): under 16px Safari zooms the viewport
+     on focus, and the zoom never quite comes back. 44px tall to match .btn. */
   .field {
     width: 100%;
-    padding: 0.6rem 0.7rem;
-    border-radius: 10px;
+    min-height: 44px;
+    padding: 0.55rem 0.8rem;
+    border-radius: var(--r-md);
     border: 1px solid var(--color-border);
     background: var(--color-surface);
+    font-size: 16px;
+    transition:
+      border-color var(--fast) var(--ease),
+      box-shadow var(--fast) var(--ease);
+  }
+  textarea.field {
+    min-height: 88px;
   }
   .field:focus {
-    outline: 2px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
-    outline-offset: 1px;
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 22%, transparent);
   }
 
   .chip {
@@ -429,20 +745,41 @@ button {
     align-items: center;
     gap: 0.3rem;
     padding: 0.15rem 0.55rem;
-    border-radius: 999px;
+    border-radius: var(--r-full);
     font-size: 0.72rem;
     font-weight: 600;
     border: 1px solid var(--color-border);
     background: var(--color-surface-2);
     white-space: nowrap;
   }
+  /* Filter / shortcut chip: a real button-sized pill that can be on or off. */
+  .chip-filter {
+    min-height: 36px;
+    padding: 0 var(--sp-3);
+    font-size: var(--fs-xs);
+    background: var(--color-surface);
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      background var(--fast) var(--ease),
+      color var(--fast) var(--ease);
+  }
+  .chip-filter > svg {
+    color: var(--color-text-dim);
+  }
+  .chip-filter[data-active] {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-primary-fg);
+  }
 
   /* Quick-add favourites. Routine rung: a press you can feel (--fast), no
      more — tapping one is the most repeated money action in the app. Sized up
      from .chip because it is a button a thumb hits, not a label. */
   .fav-chip {
-    padding: 0.35rem 0.7rem;
-    font-size: 0.78rem;
+    min-height: 34px;
+    padding: 0 0.8rem;
+    font-size: 0.8rem;
+    background: var(--color-surface);
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
@@ -456,6 +793,144 @@ button {
   .fav-chip:disabled {
     opacity: 0.6;
     cursor: default;
+  }
+
+  /* Numeric badge on an icon (inbox count, pending invites). */
+  .badge {
+    display: grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--r-full);
+    background: var(--color-danger);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 0 0 2px var(--color-surface);
+  }
+
+  /* ---- the composer ----------------------------------------------------
+     QuickAdd's input and its action buttons share one rounded well, so the
+     mic, camera and Add read as parts of one control rather than four
+     separate boxes in a row. */
+  .composer {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: var(--sp-1);
+    padding-left: 14px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--r-lg);
+    background: var(--color-surface-2);
+    transition:
+      border-color var(--fast) var(--ease),
+      box-shadow var(--fast) var(--ease),
+      background var(--fast) var(--ease);
+  }
+  .composer:focus-within {
+    background: var(--color-surface);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+  }
+  .composer > input {
+    min-width: 0;
+    flex: 1;
+    min-height: 40px;
+    border: 0;
+    background: transparent;
+    font-size: 16px;
+    outline: none;
+  }
+  .composer > input::placeholder {
+    color: var(--color-text-dim);
+  }
+  .composer .btn {
+    min-height: 40px;
+  }
+  .composer .btn-icon {
+    width: 40px;
+    border-radius: var(--r-md);
+    border-color: transparent;
+    background: transparent;
+    color: var(--color-text-dim);
+  }
+  .composer .btn-icon:hover {
+    background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  }
+  .composer .btn-icon.mic-live {
+    background: var(--color-primary);
+    color: var(--color-primary-fg);
+  }
+
+  /* ---- the tab bar -------------------------------------------------------
+     Icon over a short label; the active tab gets the theme colour plus a
+     soft pill behind its icon, so "where am I" survives a glance in bright
+     sun, where colour alone washes out. */
+  .tabbar-item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-height: 58px;
+    padding: 6px 0 5px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--color-text-dim);
+    -webkit-tap-highlight-color: transparent;
+    transition: color var(--fast) var(--ease);
+  }
+  .tabbar-icon {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 28px;
+    border-radius: var(--r-full);
+    transition:
+      background var(--fast) var(--ease),
+      transform var(--fast) var(--ease);
+  }
+  .tabbar-item:active .tabbar-icon {
+    transform: scale(0.92);
+  }
+  .tabbar-item[aria-current="page"] {
+    color: var(--color-primary);
+  }
+  .tabbar-item[aria-current="page"] .tabbar-icon {
+    background: var(--primary-wash);
+  }
+
+  /* Header icon button: 44px target, 22px glyph. */
+  .icon-btn {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--r-full);
+    color: var(--color-text);
+    -webkit-tap-highlight-color: transparent;
+    transition: background var(--fast) var(--ease);
+  }
+  .icon-btn:hover,
+  .icon-btn:active {
+    background: var(--color-surface-2);
+  }
+  .icon-btn .badge {
+    position: absolute;
+    top: 4px;
+    right: 2px;
+  }
+
+  /* Horizontal chip rows scroll by swipe; the scrollbar under them is noise. */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 
   .safe-b {

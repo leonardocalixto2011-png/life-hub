@@ -26,9 +26,9 @@ export default async function SubscriptionDetailPage({
   if (!sub) notFound();
 
   return (
-    <div className="space-y-3 p-3">
-      <Link href="/subscriptions" className="text-xs font-semibold text-[var(--color-text-dim)]">
-        ← {t("Subscriptions")}
+    <div className="page page-tight">
+      <Link href="/subscriptions" className="back-link">
+        {t("Subscriptions")}
       </Link>
       <SubscriptionForm
         ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}

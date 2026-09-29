@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addDays, format } from "date-fns";
+import { AlarmClock, Check } from "lucide-react";
 
 import { setTaskDone, setTaskFields } from "@/app/(app)/tasks/actions";
 import { dueLabel, isOverdue, money, toDateInput } from "@/lib/format";
@@ -125,11 +126,15 @@ export function TaskRow({
     <div className="relative overflow-hidden" style={{ touchAction: "pan-y" }}>
       {/* swipe backdrops */}
       <div
-        className="pointer-events-none absolute inset-0 flex items-center justify-between px-4 text-xs font-bold uppercase tracking-wide"
+        className="pointer-events-none absolute inset-0 flex items-center justify-between px-5 text-xs font-bold uppercase tracking-wide"
         aria-hidden
       >
-        <span style={{ color: "var(--color-ok)", opacity: dx > 12 ? 1 : 0 }}>✓ {t("Done")}</span>
-        <span style={{ color: "var(--color-warn)", opacity: dx < -12 ? 1 : 0 }}>{t("Tomorrow")} ⏰</span>
+        <span className="flex items-center gap-1.5" style={{ color: "var(--color-ok)", opacity: dx > 12 ? 1 : 0 }}>
+          <Check size={16} strokeWidth={2.5} /> {t("Done")}
+        </span>
+        <span className="flex items-center gap-1.5" style={{ color: "var(--color-warn)", opacity: dx < -12 ? 1 : 0 }}>
+          {t("Tomorrow")} <AlarmClock size={16} strokeWidth={2.25} />
+        </span>
       </div>
 
       <div
@@ -152,7 +157,7 @@ export function TaskRow({
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        <div className="flex items-start gap-3 px-3 py-2.5">
+        <div className="flex items-start gap-3 px-4 py-3">
           <button
             type="button"
             onClick={toggle}
@@ -161,7 +166,7 @@ export function TaskRow({
             aria-label={done ? t("Mark not done") : t("Mark done")}
             aria-pressed={done}
             data-done={done ? "" : undefined}
-            className="tick mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border"
+            className="tick mt-px grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full border-[1.5px]"
           >
             {/* Drawn rather than typed. A "✓" character appears all at once;
                 a stroked path can be dashed, so the check writes itself in the
@@ -175,7 +180,7 @@ export function TaskRow({
           <div className="min-w-0 flex-1">
             <Link
               href={`/tasks/${task.id}`}
-              className="task-title block max-w-full truncate text-[0.95rem]"
+              className="task-title block max-w-full truncate text-[0.9375rem] font-medium leading-snug"
               data-done={done ? "" : undefined}
               style={{ color: done ? "var(--color-text-dim)" : "var(--color-text)" }}
             >
@@ -208,16 +213,19 @@ export function TaskRow({
                   + {t("date")}
                 </span>
               ) : null}
-              {task.amountCents != null && (
-                <span className="chip tabular-nums font-semibold text-[var(--color-text-dim)]">
-                  {money(task.amountCents)}
-                </span>
-              )}
               {task.assignedTo && (
                 <Avatar name={task.assignedTo.name} email={task.assignedTo.email} size={18} />
               )}
             </button>
           </div>
+
+          {/* The amount sits at the right edge like every other money column
+              in the app, so a list of bills scans top to bottom. */}
+          {task.amountCents != null && (
+            <span className="row-end row-amount mt-px" style={done ? { color: "var(--color-text-dim)" } : undefined}>
+              {money(task.amountCents, "CAD", lang === "fr" ? "fr-CA" : "en-CA")}
+            </span>
+          )}
         </div>
 
         {editing && canEdit && (

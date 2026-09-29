@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { X } from "lucide-react";
 import { notFound } from "next/navigation";
 import { differenceInCalendarDays, eachDayOfInterval, format, startOfDay, startOfMonth } from "date-fns";
 
@@ -50,7 +51,7 @@ type Item = {
 };
 
 const dayKey = (d: Date) => format(d, "yyyy-MM-dd");
-const sectionTitle = "mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]";
+const sectionTitle = "section-title";
 
 export default async function TripPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -225,8 +226,8 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         )}
         <form action={deleteTripItem}>
           <input type="hidden" name="id" value={i.id} />
-          <SubmitButton aria-label={t("Delete")} className="-m-2 p-2 text-xs text-[var(--color-text-dim)]" pendingLabel="✕">
-            ✕
+          <SubmitButton aria-label={t("Delete")} className="-m-2 grid h-9 w-9 place-items-center rounded-full text-[var(--color-text-dim)]" pendingLabel="…">
+            <X size={15} strokeWidth={2.25} aria-hidden />
           </SubmitButton>
         </form>
       </div>
@@ -234,9 +235,9 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
   };
 
   return (
-    <div className="space-y-5 p-3">
-      <Link href="/trips" className="text-xs font-semibold text-[var(--color-text-dim)]">
-        ← {t("Trips")}
+    <div className="page">
+      <Link href="/trips" className="back-link">
+        {t("Trips")}
       </Link>
 
       {/* ---- hero: where, when, and the route ---------------------------- */}
@@ -423,7 +424,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
             {[...months.entries()].map(([k, list]) => (
               <div key={k}>
                 <div className="mb-1 text-sm font-semibold capitalize">{fmt(list[0].date!, "MMMM yyyy", lang)}</div>
-                <div className="card divide-y divide-[var(--color-border)] p-0">
+                <div className="list">
                   {list.map((i) => (
                     <Row key={i.id} i={i} showDate />
                   ))}
@@ -528,8 +529,8 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                     <span className="w-20 text-right font-semibold tabular-nums">{cash(b.costCents!)}</span>
                     <form action={deleteTripItem}>
                       <input type="hidden" name="id" value={b.id} />
-                      <SubmitButton aria-label={t("Delete")} className="-m-2 p-2 text-xs text-[var(--color-text-dim)]" pendingLabel="✕">
-                        ✕
+                      <SubmitButton aria-label={t("Delete")} className="-m-2 grid h-9 w-9 place-items-center rounded-full text-[var(--color-text-dim)]" pendingLabel="…">
+                        <X size={15} strokeWidth={2.25} aria-hidden />
                       </SubmitButton>
                     </form>
                   </li>
@@ -575,7 +576,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
             {list.length === 0 ? (
               <p className="card p-3 text-[0.72rem] text-[var(--color-text-dim)]">{t(sec.hint)}</p>
             ) : (
-              <div className="card divide-y divide-[var(--color-border)] p-0">
+              <div className="list">
                 {list.map((i) => (
                   <Row key={i.id} i={i} />
                 ))}
@@ -602,8 +603,8 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                   <h3 className="text-sm font-semibold">{tip.title}</h3>
                   <form action={deleteTripItem}>
                     <input type="hidden" name="id" value={tip.id} />
-                    <SubmitButton aria-label={t("Delete")} className="-m-2 p-2 text-xs text-[var(--color-text-dim)]" pendingLabel="✕">
-                      ✕
+                    <SubmitButton aria-label={t("Delete")} className="-m-2 grid h-9 w-9 place-items-center rounded-full text-[var(--color-text-dim)]" pendingLabel="…">
+                      <X size={15} strokeWidth={2.25} aria-hidden />
                     </SubmitButton>
                   </form>
                 </div>

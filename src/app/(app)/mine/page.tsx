@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CalendarClock, CircleCheck, type LucideIcon } from "lucide-react";
 import { isSameDay } from "date-fns";
 
 import { requireUser, listMyHubs } from "@/lib/session";
@@ -11,17 +12,20 @@ import { VentureChip } from "@/components/VentureChip";
 
 export const dynamic = "force-dynamic";
 
-const KIND_ICON: Record<MyItem["kind"], string> = {
-  task: "✓",
-  deadline: "⏳",
+const KIND_ICON: Record<MyItem["kind"], LucideIcon> = {
+  task: CircleCheck,
+  deadline: CalendarClock,
 };
 
 function Row({ item }: { item: MyItem }) {
+  const Icon = KIND_ICON[item.kind];
   return (
-    <Link href={item.href} className="flex items-start gap-3 px-3 py-2.5">
-      <span className="mt-0.5 w-4 shrink-0 text-center text-sm">{KIND_ICON[item.kind]}</span>
-      <div className="min-w-0 flex-1">
-        <span className="block truncate text-[0.95rem]">{item.title}</span>
+    <Link href={item.href} className="row">
+      <span className="icon-tile" aria-hidden>
+        <Icon size={17} strokeWidth={2} />
+      </span>
+      <div className="row-main">
+        <span className="row-title">{item.title}</span>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <span
             className="chip"
@@ -61,26 +65,26 @@ export default async function MinePage() {
   }
 
   return (
-    <div className="space-y-4 p-3">
-      <div>
-        <h1 className="text-lg font-bold">{t("Mine")}</h1>
-        <p className="text-xs text-[var(--color-text-dim)]">
+    <div className="page">
+      <div className="px-1">
+        <h1 className="page-title">{t("Mine")}</h1>
+        <p className="page-sub">
           {t("Assigned to you, across all {n} of your hubs.", { n: hubs.length })}
         </p>
       </div>
 
       {items.length === 0 && (
-        <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
+        <p className="card px-5 py-8 text-center text-sm text-[var(--color-text-dim)]">
           {t("Nothing assigned to you right now.")}
         </p>
       )}
 
       {overdue.length > 0 && (
         <section>
-          <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-danger)]">
+          <h2 className="section-title text-[var(--color-danger)]">
             {t("Overdue")} · {overdue.length}
           </h2>
-          <div className="card divide-y divide-[var(--color-border)]">
+          <div className="list">
             {overdue.map((i) => (
               <Row key={`${i.hub.id}-${i.kind}-${i.id}`} item={i} />
             ))}
@@ -90,10 +94,10 @@ export default async function MinePage() {
 
       {days.map(({ date, items: dayItems }) => (
         <section key={date.toISOString()}>
-          <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+          <h2 className="section-title">
             {isSameDay(date, now) ? t("Today") : fmtDay(date, lang)}
           </h2>
-          <div className="card divide-y divide-[var(--color-border)]">
+          <div className="list">
             {dayItems.map((i) => (
               <Row key={`${i.hub.id}-${i.kind}-${i.id}`} item={i} />
             ))}

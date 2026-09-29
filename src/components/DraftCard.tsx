@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import type { Draft, DraftKind } from "@/app/(app)/quick-actions";
 import { useT } from "@/components/I18nProvider";
 
@@ -65,9 +66,9 @@ export function DraftCard({
           type="button"
           onClick={onRemove}
           aria-label={t("Discard")}
-          className="text-[var(--color-text-dim)]"
+          className="btn btn-ghost btn-icon text-[var(--color-text-dim)]"
         >
-          ✕
+          <X size={18} strokeWidth={2.25} aria-hidden />
         </button>
       </div>
 

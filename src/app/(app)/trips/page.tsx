@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Plane } from "lucide-react";
 import { startOfDay } from "date-fns";
 
 import { withHub } from "@/lib/hub-context";
@@ -7,6 +8,7 @@ import { getLang, getT } from "@/lib/i18n-server";
 import { fmt, fmtShort } from "@/lib/i18n";
 import { countdownLabel, money } from "@/lib/format";
 import { TripForm } from "./TripForm";
+import { PageHeader, SectionHeader } from "@/components/SectionHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -42,20 +44,41 @@ export default async function TripsPage() {
     // hour, or the first morning of a trip reads as a countdown.
     const ongoing = startOfDay(trip.startDate) <= today && trip.endDate >= today;
     return (
-      <Link href={`/trips/${trip.id}`} className="card block p-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="truncate font-medium">✈️ {trip.title}</div>
-            <div className="text-[0.7rem] text-[var(--color-text-dim)]">
+      <Link
+        href={`/trips/${trip.id}`}
+        className="card block p-4 transition-transform active:scale-[0.99]"
+      >
+        <div className="flex items-start gap-3">
+          <span className="icon-tile h-10 w-10 rounded-xl" aria-hidden>
+            <Plane size={19} strokeWidth={2} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-base font-semibold leading-snug">{trip.title}</div>
+            <div className="mt-0.5 truncate text-xs text-[var(--color-text-dim)]">
               {trip.destination ? `${trip.destination} · ` : ""}
               {range(trip.startDate, trip.endDate)}
             </div>
           </div>
-          <span className="shrink-0 text-xs font-semibold">
+          <span
+            className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold"
+            style={
+              ongoing
+                ? { background: "var(--ok-wash)", color: "var(--color-ok)" }
+                : { background: "var(--color-surface-2)", color: "var(--color-text-dim)" }
+            }
+          >
             {ongoing ? t("happening now") : trip.endDate < today ? t("done") : countdownLabel(trip.startDate, lang)}
           </span>
         </div>
-        <div className="mt-1.5 flex flex-wrap gap-3 text-[0.7rem] text-[var(--color-text-dim)]">
+        {checkable.length > 0 && (
+          <div className="mt-3 h-1.5 rounded-full bg-[var(--color-surface-2)]" aria-hidden>
+            <div
+              className="h-full rounded-full bg-[var(--color-primary)]"
+              style={{ width: `${Math.max(3, (done / checkable.length) * 100)}%` }}
+            />
+          </div>
+        )}
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums text-[var(--color-text-dim)]">
           {checkable.length > 0 && (
             <span>{t("{done}/{total} checked off", { done, total: checkable.length })}</span>
           )}
@@ -69,27 +92,20 @@ export default async function TripsPage() {
   };
 
   return (
-    <div className="space-y-4 p-3">
-      <div>
-        <h1 className="text-lg font-bold">{t("Trips")}</h1>
-        <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-          {t("Dates, budget, what to book and what to pack — planned together.")}
-        </p>
-      </div>
+    <div className="page">
+      <PageHeader title={t("Trips")} sub={t("Dates, budget, what to book and what to pack — planned together.")} />
 
       <TripForm />
 
       {trips.length === 0 && (
-        <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
+        <p className="card px-5 py-8 text-center text-sm text-[var(--color-text-dim)]">
           {t("No trips yet. Where to next?")}
         </p>
       )}
 
       {upcoming.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-            {t("Coming up")} · {upcoming.length}
-          </h2>
+        <section className="space-y-2.5">
+          <SectionHeader title={`${t("Coming up")} · ${upcoming.length}`} />
           {upcoming.map((trip) => (
             <Card key={trip.id} trip={trip} />
           ))}
@@ -97,10 +113,8 @@ export default async function TripsPage() {
       )}
 
       {past.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-            {t("Past")} · {past.length}
-          </h2>
+        <section className="space-y-2.5">
+          <SectionHeader title={`${t("Past")} · ${past.length}`} />
           {past.map((trip) => (
             <Card key={trip.id} trip={trip} />
           ))}

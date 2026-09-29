@@ -19,10 +19,10 @@ export default async function InboxPage() {
   const vOpts = ventures.map((v) => ({ id: v.id, name: v.name }));
 
   return (
-    <div className="space-y-4 p-3">
+    <div className="page">
       <div>
-        <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
-          ← {t("Today")}
+        <Link href="/today" className="back-link">
+          {t("Today")}
         </Link>
         <h1 className="display mt-1 text-2xl">
           {items.length === 0 ? t("Nothing to review.") : t("{n} to review", { n: items.length })}

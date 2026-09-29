@@ -46,7 +46,7 @@ export function EntryRow({
 
   if (editing) {
     return (
-      <div className="p-3">
+      <div className="p-4">
         <EntryForm
           ventures={ventures}
           members={members}
@@ -63,10 +63,10 @@ export function EntryRow({
   const split = splitLabel(e.payerSharePct);
 
   return (
-    <div className="flex items-start gap-3 px-3 py-2.5">
+    <div className="flex items-start gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium">{t(e.category)}</span>
+          <span className="text-[0.9375rem] font-medium">{t(e.category)}</span>
           {e.venture && <VentureChip name={e.venture.name} color={e.venture.color} />}
           {e.isSettlement ? (
             <span className="chip text-[var(--color-text-dim)]">{t("settle-up")}</span>
@@ -74,15 +74,15 @@ export function EntryRow({
             split && <span className="chip text-[var(--color-text-dim)]">{t("shared")} {t(split)}</span>
           )}
         </div>
-        <div className="mt-0.5 text-xs text-[var(--color-text-dim)]">
+        <div className="mt-1 text-xs text-[var(--color-text-dim)]">
           {fmtShort(new Date(e.date), lang)}
           {payerName && members.length > 1 ? ` · ${t("paid by {name}", { name: payerName })}` : ""}
           {e.description ? ` · ${describe(e.description, t)}` : ""}
         </div>
       </div>
-      <div className="text-right">
+      <div className="shrink-0 text-right">
         <div
-          className="font-semibold tabular-nums"
+          className="row-amount tabular-nums"
           style={{
             color: income
               ? "var(--color-ok)"
@@ -94,7 +94,7 @@ export function EntryRow({
           {income ? "+" : "−"}
           {money(e.amountCents, e.currency, locale)}
         </div>
-        <div className="flex gap-2">
+        <div className="mt-1 flex justify-end gap-3">
           {!e.isSettlement && (
             <button
               type="button"

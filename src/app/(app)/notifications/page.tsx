@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CalendarClock, CalendarDays, Landmark, Repeat, Sun, UserRound } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
 import { requireHub } from "@/lib/session";
@@ -21,13 +22,13 @@ export default async function NotificationsPage() {
   const pushConfigured = Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
 
   return (
-    <div className="space-y-4 p-3">
+    <div className="page">
       <div>
-        <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
-          ← {t("Today")}
+        <Link href="/today" className="back-link">
+          {t("Today")}
         </Link>
-        <h1 className="mt-1 text-lg font-bold">{t("Notifications")}</h1>
-        <p className="text-xs text-[var(--color-text-dim)]">
+        <h1 className="page-title">{t("Notifications")}</h1>
+        <p className="page-sub">
           {deviceCount > 0
             ? t("{n} devices registered for push.", { n: deviceCount })
             : t("No devices registered for push yet.")}
@@ -47,22 +48,26 @@ export default async function NotificationsPage() {
         <h2 id="notify-what" className="text-sm font-semibold">
           {t("What you’ll be notified about")}
         </h2>
-        <ul className="mt-2 space-y-1.5 text-xs leading-relaxed">
-          {[
-            ["☀️", t("A morning summary around 8 a.m. — what’s due today and tomorrow.")],
-            ["📅", t("1 hour before an event on your calendar.")],
-            ["🔁", t("Subscriptions: 3 days before the cancel-by date, and on the day.")],
-            ["🏦", t("Debts: the day before a payment is due.")],
-            ["⏳", t("Deadlines and special dates: on the days you choose (e.g. 7, 3, 1 days before).")],
-            ["👤", t("When someone assigns you a task.")],
-          ].map(([icon, text]) => (
-            <li key={icon} className="flex gap-2">
-              <span aria-hidden>{icon}</span>
-              <span>{text}</span>
+        <ul className="mt-3 space-y-3 text-sm leading-snug">
+          {(
+            [
+              ["morning", Sun, t("A morning summary around 8 a.m. — what’s due today and tomorrow.")],
+              ["event", CalendarDays, t("1 hour before an event on your calendar.")],
+              ["subs", Repeat, t("Subscriptions: 3 days before the cancel-by date, and on the day.")],
+              ["debts", Landmark, t("Debts: the day before a payment is due.")],
+              ["deadlines", CalendarClock, t("Deadlines and special dates: on the days you choose (e.g. 7, 3, 1 days before).")],
+              ["assigned", UserRound, t("When someone assigns you a task.")],
+            ] as const
+          ).map(([key, Icon, text]) => (
+            <li key={key} className="flex items-start gap-3">
+              <span className="icon-tile h-7 w-7" aria-hidden>
+                <Icon size={15} strokeWidth={2} />
+              </span>
+              <span className="pt-1">{text}</span>
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-[0.7rem] text-[var(--color-text-dim)]">
+        <p className="mt-3 text-xs text-[var(--color-text-dim)]">
           {t("Pushes need notifications turned on for each phone or computer you use.")}
         </p>
       </section>
