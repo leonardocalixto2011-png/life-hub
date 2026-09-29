@@ -1,12 +1,13 @@
 import type { HubTx } from "@/lib/hub-context";
+import { dollarsToCents } from "@/lib/money";
 import { fromDateInput, fromDateTimeInput } from "@/lib/format";
 import type { Draft } from "@/lib/parse";
 import { assertVentureInHub } from "@/lib/membership";
 
+/** Draft amounts are typed by people ("4,50", "1 234,56"), so they go
+ * through the same locale-aware parser as every form. */
 function toCents(s: string | null): number | null {
-  if (!s) return null;
-  const n = Number(s.replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(n) ? Math.round(n * 100) : null;
+  return dollarsToCents(s);
 }
 
 export type CommitResult =

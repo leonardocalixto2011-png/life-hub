@@ -34,8 +34,8 @@ function amountCentsOf(kind: string, raw: string | null): number | null {
     if (kind === "BUDGET") throw new Error("A budget favourite needs an amount");
     return null;
   }
-  // "4,50" is how half of this app writes money; dollarsToCents would read 450.
-  const cents = dollarsToCents(raw.trim().replace(/,(\d{1,2})$/, ".$1"));
+  // dollarsToCents already reads "4,50" and "1.234,56" the French way.
+  const cents = dollarsToCents(raw.trim());
   if (cents == null || cents <= 0) throw new Error("Amount must be a positive number");
   return cents;
 }
@@ -153,6 +153,7 @@ export async function saveDraftAsFavorite(
   const kind = p.data.kind === "budget" ? "BUDGET" : "TASK";
   const amountCents = dollarsToCents(p.data.amount);
   if (kind === "BUDGET" && (amountCents == null || amountCents <= 0)) return { status: "invalid" };
+  if (amountCents != null && amountCents <= 0) return { status: "invalid" };
   await assertVentureInHub(hub.id, p.data.ventureId);
 
   const candidate = { label: p.data.title, kind, amountCents, entryType: p.data.entryType };

@@ -57,6 +57,11 @@ function worthParsing(text: string): boolean {
     /\$|€|\bby\b|\bon\b|\bevery\b|\brenew|\bdue\b|\bpay\b|tomorrow|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week/i.test(
       t,
     ) ||
+    // The same signals in French. Without these, a short "payer hydro
+    // vendredi" skipped parsing and was saved as a bare task.
+    /demain|ce soir|aujourd|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|semaine prochaine|\bpayer\b|\bfacture|\brdv\b|rendez-vous|\bchaque\b|renouvel|[ée]ch[ée]ance|\bavant le\b/i.test(
+      t,
+    ) ||
     t.split(/\s+/).length >= 5
   );
 }
@@ -122,6 +127,9 @@ export function QuickAdd({
   const [prompt, setPrompt] = useState<"snap" | "voice" | null>(null);
   const [favOffer, setFavOffer] = useState<FavOffer | null>(null);
   const [favBusy, setFavBusy] = useState<string | null>(null);
+  // State alone can't stop a double-tap: both taps land before the re-render
+  // that would disable the chip, and each would record the entry.
+  const favInFlight = useRef(false);
   const pressTimer = useRef<number | null>(null);
   const longPressed = useRef(false);
   const [pending, startTransition] = useTransition();
@@ -326,7 +334,8 @@ export function QuickAdd({
       longPressed.current = false;
       return;
     }
-    if (favBusy) return;
+    if (favInFlight.current) return;
+    favInFlight.current = true;
     setFavBusy(f.id);
     setMsg(null);
     setFavOffer(null);
@@ -347,7 +356,10 @@ export function QuickAdd({
         });
       })
       .catch(() => setMsg(t("Could not add")))
-      .finally(() => setFavBusy(null));
+      .finally(() => {
+        favInFlight.current = false;
+        setFavBusy(null);
+      });
   }
 
   /** Long-press a chip → manage favourites. */

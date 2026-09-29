@@ -5,8 +5,6 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 import { ai, aiEnabled, fastEffort, AI_MODEL_FAST } from "@/lib/ai";
 import { reportError } from "@/lib/observability";
-import { listVentures } from "@/lib/data";
-import type { HubTx } from "@/lib/hub-context";
 
 // "needs_reply" only ever comes from the mail connector's classifier
 // (lib/mail/classify.ts), never from this file's own parseText() — accepting
@@ -69,15 +67,19 @@ export type ParseOutcome =
  * drafts. No auth — callers gate. Returns an error string when AI is off or the
  * text yields nothing actionable.
  *
- * `hub` is omitted on the inbound-email path (src/app/api/inbound/route.ts).
- * That route now resolves a hub from the recipient address, but does so
- * outside a withHub transaction, so there is no tx to look ventures up with —
- * venture matching is skipped there and drafts come back with ventureId: null
- * for the user to fill in on Accept.
+ * `ventures` is empty on the inbound-email path (src/app/api/inbound/route.ts),
+ * so venture matching is skipped there and drafts come back with
+ * ventureId: null for the user to fill in on Accept.
  */
 export async function parseText(
   text: string,
-  hub?: { tx: HubTx; hubId: string },
+  /**
+   * The hub's ventures, for name matching. Passed in, not looked up here: the
+   * Claude call must not run inside a withHub transaction, which would hold a
+   * pooled connection (one per instance in prod) for the whole call and fail
+   * past the transaction's 15s timeout.
+   */
+  ventures: VentureRef[] = [],
   maxItems = 25,
   /**
    * Whose AI budget this call is charged to — a user id from the app, a hub
@@ -92,8 +94,6 @@ export async function parseText(
   if (!aiEnabled()) {
     return { ok: false, error: "Parsing needs ANTHROPIC_API_KEY set on the server." };
   }
-
-  const ventures = hub ? await listVentures(hub.tx, hub.hubId) : [];
 
   const system = [
     "Convert freeform notes (or a forwarded email) into structured items for a shared life/business admin app.",
@@ -131,7 +131,7 @@ export async function parseText(
 }
 
 /** What `listVentures` returns, narrowed to the two fields matching needs. */
-type VentureRef = { id: string; name: string };
+export type VentureRef = { id: string; name: string };
 
 /**
  * The part of the system prompt both parsers share: which kind to pick, the
@@ -213,15 +213,14 @@ export type ImageMediaType = (typeof IMAGE_MEDIA_TYPES)[number];
  */
 export async function parseImage(
   image: { data: string; mediaType: ImageMediaType },
-  hub: { tx: HubTx; hubId: string },
+  /** See parseText: looked up by the caller, outside any transaction. */
+  ventures: VentureRef[],
   subject: string,
   maxItems = 10,
 ): Promise<ParseOutcome> {
   if (!aiEnabled()) {
     return { ok: false, error: "Parsing needs ANTHROPIC_API_KEY set on the server." };
   }
-
-  const ventures = await listVentures(hub.tx, hub.hubId);
 
   const system = [
     "Read a photo (receipt, bill, invitation, poster, renewal notice, appointment card…) and turn what it asks of the reader into structured items for a shared life/business admin app.",

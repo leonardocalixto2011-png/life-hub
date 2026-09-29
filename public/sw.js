@@ -6,7 +6,7 @@
  * guarantees the bytes differ, and skipWaiting + clients.claim below make the
  * new worker take over immediately instead of after every tab closes.
  */
-const SW_VERSION = "2026-09-28.1-share-photos";
+const SW_VERSION = "2026-09-29.1-share-expiry";
 
 /** Shared photos wait here between the POST and the /share page reading them. */
 const SHARE_CACHE = "lifehub-share-v1";
@@ -69,7 +69,9 @@ async function receiveShare(request) {
         kept.map((file, i) =>
           cache.put(
             new Request(`/__share/${i}`),
-            new Response(file, { headers: { "Content-Type": file.type } }),
+            new Response(file, {
+              headers: { "Content-Type": file.type, "X-Shared-At": String(Date.now()) },
+            }),
           ),
         ),
       );
