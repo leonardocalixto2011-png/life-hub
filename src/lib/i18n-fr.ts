@@ -935,6 +935,9 @@ export const FR: Record<string, string> = {
 
   // ---- share sheet: photos -----------------------------------------------------
   "Reading photo {i} of {n}…": "Lecture de la photo {i} sur {n}…",
+  "Read the photo": "Lire la photo",
+  "Read {n} photos": "Lire les {n} photos",
+  "Shared photo {i}": "Photo partagée {i}",
   "The shared photo is no longer here — share it again.": "La photo partagée n'est plus là — partage-la encore.",
   "Reading photos needs the assistant, which isn't set up on this server.": "Lire des photos demande l'assistant, qui n'est pas configuré sur ce serveur.",
   "Something went wrong receiving that share. Try sharing it again.": "Quelque chose a mal tourné en recevant ce partage. Réessaie de le partager.",

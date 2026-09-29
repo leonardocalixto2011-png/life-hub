@@ -11,6 +11,19 @@ export function addMonthsOnDay(d: Date, n: number, anchorDay: number): Date {
   return setDate(month, Math.min(anchorDay, getDaysInMonth(month)));
 }
 
+/**
+ * True when two dates fall on the same calendar day (local — the process TZ is
+ * pinned in instrumentation.ts). Edit forms re-submit the stored date on every
+ * save, so an anchor must only be reset when the day actually changed: a
+ * rolled Feb 28 re-saved unchanged keeps anchor 31 and still returns to Mar 31.
+ */
+export function sameDay(a: Date | null | undefined, b: Date | null | undefined): boolean {
+  if (!a || !b) return !a && !b;
+  return (
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+  );
+}
+
 /** The day a recurrence is anchored to: the stored anchor, else the date's own day. */
 export function anchorOf(d: Date, stored: number | null | undefined): number {
   return stored ?? d.getDate();

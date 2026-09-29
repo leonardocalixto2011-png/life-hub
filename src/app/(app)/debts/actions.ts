@@ -11,7 +11,7 @@ import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents, percentToBasisPoints } from "@/lib/money";
 import { revalidateContent } from "@/lib/revalidate";
-import { addMonthsOnDay, anchorOf } from "@/lib/recur";
+import { addMonthsOnDay, anchorOf, sameDay } from "@/lib/recur";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -69,7 +69,7 @@ function data(d: z.infer<typeof createSchema>) {
  * policy at all (see the RLS gotcha in CLAUDE.md).
  */
 async function assertOwns(tx: Parameters<Parameters<typeof withHub>[1]>[0], id: string, userId: string) {
-  const row = await tx.debt.findUnique({ where: { id }, select: { ownerId: true, hubId: true } });
+  const row = await tx.debt.findUnique({ where: { id }, select: { ownerId: true, hubId: true, dueDate: true } });
   if (!row || row.ownerId !== userId) throw new Error("That debt isn't yours to change.");
   return row;
 }
@@ -88,10 +88,14 @@ export async function updateDebt(fd: FormData) {
   const { user } = await requireHub();
   const d = parse(updateSchema, fd);
   await withHub(user.id, async (tx) => {
-    const { hubId } = await assertOwns(tx, d.id, user.id);
+    const { hubId, dueDate } = await assertOwns(tx, d.id, user.id);
     await assertVentureInHub(hubId, d.ventureId);
+    // The form re-submits the stored date on every save; only a changed day
+    // resets the anchor, or a rolled Feb 28 would forget it was the 31st.
+    const { dueDay, ...rest } = data(d);
+    const values = sameDay(dueDate, rest.dueDate) ? rest : { ...rest, dueDay };
     // Editing confirms the owner, so a backfilled guess stops being flagged.
-    await tx.debt.update({ where: { id: d.id }, data: { ...data(d), ownerBackfilled: false } });
+    await tx.debt.update({ where: { id: d.id }, data: { ...values, ownerBackfilled: false } });
   });
   revalidateContent(`/debts/${d.id}`);
   redirect("/debts");

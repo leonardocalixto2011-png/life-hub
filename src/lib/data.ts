@@ -1,6 +1,5 @@
 import {
   addWeeks,
-  addYears,
   endOfDay,
   endOfMonth,
   startOfDay,
@@ -42,7 +41,9 @@ export async function advanceLapsedRenewals(tx: HubTx, hubId: string): Promise<v
   const step = (d: Date, cycle: BillingCycle, day: number): Date => {
     if (cycle === "WEEKLY") return addWeeks(d, 1);
     if (cycle === "QUARTERLY") return addMonthsOnDay(d, 3, day);
-    if (cycle === "YEARLY") return addYears(d, 1);
+    // Twelve anchored months, not addYears: that clamps Feb 29 to Feb 28 and
+    // forgets, so a leap-day renewal would never come back to the 29th.
+    if (cycle === "YEARLY") return addMonthsOnDay(d, 12, day);
     return addMonthsOnDay(d, 1, day); // MONTHLY
   };
 

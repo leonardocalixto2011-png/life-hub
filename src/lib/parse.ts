@@ -209,7 +209,8 @@ export type ImageMediaType = (typeof IMAGE_MEDIA_TYPES)[number];
  * and type before anything reaches here).
  *
  * The image is never logged: on failure only the error and the model go to
- * reportError, exactly as on the text path.
+ * reportError, exactly as on the text path. `ventures` comes from the caller,
+ * fetched outside any transaction, for the same reason as parseText.
  */
 export async function parseImage(
   image: { data: string; mediaType: ImageMediaType },
