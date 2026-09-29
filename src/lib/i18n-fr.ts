@@ -517,6 +517,7 @@ export const FR: Record<string, string> = {
   "Each theme has a light and a dark version — it follows whatever your phone is set to.":
     "Chaque thème a une version claire et une sombre — il suit le réglage de ton cellulaire.",
   "Motion": "Animations",
+  "Language": "Langue",
   "Language & format": "Langue et format",
   "Language and formatting": "Langue et format",
   "Amounts look like {example}.": "Les montants s'affichent comme {example}.",

@@ -55,9 +55,9 @@ export async function setTheme(themeId: string) {
 }
 
 /**
- * Number/date formatting only — this does not translate the interface, which
- * is still English. Per-user, because two people sharing a hub can reasonably
- * want different formatting.
+ * Language (French or English interface) and number/date formatting in one
+ * setting. Per-user, because two people sharing a hub can reasonably want
+ * different ones. Set from /appearance and from the account menu's switch.
  */
 export async function setLocale(locale: string) {
   const user = await requireUser();
