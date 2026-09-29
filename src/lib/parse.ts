@@ -218,16 +218,22 @@ export async function parseImage(
   ventures: VentureRef[],
   subject: string,
   maxItems = 10,
+  /** The reader's language. A receipt rarely says which language it's in, so
+   *  without this a French user got "Pharmacy — Pharmaprix". */
+  lang?: "fr" | "en",
 ): Promise<ParseOutcome> {
   if (!aiEnabled()) {
     return { ok: false, error: "Parsing needs ANTHROPIC_API_KEY set on the server." };
   }
 
   const system = [
+    ...(lang
+      ? [`Write every title and note in ${lang === "fr" ? "Québec French" : "English"} — the reader's language — whatever language the photo is in. Keep proper names (stores, people) as written.`]
+      : []),
     "Read a photo (receipt, bill, invitation, poster, renewal notice, appointment card…) and turn what it asks of the reader into structured items for a shared life/business admin app.",
     ...itemRules(ventures),
     "How to read common photos:",
-    "- Store or restaurant receipt (already paid): one budget item, entryType EXPENSE, amount = the final total paid including tax and tip, date = purchase date, title = short category + merchant, in the receipt's language (e.g. \"Épicerie — Metro\" on a French receipt). Never one item per line.",
+    "- Store or restaurant receipt (already paid): one budget item, entryType EXPENSE, amount = the final total paid including tax and tip, date = purchase date, title = short category + merchant (e.g. \"Épicerie — Metro\" in French, \"Groceries — Metro\" in English). Never one item per line.",
     "- Bill or invoice still to pay: a task, amount = amount due, date = due date, title = \"Pay <biller>\" (\"Payer <biller>\" in French).",
     "- Invitation, poster or appointment: an event when a clock time is shown (time set), otherwise a deadline with the date. Put the place in note.",
     "- Subscription or renewal notice: a subscription with billingCycle and the next renewal date.",

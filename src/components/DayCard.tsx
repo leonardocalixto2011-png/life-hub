@@ -51,8 +51,11 @@ export function DayCard({
   t: T;
 }) {
   const $ = (cents: number) => money(cents, currency, locale);
+  const ring = day.progress && day.progress.total > 0 ? day.progress : null;
   const stats: { href: string; value: string; label: string; danger?: boolean }[] = [];
-  if (day.dueToday > 0) {
+  // The ring already says how many things are due today; repeating it as a
+  // big figure right underneath read as the same fact twice.
+  if (day.dueToday > 0 && !ring) {
     stats.push({ href: "/agenda", value: String(day.dueToday), label: t("due today") });
   }
   if (day.outWeekCents > 0) {
@@ -68,7 +71,6 @@ export function DayCard({
     });
   }
   const calm = day.dueToday === 0 && day.outWeekCents === 0;
-  const ring = day.progress && day.progress.total > 0 ? day.progress : null;
 
   return (
     <section aria-labelledby="your-day" className="card overflow-hidden p-4 pb-3">
