@@ -8,6 +8,7 @@ import { toDateInput } from "@/lib/format";
 import { centsToInput } from "@/lib/money";
 import { PageHeader } from "@/components/SectionHeader";
 import { TaskEditForm } from "./TaskEditForm";
+import { TaskPhoto } from "./TaskPhoto";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,7 @@ export default async function TaskDetailPage({
         title={task.title}
         sub={t("Added by {name}", { name: task.createdBy.name ?? task.createdBy.email ?? "" })}
       />
+      <TaskPhoto taskId={task.id} title={task.title} imageUrl={task.imageUrl} userId={user.id} />
       <TaskEditForm
         task={{
           id: task.id,

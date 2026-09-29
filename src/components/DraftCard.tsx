@@ -3,6 +3,7 @@
 import { X } from "lucide-react";
 import type { Draft, DraftKind } from "@/app/(app)/quick-actions";
 import { useT } from "@/components/I18nProvider";
+import { PhotoThumb } from "@/components/PhotoViewer";
 
 const KIND_LABEL: Record<DraftKind, string> = {
   task: "Task",
@@ -71,6 +72,15 @@ export function DraftCard({
           <X size={18} strokeWidth={2.25} aria-hidden />
         </button>
       </div>
+
+      {draft.imageUrl && draft.kind === "task" && (
+        <div className="flex items-center gap-2">
+          <PhotoThumb src={draft.imageUrl} alt={draft.title} size={44} />
+          <span className="text-[0.7rem] font-semibold text-[var(--color-text-dim)]">
+            {t("The photo is pinned to this task.")}
+          </span>
+        </div>
+      )}
 
       {isNeedsReply ? (
         <>

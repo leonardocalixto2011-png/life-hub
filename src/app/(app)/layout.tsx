@@ -106,6 +106,7 @@ export default async function AppLayout({
           ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}
           members={members}
           defaultAssigneeId={user.id}
+          userId={user.id}
           aiEnabled={Boolean(process.env.ANTHROPIC_API_KEY)}
           favorites={favorites.map((f) => ({
             id: f.id,

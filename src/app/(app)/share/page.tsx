@@ -50,6 +50,7 @@ export default async function SharePage({
 
       <ShareCapture
         initialText={shared}
+        userId={user.id}
         ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}
         aiEnabled={Boolean(process.env.ANTHROPIC_API_KEY)}
         sharedImages={sp.shared === "1"}

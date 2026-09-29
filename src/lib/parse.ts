@@ -25,6 +25,8 @@ export type Draft = {
   note: string | null; // also doubles as the email snippet, for needs_reply
   visibility: "PRIVATE" | "SHARED";
   suggestedReply: string | null; // needs_reply only — never auto-sent, just a starting point
+  /** The photo this draft was read from, pinned to the task it becomes (tasks only). */
+  imageUrl?: string | null;
 };
 
 const AiSchema = z.object({
@@ -230,13 +232,14 @@ export async function parseImage(
     ...(lang
       ? [`Write every title and note in ${lang === "fr" ? "Québec French" : "English"} — the reader's language — whatever language the photo is in. Keep proper names (stores, people) as written.`]
       : []),
-    "Read a photo (receipt, bill, invitation, poster, renewal notice, appointment card…) and turn what it asks of the reader into structured items for a shared life/business admin app.",
+    "Read a photo (receipt, bill, invitation, poster, renewal notice, appointment card, a product someone wants bought…) and turn what it asks of the reader into structured items for a shared life/business admin app.",
     ...itemRules(ventures),
     "How to read common photos:",
     "- Store or restaurant receipt (already paid): one budget item, entryType EXPENSE, amount = the final total paid including tax and tip, date = purchase date, title = short category + merchant (e.g. \"Épicerie — Metro\" in French, \"Groceries — Metro\" in English). Never one item per line.",
     "- Bill or invoice still to pay: a task, amount = amount due, date = due date, title = \"Pay <biller>\" (\"Payer <biller>\" in French).",
     "- Invitation, poster or appointment: an event when a clock time is shown (time set), otherwise a deadline with the date. Put the place in note.",
     "- Subscription or renewal notice: a subscription with billingCycle and the next renewal date.",
+    "- Product or item photo (a package, a bottle, something on a store shelf, someone holding or pointing at an item) with no bill, receipt or invitation in it: someone is saying \"buy this\". Exactly ONE task, title = \"Acheter <product>\" in French, \"Buy <product>\" in English, where <product> is a short name plus brand and size if visible (e.g. \"Acheter cristaux désodorisants litière PetStore 1,8 kg\"). Keep the title under ~60 characters. amount only if a price tag is visible, else null. date null. note = the identifying details someone needs to find the exact item (brand, variant, scent, size, colour), short.",
     "A date with no year is the next such date for anything upcoming, the most recent past one for a receipt.",
     "Keep note short (place, invoice number) and never copy card, account or client numbers into it.",
     "Only include items clearly visible in the photo. Empty items array if it shows nothing actionable.",

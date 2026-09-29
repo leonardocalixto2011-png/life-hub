@@ -1443,4 +1443,44 @@ body:has([data-photo])::before {
       radial-gradient(110% 70% at 50% 0%, var(--primary-wash) 0%, transparent 70%),
       var(--color-surface);
   }
+
+  /* A task photo, full screen. Native <dialog>, so Esc / back close it and
+     pinch-zoom is the browser's own. Routine rung: a plain fade, no flourish. */
+  .photo-viewer {
+    margin: 0;
+    width: 100vw;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+    border: 0;
+    background: rgb(0 0 0 / 0.92);
+    color: #fff;
+  }
+  .photo-viewer[open] {
+    display: grid;
+    place-items: center;
+    animation: photo-in var(--fast) var(--ease);
+  }
+  .photo-viewer::backdrop {
+    background: rgb(0 0 0 / 0.6);
+  }
+  .photo-viewer-img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: var(--r-md);
+  }
+  .photo-viewer-close {
+    position: absolute;
+    top: max(12px, env(safe-area-inset-top));
+    right: 12px;
+    background: rgb(255 255 255 / 0.14);
+    color: #fff;
+  }
+  @keyframes photo-in {
+    from {
+      opacity: 0;
+    }
+  }
 }

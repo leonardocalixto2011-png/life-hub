@@ -147,6 +147,8 @@ export type TaskFilter = {
   ventureSlug?: string;
   mineUserId?: string; // when set, only tasks assigned to this user
   includeDone?: boolean;
+  /** Shopping: open tasks titled "Acheter …" / "Buy …", or with a pinned photo. */
+  toBuy?: boolean;
 };
 
 export function listTasks(tx: HubTx, hubId: string, userId: string, filter: TaskFilter = {}) {
@@ -157,6 +159,16 @@ export function listTasks(tx: HubTx, hubId: string, userId: string, filter: Task
       ...(filter.includeDone ? {} : { status: "OPEN" }),
       ...(filter.ventureSlug ? { venture: { slug: filter.ventureSlug } } : {}),
       ...(filter.mineUserId ? { assignedToId: filter.mineUserId } : {}),
+      ...(filter.toBuy
+        ? {
+            status: "OPEN" as const,
+            OR: [
+              { title: { startsWith: "Acheter", mode: "insensitive" as const } },
+              { title: { startsWith: "Buy ", mode: "insensitive" as const } },
+              { imageUrl: { not: null } },
+            ],
+          }
+        : {}),
     },
     include: taskInclude,
     orderBy: [

@@ -13,6 +13,7 @@ import { haptic } from "@/lib/haptics";
 import { Avatar } from "@/components/Avatar";
 import { VentureChip } from "@/components/VentureChip";
 import { useLang, useT } from "@/components/I18nProvider";
+import { PhotoThumb } from "@/components/PhotoViewer";
 
 type Venture = { id: string; name: string };
 type Member = { id: string; name: string | null; email: string | null };
@@ -24,6 +25,8 @@ export type TaskRowData = {
   priority: "LOW" | "MED" | "HIGH";
   dueDate: Date | string | null;
   amountCents: number | null;
+  /** A pinned photo ("buy this"). Optional so callers that don't select it still type-check. */
+  imageUrl?: string | null;
   ventureId: string | null;
   assignedToId: string | null;
   venture: { name: string; color: string | null } | null;
@@ -235,6 +238,10 @@ export function TaskRow({
               )}
             </button>
           </div>
+
+          {task.imageUrl && (
+            <PhotoThumb src={task.imageUrl} alt={task.title} size={36} className="mt-px" />
+          )}
 
           {/* The amount sits at the right edge like every other money column
               in the app, so a list of bills scans top to bottom. */}

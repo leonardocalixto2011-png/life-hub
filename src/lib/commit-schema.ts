@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { blobUrlSchema } from "@/lib/blob-url";
+
 /**
  * Validates a client-supplied `Draft` before it is committed. Lives in a plain
  * module because a `"use server"` file may only export async functions, and
@@ -19,4 +21,7 @@ export const CommitSchema = z.object({
   note: z.string().nullable(),
   visibility: z.enum(["PRIVATE", "SHARED"]).default("SHARED"),
   suggestedReply: z.string().nullable().default(null),
+  // The uploaded photo a draft came from. Only our own Blob host in
+  // production — a task photo loads in every hub member's browser.
+  imageUrl: blobUrlSchema.nullable().optional(),
 });
