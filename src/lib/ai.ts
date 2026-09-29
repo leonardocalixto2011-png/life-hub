@@ -32,7 +32,9 @@ export const AI_MODEL_FAST = process.env.ANTHROPIC_MODEL_FAST ?? "claude-haiku-4
  * "low"; spread this into output_config instead of hard-coding the field.
  */
 export function fastEffort(): { effort?: "low" } {
-  return AI_MODEL_FAST.startsWith("claude-haiku") ? {} : { effort: "low" };
+  // includes(), not startsWith(): Bedrock/Vertex ids look like
+  // "us.anthropic.claude-haiku-…" and would otherwise get the rejected field.
+  return AI_MODEL_FAST.includes("haiku") ? {} : { effort: "low" };
 }
 
 export function aiEnabled(): boolean {

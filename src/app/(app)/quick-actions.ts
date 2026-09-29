@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import { withHub } from "@/lib/hub-context";
+import { hubChrome } from "@/lib/data";
 import { requireHub } from "@/lib/session";
 import { rateLimit } from "@/lib/rate-limit";
 import { overAiBudget, AI_BUDGET_MESSAGE } from "@/lib/ai-budget";
@@ -34,7 +35,8 @@ export async function parseQuickAdd(text: string): Promise<ParseResult> {
     return { ok: false, error: "Keep it under 2000 characters." };
   }
   if (await overAiBudget(user.id)) return { ok: false, error: AI_BUDGET_MESSAGE };
-  return withHub(user.id, (tx) => parseText(text, { tx, hubId: hub.id }, 25, user.id));
+  const { ventures } = await hubChrome(user.id, hub.id);
+  return parseText(text, ventures, 25, user.id);
 }
 
 /**
@@ -72,9 +74,8 @@ export async function parseImage(input: {
     return { ok: false, error: "That photo couldn't be read." };
   }
   if (await overAiBudget(user.id)) return { ok: false, error: AI_BUDGET_MESSAGE };
-  return withHub(user.id, (tx) =>
-    parseImageCore({ data, mediaType: mediaType as ImageMediaType }, { tx, hubId: hub.id }, user.id),
-  );
+  const { ventures } = await hubChrome(user.id, hub.id);
+  return parseImageCore({ data, mediaType: mediaType as ImageMediaType }, ventures, user.id);
 }
 
 export async function commitDrafts(

@@ -23,13 +23,20 @@ const SHARE_MAX_IMAGES = 3;
  * in the order they were shared, and deletes them — they are read once. Empty
  * when the page is reloaded after they were consumed.
  */
+/** How long a shared photo may wait in the cache before it is discarded. */
+const SHARE_MAX_AGE_MS = 5 * 60 * 1000;
+
 async function takeSharedImages(): Promise<Blob[]> {
   if (typeof caches === "undefined") return [];
   const cache = await caches.open(SHARE_CACHE);
   const out: Blob[] = [];
   for (let i = 0; i < SHARE_MAX_IMAGES; i++) {
     const res = await cache.match(`/__share/${i}`);
-    if (res) out.push(await res.blob());
+    // Photos parked by a share that never reached this page (it landed on
+    // the sign-in screen, say) must not be read by whoever opens /share next
+    // on the same device. public/sw.js stamps each one when it stores it.
+    const at = Number(res?.headers.get("X-Shared-At"));
+    if (res && Number.isFinite(at) && Date.now() - at < SHARE_MAX_AGE_MS) out.push(await res.blob());
   }
   await caches.delete(SHARE_CACHE);
   return out;

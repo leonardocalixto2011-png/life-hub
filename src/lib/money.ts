@@ -47,7 +47,8 @@ export function perMonth(cents: number, frequency: "WEEKLY" | "BIWEEKLY" | "MONT
  * when one or two digits follow it, so "1,234" is still a thousand.
  */
 export function parseDecimal(raw: string): number {
-  let s = raw.replace(/[^0-9.,-]/g, "");
+  // A pasted Unicode minus (U+2212) would otherwise be stripped, flipping the sign.
+  let s = raw.replace(/\u2212/g, "-").replace(/[^0-9.,-]/g, "");
   const lastComma = s.lastIndexOf(",");
   const lastDot = s.lastIndexOf(".");
   if (lastComma > lastDot && (lastDot !== -1 || /,\d{1,2}$/.test(s))) {
@@ -61,7 +62,9 @@ export function parseDecimal(raw: string): number {
 export function dollarsToCents(value: string | null | undefined): number | null {
   if (value == null || value === "") return null;
   const n = parseDecimal(String(value));
-  if (!Number.isFinite(n)) return null;
+  // Past ~$21M the cents overflow Postgres Int and Prisma throws an error page
+  // instead of the form's own "invalid amount" path. Nothing here is that big.
+  if (!Number.isFinite(n) || Math.abs(n) > 1e7) return null;
   return Math.round(n * 100);
 }
 
