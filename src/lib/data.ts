@@ -725,15 +725,16 @@ export async function myItemsInHub(
 // Dashboard aggregate
 // --------------------------------------------------------------------------
 
-export async function dashboard(tx: HubTx, hubId: string, userId: string) {
+export async function dashboard(tx: HubTx, hubId: string, userId: string, currency = "CAD") {
   const now = new Date();
   const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
   const weekEnd = endOfDay(new Date(now.getTime() + 6 * 864e5));
   const soon = endOfDay(new Date(now.getTime() + 13 * 864e5)); // ~2 weeks
 
   await advanceLapsedRenewals(tx, hubId);
 
-  const [tasks, deadlines, renewals, cancelBys, events, debts, month] = await Promise.all([
+  const [tasks, deadlines, renewals, cancelBys, events, debts, month, deadlinesToday, targets] = await Promise.all([
     tx.task.findMany({
       where: { hubId, status: "OPEN", dueDate: { lte: weekEnd }, ...visibilityFilter(userId) },
       include: taskInclude,
@@ -770,10 +771,60 @@ export async function dashboard(tx: HubTx, hubId: string, userId: string) {
       orderBy: { dueDate: "asc" },
     }),
     budgetMonth(tx, hubId, now),
+    // Counted separately: the list above is capped at 5, so it can't answer
+    // "how many are due today" once a few overdue ones sit ahead of them.
+    tx.deadline.count({
+      where: { hubId, doneAt: null, dueDate: { gte: todayStart, lte: todayEnd }, ...deadlineVisibility(userId) },
+    }),
+    tx.budgetTarget.findMany({ where: { hubId }, select: { category: true, monthlyCents: true } }),
   ]);
 
   const overdue = tasks.filter((t) => t.dueDate && t.dueDate < todayStart);
   const dueSoon = tasks.filter((t) => !t.dueDate || t.dueDate >= todayStart);
+
+  // ---- "Your day" line. Built from the rows fetched above, so it inherits
+  // every hub / visibility / owner filter they already carry.
+  const dueToday =
+    tasks.filter((t) => t.dueDate && t.dueDate >= todayStart && t.dueDate <= todayEnd).length +
+    deadlinesToday +
+    events.filter((e) => e.startAt <= todayEnd).length;
+
+  // Money leaving in the next 7 days. Overdue bills and missed debt payments
+  // count too — still owed, and sooner rather than later. Per-payment amounts,
+  // not perMonth(): this is a dated window, not a monthly forecast.
+  const inWeek = (d: Date | null) => d != null && d <= weekEnd;
+  const outWeekCents =
+    tasks.reduce((n, t) => n + (inWeek(t.dueDate) ? (t.amountCents ?? 0) : 0), 0) +
+    debts.reduce(
+      (n, x) => n + (inWeek(x.dueDate) ? (x.actualPaymentCents ?? x.minimumPaymentCents ?? 0) : 0),
+      0,
+    ) +
+    // Another currency is left out rather than summed as if it were the hub's.
+    renewals.reduce(
+      (n, s) =>
+        n + (s.renewalDate >= todayStart && inWeek(s.renewalDate) && s.currency === currency ? s.costCents : 0),
+      0,
+    );
+
+  // Case-folded like /budget's target list, so "Food" and "food" meet.
+  let budgetLeftCents: number | null = null;
+  if (targets.length > 0) {
+    const spentBy = new Map<string, number>();
+    for (const c of month.categories) {
+      const k = c.category.toLowerCase();
+      spentBy.set(k, (spentBy.get(k) ?? 0) + c.cents);
+    }
+    const counted = new Set<string>();
+    let spent = 0;
+    let limit = 0;
+    for (const tg of targets) {
+      const k = tg.category.toLowerCase();
+      limit += tg.monthlyCents;
+      if (!counted.has(k)) spent += spentBy.get(k) ?? 0;
+      counted.add(k);
+    }
+    budgetLeftCents = limit - spent;
+  }
 
   return {
     now,
@@ -785,5 +836,6 @@ export async function dashboard(tx: HubTx, hubId: string, userId: string) {
     events,
     debts,
     budget: { income: month.income, expense: month.expense, net: month.net },
+    day: { dueToday, outWeekCents, budgetLeftCents },
   };
 }

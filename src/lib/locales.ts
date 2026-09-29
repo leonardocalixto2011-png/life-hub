@@ -1,10 +1,10 @@
 /**
  * Formatting locales and hub currencies offered in settings.
  *
- * Locale here controls *number and date formatting only* — the interface
- * itself is still English throughout. Offering fr-CA does not translate the
- * app; it makes "1 234,56 $" render the way a Quebec user writes it instead
- * of "$1,234.56". Real UI translation is a separate, much larger job.
+ * Locale picks both the interface language (French for any fr-*, English
+ * otherwise — see langOf in lib/i18n.ts) and number/date formatting, so fr-CA
+ * shows French text *and* "1 234,56 $". The account menu has a one-tap
+ * Français/English switch that sets fr-CA / en-CA.
  */
 
 export const LOCALES: { value: string; label: string }[] = [
