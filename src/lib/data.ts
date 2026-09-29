@@ -16,6 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { money } from "@/lib/format";
 import { monthlyCents, perMonth } from "@/lib/money";
 import { addMonthsOnDay, anchorOf } from "@/lib/recur";
+import { listFavorites } from "@/lib/favorites";
 
 /**
  * Rolls any ACTIVE subscription whose `renewalDate` has already passed
@@ -106,11 +107,18 @@ export const hubChrome = cache(async (userId: string, hubId: string) => {
   // awaiting a second connection while holding one open deadlocks a
   // single-connection pool (the local dev database hung here until the 15s
   // transaction timeout) and needlessly holds a pooled connection in prod.
-  const [[ventures, reviewCount], members] = await Promise.all([
-    withHub(userId, (tx) => Promise.all([listVentures(tx, hubId), pendingReviewCount(tx, userId)])),
+  const [[ventures, reviewCount, favorites], members] = await Promise.all([
+    withHub(userId, (tx) =>
+      Promise.all([
+        listVentures(tx, hubId),
+        pendingReviewCount(tx, userId),
+        // Quick-add's chip row, on every page — same transaction, no extra round trip.
+        listFavorites(tx, hubId, userId),
+      ]),
+    ),
     listMembers(userId, hubId),
   ]);
-  return { ventures, members, reviewCount };
+  return { ventures, members, reviewCount, favorites };
 });
 
 /**

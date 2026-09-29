@@ -17,6 +17,7 @@ const LINKS = [
   { href: "/calendar", label: "Calendar", icon: "📅" },
   { href: "/schedule", label: "Schedules", icon: "🕐" },
   { href: "/trips", label: "Trips", icon: "✈️" },
+  { href: "/favorites", label: "Favourites", icon: "⭐" },
   { href: "/assistant", label: "Assistant", icon: "✨" },
   { href: "/notifications", label: "Notifications", icon: "🔔" },
   { href: "/appearance", label: "Appearance", icon: "🖼️" },

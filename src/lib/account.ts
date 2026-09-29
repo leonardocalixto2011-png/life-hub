@@ -57,6 +57,7 @@ export async function exportUserData(userId: string) {
     mailAccounts,
     pushSubscriptions,
     notificationPref,
+    quickFavorites,
   ] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
@@ -95,6 +96,7 @@ export async function exportUserData(userId: string) {
       select: { userAgent: true, createdAt: true, lastOkAt: true },
     }),
     prisma.notificationPreference.findUnique({ where: { userId } }),
+    prisma.quickFavorite.findMany({ where: { createdById: userId } }),
   ]);
 
   return {
@@ -117,6 +119,7 @@ export async function exportUserData(userId: string) {
     mailAccounts,
     pushSubscriptions,
     notificationPref,
+    quickFavorites,
   };
 }
 

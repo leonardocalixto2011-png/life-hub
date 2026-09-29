@@ -58,6 +58,7 @@ model User {
   remindersSent      ReminderSent[]
   specialDates       SpecialDate[]
   trips              Trip[]
+  quickFavorites     QuickFavorite[]
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +133,7 @@ model Hub {
   trips          Trip[]
   tripItems      TripItem[]
   budgetTargets  BudgetTarget[]
+  quickFavorites QuickFavorite[]
 }
 
 model HubMembership {
@@ -199,12 +201,13 @@ model Venture {
   archived  Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  tasks         Task[]
-  deadlines     Deadline[]
-  subscriptions Subscription[]
-  debts         Debt[]
-  budgetEntries BudgetEntry[]
-  events        Event[]
+  tasks          Task[]
+  deadlines      Deadline[]
+  subscriptions  Subscription[]
+  debts          Debt[]
+  budgetEntries  BudgetEntry[]
+  events         Event[]
+  quickFavorites QuickFavorite[]
 
   @@unique([hubId, slug])
 }
@@ -793,4 +796,36 @@ model BudgetTarget {
   updatedAt    DateTime @updatedAt
 
   @@unique([hubId, category])
+}
+
+// ---------------------------------------------------------------------------
+// Favourites — one-tap repeat entries under quick-add ("Essence 60 $",
+// "Café 5 $"). Personal: only the person who made one sees or edits it, and
+// only inside a hub they're an ACTIVE member of (RLS quick_favorite_own).
+// ---------------------------------------------------------------------------
+
+enum FavoriteKind {
+  TASK
+  BUDGET
+  EVENT
+}
+
+model QuickFavorite {
+  id          String       @id @default(cuid())
+  hubId       String
+  hub         Hub          @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  label       String
+  kind        FavoriteKind @default(BUDGET)
+  amountCents Int?
+  /// Budget category; null = use the label.
+  category    String?
+  ventureId   String?
+  venture     Venture?     @relation(fields: [ventureId], references: [id], onDelete: SetNull)
+  entryType   EntryType    @default(EXPENSE)
+  sortOrder   Int          @default(0)
+  createdAt   DateTime     @default(now())
+
+  @@index([hubId, createdById, sortOrder])
 }

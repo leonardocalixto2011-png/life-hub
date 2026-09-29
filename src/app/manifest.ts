@@ -11,10 +11,22 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait",
     background_color: "#f6f6f4",
     theme_color: "#4f46e5",
+    // POST so the share sheet can hand over photos, not just text. public/sw.js
+    // intercepts it, parks the images in the Cache API and redirects to
+    // /share?shared=1 (a GET page can't receive a POST). If the worker isn't
+    // running yet, src/app/(app)/share/receive/route.ts answers instead and
+    // keeps the text. The action can't be /share itself: a route handler and
+    // a page may not share a segment.
     share_target: {
-      action: "/share",
-      method: "GET",
-      params: { title: "title", text: "text", url: "url" },
+      action: "/share/receive",
+      method: "POST",
+      enctype: "multipart/form-data",
+      params: {
+        title: "title",
+        text: "text",
+        url: "url",
+        files: [{ name: "files", accept: ["image/*"] }],
+      },
     },
     // Long-press the home-screen icon (Android; desktop Chrome/Edge too). Each
     // lands on /today with a flag QuickAdd consumes on arrival and strips from
