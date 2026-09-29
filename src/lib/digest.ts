@@ -4,7 +4,6 @@ import type { HubTx } from "@/lib/hub-context";
 import { withHub } from "@/lib/hub-context";
 import { listMyHubs, type SessionHub } from "@/lib/session";
 import { advanceLapsedRenewals } from "@/lib/data";
-import { dueLabel, money } from "@/lib/format";
 
 type WithHub<T> = T & { hubName: string };
 
@@ -27,7 +26,7 @@ async function collectDigestInHub(tx: HubTx, hubId: string, userId: string, wind
 
   await advanceLapsedRenewals(tx, hubId);
 
-  const [overdueTasks, dueTasks, deadlines, renewals, cancelBys] = await Promise.all([
+  const [overdueTasks, dueTasks, deadlines, renewals, cancelBys, events] = await Promise.all([
     tx.task.findMany({
       where: { hubId, status: "OPEN", dueDate: { lt: todayStart }, ...vis(userId) },
       include: ventureName,
@@ -53,9 +52,17 @@ async function collectDigestInHub(tx: HubTx, hubId: string, userId: string, wind
       include: ventureName,
       orderBy: { cancelByDate: "asc" },
     }),
+    // Events feed the push line ("Souper chez maman 18 h") and the email.
+    // Shifts stay out, as on every other calendar surface. endAt >= now so a
+    // morning digest doesn't list what already happened at 7 a.m.
+    tx.event.findMany({
+      where: { hubId, kind: "EVENT", endAt: { gte: now }, startAt: { lte: horizon }, ...vis(userId) },
+      select: { title: true, startAt: true, ...ventureName },
+      orderBy: { startAt: "asc" },
+    }),
   ]);
 
-  return { overdueTasks, dueTasks, deadlines, renewals, cancelBys };
+  return { overdueTasks, dueTasks, deadlines, renewals, cancelBys, events };
 }
 
 /**
@@ -91,6 +98,9 @@ export async function collectDigestForUser(userId: string, windowHours = 48) {
   const deadlines = perHub.flatMap(({ hub, d }) => tagHub(d.deadlines, hub));
   const renewals = perHub.flatMap(({ hub, d }) => tagHub(d.renewals, hub));
   const cancelBys = perHub.flatMap(({ hub, d }) => tagHub(d.cancelBys, hub));
+  const events = perHub
+    .flatMap(({ hub, d }) => tagHub(d.events, hub))
+    .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
 
   const count =
     overdueTasks.length +
@@ -98,17 +108,25 @@ export async function collectDigestForUser(userId: string, windowHours = 48) {
     deadlines.length +
     renewals.length +
     cancelBys.length +
+    events.length +
     debts.length;
 
-  return { now, windowHours, multiHub: hubs.length > 1, count, overdueTasks, dueTasks, deadlines, renewals, cancelBys, debts };
+  return {
+    now,
+    windowHours,
+    multiHub: hubs.length > 1,
+    count,
+    overdueTasks,
+    dueTasks,
+    deadlines,
+    events,
+    renewals,
+    cancelBys,
+    debts,
+  };
 }
 
 export type DigestData = Awaited<ReturnType<typeof collectDigestForUser>>;
-
-export function digestSubject(d: DigestData): string {
-  if (d.count === 0) return "Life Hub — nothing due";
-  return `Life Hub — ${d.count} thing${d.count === 1 ? "" : "s"} to look at`;
-}
 
 // ---------------------------------------------------------------------------
 // Weekly rollup — one short paragraph, sent Monday mornings.
@@ -188,156 +206,15 @@ export async function collectWeeklyForUser(userId: string) {
 
 export type WeeklyData = Awaited<ReturnType<typeof collectWeeklyForUser>>;
 
-export function weeklySubject() {
-  return "Life Hub — the week ahead";
-}
-
-export function weeklyText(w: WeeklyData): string {
-  const bits: string[] = [];
-  if (w.overdueTasks > 0) bits.push(`${w.overdueTasks} overdue task${w.overdueTasks === 1 ? "" : "s"}`);
-  bits.push(`${w.dueTasks} task${w.dueTasks === 1 ? "" : "s"} due`);
-  if (w.deadlines > 0) bits.push(`${w.deadlines} deadline${w.deadlines === 1 ? "" : "s"}`);
-  if (w.renewals.length > 0) {
-    bits.push(
-      `${w.renewals.length} subscription${w.renewals.length === 1 ? "" : "s"} renewing (${money(w.renewalTotal, w.currency)})`,
-    );
-  }
-  if (w.debts.length > 0) {
-    bits.push(
-      `${w.debts.length} debt payment${w.debts.length === 1 ? "" : "s"} due (${money(w.debtTotal)})`,
-    );
-  }
-
-  const net = w.budget.net;
-  const budgetNote =
-    net >= 0
-      ? `Budget this month is positive (${money(net)} net).`
-      : `Budget this month is down ${money(-net)}.`;
-
-  return `This week: ${bits.join(", ")}. ${budgetNote}`;
-}
-
-export function weeklyHtml(w: WeeklyData, appUrl: string): string {
-  const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
-  return `
-    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;padding:24px">
-      <h1 style="font-size:18px;margin:0 0 4px">Life Hub — the week ahead</h1>
-      <p style="font-size:12px;color:#999;margin:0 0 12px">${esc(w.now.toDateString())}</p>
-      <p style="font-size:15px;line-height:1.6;color:#222">${esc(weeklyText(w))}</p>
-      ${
-        w.renewals.length
-          ? `<ul style="font-size:14px;color:#444;line-height:1.6">${w.renewals
-              .map((r) => `<li>${esc(r.name)} — ${esc(money(r.costCents, r.currency))}</li>`)
-              .join("")}</ul>`
-          : ""
-      }
-      <p style="margin:20px 0 0"><a href="${esc(appUrl)}/agenda" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:600">Open the agenda</a></p>
-    </div>
-  `;
-}
-
-/** The actual-or-minimum payment, or undefined when neither is recorded. */
-function debtAmount(d: { actualPaymentCents: number | null; minimumPaymentCents: number | null }) {
-  const cents = d.actualPaymentCents ?? d.minimumPaymentCents;
-  return cents != null && cents > 0 ? money(cents) : undefined;
-}
-
-function line(label: string, when: Date | null, extra?: string): string {
-  return `• ${label}${when ? ` — ${dueLabel(when)}` : ""}${extra ? ` (${extra})` : ""}`;
-}
-
-export function digestText(d: DigestData): string {
-  if (d.count === 0) {
-    return "Nothing due in the next couple of days. Nice.";
-  }
-  const parts: string[] = [];
-  const hubTag = (hubName: string) => (d.multiHub ? ` [${hubName}]` : "");
-
-  if (d.overdueTasks.length) {
-    parts.push(
-      "OVERDUE",
-      ...d.overdueTasks.map((t) => line(t.title + hubTag(t.hubName), t.dueDate, t.venture?.name ?? undefined)),
-      "",
-    );
-  }
-  if (d.dueTasks.length) {
-    parts.push(
-      "TASKS",
-      ...d.dueTasks.map((t) => line(t.title + hubTag(t.hubName), t.dueDate, t.venture?.name ?? undefined)),
-      "",
-    );
-  }
-  if (d.deadlines.length) {
-    parts.push(
-      "DEADLINES",
-      ...d.deadlines.map((x) => line(x.title + hubTag(x.hubName), x.dueDate, x.venture?.name ?? undefined)),
-      "",
-    );
-  }
-  if (d.renewals.length) {
-    parts.push(
-      "SUBSCRIPTIONS RENEWING",
-      ...d.renewals.map((s) =>
-        line(s.name + hubTag(s.hubName), s.renewalDate, money(s.costCents, s.currency)),
-      ),
-      "",
-    );
-  }
-  if (d.cancelBys.length) {
-    parts.push(
-      "CANCEL BY",
-      ...d.cancelBys.map((s) => line(s.name + hubTag(s.hubName), s.cancelByDate, "cancel deadline")),
-      "",
-    );
-  }
-  if (d.debts.length) {
-    parts.push(
-      "PAYMENTS DUE",
-      ...d.debts.map((x) => line(x.name, x.dueDate, debtAmount(x))),
-      "",
-    );
-  }
-
-  return parts.join("\n").trim();
-}
-
-export function digestHtml(d: DigestData, appUrl: string): string {
-  const esc = (s: string) =>
-    s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-  const hubTag = (hubName: string) => (d.multiHub ? ` <span style="color:#aaa">[${esc(hubName)}]</span>` : "");
-
-  const section = (heading: string, rows: string[]) =>
-    rows.length
-      ? `<h2 style="font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#666;margin:18px 0 6px">${heading}</h2>
-         <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.6">${rows.join("")}</ul>`
-      : "";
-
-  const li = (label: string, hubName: string, when: Date | null, extra?: string) =>
-    `<li>${esc(label)}${hubTag(hubName)}${when ? ` — <strong>${esc(dueLabel(when))}</strong>` : ""}${
-      extra ? ` <span style="color:#888">(${esc(extra)})</span>` : ""
-    }</li>`;
-
-  const bodyInner =
-    d.count === 0
-      ? `<p style="font-size:14px;color:#444">Nothing due in the next couple of days.</p>`
-      : [
-          section("Overdue", d.overdueTasks.map((t) => li(t.title, t.hubName, t.dueDate, t.venture?.name ?? undefined))),
-          section("Tasks", d.dueTasks.map((t) => li(t.title, t.hubName, t.dueDate, t.venture?.name ?? undefined))),
-          section("Deadlines", d.deadlines.map((x) => li(x.title, x.hubName, x.dueDate, x.venture?.name ?? undefined))),
-          section(
-            "Subscriptions renewing",
-            d.renewals.map((s) => li(s.name, s.hubName, s.renewalDate, money(s.costCents, s.currency))),
-          ),
-          section("Cancel by", d.cancelBys.map((s) => li(s.name, s.hubName, s.cancelByDate, "cancel deadline"))),
-          section("Payments due", d.debts.map((x) => li(x.name, "", x.dueDate, debtAmount(x)))),
-        ].join("");
-
-  return `
-    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;padding:24px">
-      <h1 style="font-size:18px;margin:0 0 4px">Life Hub — daily digest</h1>
-      <p style="font-size:12px;color:#999;margin:0 0 8px">Next ${d.windowHours}h · ${esc(d.now.toDateString())}</p>
-      ${bodyInner}
-      <p style="margin:24px 0 0"><a href="${esc(appUrl)}/today" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:600">Open Life Hub</a></p>
-    </div>
-  `;
-}
+// Rendering (subject / text / HTML / push, per recipient language) lives in
+// digest-text.ts — pure, so it can be checked without a database.
+export {
+  digestHtml,
+  digestPush,
+  digestSubject,
+  digestText,
+  weeklyHtml,
+  weeklySubject,
+  weeklyText,
+  type Reader,
+} from "@/lib/digest-text";

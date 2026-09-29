@@ -12,9 +12,11 @@ import { sendPushToUser } from "@/lib/push";
 import {
   collectDigestForUser,
   digestHtml,
+  digestPush,
   digestSubject,
   digestText,
 } from "@/lib/digest";
+import { langOf } from "@/lib/i18n";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +37,7 @@ export async function GET(req: Request) {
     select: {
       id: true,
       email: true,
+      locale: true,
       notificationPref: true,
       _count: { select: { pushSubscriptions: true } },
     },
@@ -61,14 +64,18 @@ export async function GET(req: Request) {
     if (digest.count === 0) return;
 
     const pref = u.notificationPref;
-    const subject = digestSubject(digest);
-    const text = digestText(digest);
-    const html = digestHtml(digest, appUrl);
+    // Each person reads their digest in their own language (Appearance → locale).
+    const reader = { lang: langOf(u.locale), locale: u.locale };
+    const subject = digestSubject(digest, reader);
+    const text = digestText(digest, reader);
+    const html = digestHtml(digest, appUrl, reader);
 
     if ((pref?.pushEnabled ?? true) && u._count.pushSubscriptions > 0) {
+      // Names what matters ("Today: Pay Hydro ($84) · …"), not a bare count.
+      const { title, body } = digestPush(digest, reader);
       const r = await sendPushToUser(u.id, {
-        title: "Life Hub — daily digest",
-        body: `${digest.count} thing${digest.count === 1 ? "" : "s"} due in the next 48h. Tap to review.`,
+        title,
+        body,
         url: "/today",
         tag: "digest",
       });
