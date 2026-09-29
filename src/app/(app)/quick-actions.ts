@@ -19,6 +19,7 @@ import {
 import { commitDraftsCore } from "@/lib/commit-drafts";
 import { CommitSchema } from "@/lib/commit-schema";
 import { revalidateContent } from "@/lib/revalidate";
+import { langOf } from "@/lib/i18n";
 
 export type { Draft, DraftKind };
 export type ParseResult = ParseOutcome;
@@ -75,7 +76,13 @@ export async function parseImage(input: {
   }
   if (await overAiBudget(user.id)) return { ok: false, error: AI_BUDGET_MESSAGE };
   const { ventures } = await hubChrome(user.id, hub.id);
-  return parseImageCore({ data, mediaType: mediaType as ImageMediaType }, ventures, user.id);
+  return parseImageCore(
+    { data, mediaType: mediaType as ImageMediaType },
+    ventures,
+    user.id,
+    10,
+    langOf(user.locale),
+  );
 }
 
 export async function commitDrafts(

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUp, Camera, ChevronDown, Loader2, Mic, Pencil, SlidersHorizontal, Star } from "lucide-react";
+import { ArrowUp, Camera, ChevronDown, Images, Loader2, Mic, Pencil, SlidersHorizontal, Star } from "lucide-react";
 
 import { createTask } from "@/app/(app)/tasks/actions";
 import {
@@ -120,6 +120,8 @@ export function QuickAdd({
   const formRef = useRef<HTMLFormElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const libraryRef = useRef<HTMLInputElement>(null);
+  const [photoMenu, setPhotoMenu] = useState(false);
   const recRef = useRef<Recognition | null>(null);
   const [open, setOpen] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -288,36 +290,56 @@ export function QuickAdd({
   // ---- snap ----------------------------------------------------------------
   function openCamera() {
     setPrompt(null);
+    setPhotoMenu(false);
     fileRef.current?.click();
   }
 
+  /** Photos already on the phone — a receipt screenshot, last week's bill. */
+  function openLibrary() {
+    setPhotoMenu(false);
+    libraryRef.current?.click();
+  }
+
+  // Up to 3 at once: each is its own paid read, and the review list gets long
+  // past that. Read one after another so a burst doesn't trip the rate limit.
+  const MAX_PHOTOS = 3;
+
   function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []).slice(0, MAX_PHOTOS);
+    const extra = (e.target.files?.length ?? 0) - files.length;
     e.target.value = ""; // so picking the same photo again still fires
-    if (!file) return;
-    setMsg(t("Reading the photo…"));
+    if (!files.length) return;
+    setMsg(files.length > 1 ? t("Reading {n} photos…", { n: files.length }) : t("Reading the photo…"));
     setFavOffer(null);
     setDrafts(null);
     startTransition(async () => {
-      let data: string;
-      try {
-        data = await downscaleImage(file);
-      } catch {
-        setMsg(t("This photo format can't be read here. Try a JPEG, or take a screenshot of it."));
-        return;
+      const all: Draft[] = [];
+      let lastError: string | null = null;
+      for (const file of files) {
+        let data: string;
+        try {
+          data = await downscaleImage(file);
+        } catch {
+          lastError = t("This photo format can't be read here. Try a JPEG, or take a screenshot of it.");
+          continue;
+        }
+        try {
+          const r = await parseImage({ data, mediaType: "image/jpeg" });
+          if (r.ok) all.push(...r.drafts);
+          else lastError = t(r.error);
+        } catch {
+          lastError = t("Something went wrong. Try again.");
+        }
       }
-      let r: ParseResult;
-      try {
-        r = await parseImage({ data, mediaType: "image/jpeg" });
-      } catch {
-        setMsg(t("Something went wrong. Try again."));
-        return;
-      }
-      if (r.ok) {
-        setMsg(null);
-        showParsed(r);
+      if (all.length) {
+        setDrafts(all);
+        setMsg(
+          extra > 0
+            ? t("Only the first {n} photos were read.", { n: MAX_PHOTOS })
+            : lastError,
+        );
       } else {
-        setMsg(t(r.error));
+        setMsg(lastError ?? t("Nothing to add from that photo."));
       }
     });
   }
@@ -516,16 +538,35 @@ export function QuickAdd({
             </button>
           )}
           {aiEnabled && (
-            <button
-              type="button"
-              onClick={openCamera}
-              disabled={pending}
-              className="btn btn-icon"
-              aria-label={t("Snap a photo")}
-              title={t("Snap a photo")}
-            >
-              <Camera size={20} strokeWidth={2} aria-hidden />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setPhotoMenu((v) => !v)}
+                disabled={pending}
+                className="btn btn-icon"
+                aria-label={t("Add from a photo")}
+                aria-haspopup="menu"
+                aria-expanded={photoMenu}
+                title={t("Add from a photo")}
+              >
+                <Camera size={20} strokeWidth={2} aria-hidden />
+              </button>
+              {photoMenu && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setPhotoMenu(false)} />
+                  <div role="menu" className="menu absolute right-0 top-full z-40 mt-2 w-60">
+                    <button type="button" role="menuitem" onClick={openCamera} className="menu-item w-full">
+                      <Camera size={18} strokeWidth={2} aria-hidden />
+                      {t("Take a photo")}
+                    </button>
+                    <button type="button" role="menuitem" onClick={openLibrary} className="menu-item w-full">
+                      <Images size={18} strokeWidth={2} aria-hidden />
+                      {t("Choose from your photos")}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
           <button
             type="submit"
@@ -586,6 +627,20 @@ export function QuickAdd({
             type="file"
             accept="image/*"
             capture="environment"
+            onChange={onPhoto}
+            className="hidden"
+            tabIndex={-1}
+            aria-hidden
+          />
+        )}
+        {aiEnabled && (
+          // No capture attribute: the phone opens its photo library (iOS also
+          // offers Files), so a screenshot or an older photo can be read.
+          <input
+            ref={libraryRef}
+            type="file"
+            accept="image/*"
+            multiple
             onChange={onPhoto}
             className="hidden"
             tabIndex={-1}
