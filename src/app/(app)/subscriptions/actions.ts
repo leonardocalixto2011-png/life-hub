@@ -7,6 +7,7 @@ import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
+import { sameDay } from "@/lib/recur";
 import { revalidateContent } from "@/lib/revalidate";
 import { assertActiveMember, assertVentureInHub } from "@/lib/membership";
 
@@ -79,7 +80,16 @@ export async function updateSubscription(fd: FormData) {
   await assertVentureInHub(hub.id, values.ventureId);
   // Pinned to this hub in app code as well as by RLS.
   await withHub(user.id, async (tx) => {
-    const { count } = await tx.subscription.updateMany({ where: { id: d.id, hubId: hub.id }, data: values });
+    const current = await tx.subscription.findFirst({
+      where: { id: d.id, hubId: hub.id },
+      select: { renewalDate: true },
+    });
+    if (!current) throw new Error("Not found.");
+    // The form re-submits the stored date on every save; only a changed day
+    // resets the anchor, or a rolled Feb 28 would forget it was the 31st.
+    const { renewalDay, ...rest } = values;
+    const write = sameDay(current.renewalDate, values.renewalDate) ? rest : { ...rest, renewalDay };
+    const { count } = await tx.subscription.updateMany({ where: { id: d.id, hubId: hub.id }, data: write });
     if (count === 0) throw new Error("Not found.");
   });
   revalidateContent(`/subscriptions/${d.id}`);

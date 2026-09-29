@@ -118,14 +118,31 @@ export async function applyFavorite(
 
 const undoSchema = z.object({ kind: z.enum(["TASK", "BUDGET", "EVENT"]), id: z.string().cuid() });
 
-/** Undo for the toast: deletes only a row this person created, in this hub. */
+/** How long the toast's Undo stays honoured. The toast is gone long before this. */
+const UNDO_WINDOW_MS = 5 * 60 * 1000;
+
+/**
+ * Undo for the toast: deletes only a row this person created, in this hub,
+ * in the last few minutes. The id arrives from the client, so without the
+ * time bound this would be a general "delete any of my rows" endpoint.
+ */
 export async function undoFavorite(input: Created): Promise<{ ok: boolean }> {
   const { user, hub } = await requireHub();
   const p = undoSchema.safeParse(input);
   if (!p.success) return { ok: false };
-  const where = { id: p.data.id, hubId: hub.id, createdById: user.id };
+  const where = {
+    id: p.data.id,
+    hubId: hub.id,
+    createdById: user.id,
+    createdAt: { gte: new Date(Date.now() - UNDO_WINDOW_MS) },
+  };
   const { count } = await withHub(user.id, (tx) => {
-    if (p.data.kind === "BUDGET") return tx.budgetEntry.deleteMany({ where });
+    // A favourite writes a plain entry: never a settle-up, never a
+    // description (logDebtPayment's entries carry "Debt payment"). Anything
+    // else was not made by a favourite tap, so it isn't this undo's to delete.
+    if (p.data.kind === "BUDGET") {
+      return tx.budgetEntry.deleteMany({ where: { ...where, isSettlement: false, description: null } });
+    }
     if (p.data.kind === "EVENT") return tx.event.deleteMany({ where });
     return tx.task.deleteMany({ where });
   });

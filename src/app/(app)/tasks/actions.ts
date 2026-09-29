@@ -13,7 +13,7 @@ import { notifyAssignment } from "@/lib/notify";
 import { revalidateContent } from "@/lib/revalidate";
 import { assertActiveMember, assertVentureInHub } from "@/lib/membership";
 import { visibleTo } from "@/lib/visibility";
-import { addMonthsOnDay, anchorOf } from "@/lib/recur";
+import { addMonthsOnDay, anchorOf, sameDay } from "@/lib/recur";
 
 /**
  * Every write below goes by a client-supplied id. RLS already limits that to
@@ -29,6 +29,11 @@ async function findScopedTask(tx: HubTx, id: string, hubId: string, userId: stri
   const task = await tx.task.findFirst({ where: scoped(id, hubId, userId) });
   if (!task) throw new Error("Not found.");
   return task;
+}
+
+/** A new due date, resetting the monthly anchor only if the day really changed. */
+function dueFields(before: Date | null, dueDate: Date | null) {
+  return sameDay(before, dueDate) ? { dueDate } : { dueDate, dueDay: null };
 }
 
 /**
@@ -141,8 +146,9 @@ export async function updateTask(formData: FormData) {
         notes: data.notes,
         ventureId: data.ventureId,
         assignedToId: data.assignedToId,
-        dueDate: fromDateInput(data.dueDate),
-        dueDay: null,
+        // A changed date becomes the new anchor (re-derived on the next roll);
+        // re-saving the form with the same date keeps the old one.
+        ...dueFields(before.dueDate, fromDateInput(data.dueDate)),
         amountCents: dollarsToCents(data.amount),
         priority: data.priority,
         isRecurring: data.isRecurring,
@@ -255,9 +261,7 @@ export async function setTaskFields(input: z.infer<typeof patchSchema>) {
     const after = await tx.task.update({
       where: { id: p.id },
       data: {
-        ...(p.dueDate !== undefined
-          ? { dueDate: p.dueDate ? fromDateInput(p.dueDate) : null, dueDay: null }
-          : {}),
+        ...(p.dueDate !== undefined ? dueFields(before.dueDate, p.dueDate ? fromDateInput(p.dueDate) : null) : {}),
         ...(p.ventureId !== undefined ? { ventureId: p.ventureId } : {}),
         ...(p.assignedToId !== undefined ? { assignedToId: p.assignedToId } : {}),
         ...(p.priority !== undefined ? { priority: p.priority } : {}),

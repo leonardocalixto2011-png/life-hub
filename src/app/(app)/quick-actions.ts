@@ -15,6 +15,7 @@ import {
   type ImageMediaType,
   type ParseOutcome,
 } from "@/lib/parse";
+import { listVentures } from "@/lib/data";
 import { commitDraftsCore } from "@/lib/commit-drafts";
 import { CommitSchema } from "@/lib/commit-schema";
 import { revalidateContent } from "@/lib/revalidate";
@@ -34,7 +35,18 @@ export async function parseQuickAdd(text: string): Promise<ParseResult> {
     return { ok: false, error: "Keep it under 2000 characters." };
   }
   if (await overAiBudget(user.id)) return { ok: false, error: AI_BUDGET_MESSAGE };
-  return withHub(user.id, (tx) => parseText(text, { tx, hubId: hub.id }, 25, user.id));
+  return parseText(text, await hubVentures(user.id, hub.id), 25, user.id);
+}
+
+/**
+ * The venture list the parsers match names against, read in its own short
+ * transaction. The Claude call happens after this returns, outside any
+ * transaction: holding one open across a multi-second network call pins a
+ * pooled connection for the whole wait and can hit the transaction timeout.
+ */
+async function hubVentures(userId: string, hubId: string) {
+  const rows = await withHub(userId, (tx) => listVentures(tx, hubId));
+  return rows.map((v) => ({ id: v.id, name: v.name }));
 }
 
 /**
@@ -72,8 +84,10 @@ export async function parseImage(input: {
     return { ok: false, error: "That photo couldn't be read." };
   }
   if (await overAiBudget(user.id)) return { ok: false, error: AI_BUDGET_MESSAGE };
-  return withHub(user.id, (tx) =>
-    parseImageCore({ data, mediaType: mediaType as ImageMediaType }, { tx, hubId: hub.id }, user.id),
+  return parseImageCore(
+    { data, mediaType: mediaType as ImageMediaType },
+    await hubVentures(user.id, hub.id),
+    user.id,
   );
 }
 

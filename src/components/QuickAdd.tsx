@@ -150,7 +150,16 @@ export function QuickAdd({
   /** Sentence → AI drafts, falling back to a plain task if parsing fails. */
   function parseAndReview(title: string, fd: FormData) {
     startTransition(async () => {
-      const r = await parseQuickAdd(title);
+      // A thrown server action (network drop, function timeout) would
+      // otherwise bubble out of the transition to error.tsx and lose the
+      // typed text. Nothing was created, so the text stays for a retry.
+      let r: ParseResult;
+      try {
+        r = await parseQuickAdd(title);
+      } catch {
+        setMsg(t("Something went wrong. Try again."));
+        return;
+      }
       if (r.ok) {
         showParsed(r);
       } else {
@@ -178,6 +187,13 @@ export function QuickAdd({
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Mid-dictation, "Add" (or Enter) means "that's it": stop the mic and let
+    // its onend — the one path that submits spoken text — send it, exactly
+    // once. Submitting here too would parse the same sentence twice.
+    if (recRef.current) {
+      recRef.current.stop();
+      return;
+    }
     const fd = new FormData(e.currentTarget);
     const title = String(fd.get("title") ?? "").trim();
     if (!title) return;
@@ -279,7 +295,13 @@ export function QuickAdd({
         setMsg(t("This photo format can't be read here. Try a JPEG, or take a screenshot of it."));
         return;
       }
-      const r = await parseImage({ data, mediaType: "image/jpeg" });
+      let r: ParseResult;
+      try {
+        r = await parseImage({ data, mediaType: "image/jpeg" });
+      } catch {
+        setMsg(t("Something went wrong. Try again."));
+        return;
+      }
       if (r.ok) {
         setMsg(null);
         showParsed(r);

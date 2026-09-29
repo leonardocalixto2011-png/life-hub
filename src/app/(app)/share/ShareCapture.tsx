@@ -56,80 +56,97 @@ export function ShareCapture({
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const parsedOnce = useRef(false);
+  const [images, setImages] = useState<{ blob: Blob; url: string }[]>([]);
+  const arrived = useRef(false);
 
-  // Auto-parse the shared content once on arrival: the photos if the share
-  // sheet sent any, otherwise the text.
+  // Nothing here calls Claude on arrival. /share/receive is a plain POST
+  // endpoint, so any website can auto-submit a form to it: if landing here
+  // parsed automatically, visiting a hostile page would silently spend the
+  // viewer's AI budget. Arrival only *shows* what came in; every parse is a
+  // tap on the button below.
   useEffect(() => {
-    if (parsedOnce.current) return;
-    parsedOnce.current = true;
+    if (arrived.current) return;
+    arrived.current = true;
 
     // The share flags have done their job; a reload shouldn't re-announce them.
     const url = new URL(window.location.href);
     for (const k of ["shared", "more", "skipped", "nofile", "shareError"]) url.searchParams.delete(k);
     window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
 
-    if (sharedImages) {
-      start(async () => {
-        const images = await takeSharedImages().catch(() => [] as Blob[]);
-        if (!images.length) {
+    if (!sharedImages) return;
+    void takeSharedImages()
+      .catch(() => [] as Blob[])
+      .then((blobs) => {
+        if (!blobs.length) {
           setMsg(t("The shared photo is no longer here — share it again."));
           return;
         }
-        if (!aiEnabled) {
-          setMsg(t("Reading photos needs the assistant, which isn't set up on this server."));
-          return;
+        setImages(blobs.map((blob) => ({ blob, url: URL.createObjectURL(blob) })));
+        if (!aiEnabled) setMsg(t("Reading photos needs the assistant, which isn't set up on this server."));
+      });
+  }, [aiEnabled, sharedImages, t]);
+
+  // Thumbnails are object URLs; release them when the set changes or the page goes.
+  useEffect(() => () => images.forEach((i) => URL.revokeObjectURL(i.url)), [images]);
+
+  /** One tap reads every shared photo, one at a time. */
+  function readPhotos() {
+    if (!images.length) return;
+    setMsg(null);
+    start(async () => {
+      // One at a time: each is a paid call against the same hourly budget,
+      // and a failure on one photo shouldn't lose the others.
+      const found: Draft[] = [];
+      const problems: string[] = [];
+      for (let i = 0; i < images.length; i++) {
+        setMsg(
+          images.length > 1
+            ? t("Reading photo {i} of {n}…", { i: i + 1, n: images.length })
+            : t("Reading the photo…"),
+        );
+        let data: string;
+        try {
+          data = await downscaleImage(images[i].blob);
+        } catch {
+          problems.push(t("This photo format can't be read here. Try a JPEG, or take a screenshot of it."));
+          continue;
         }
-        // One at a time: each is a paid call against the same hourly budget,
-        // and a failure on one photo shouldn't lose the others.
-        const found: Draft[] = [];
-        const problems: string[] = [];
-        for (let i = 0; i < images.length; i++) {
-          setMsg(
-            images.length > 1
-              ? t("Reading photo {i} of {n}…", { i: i + 1, n: images.length })
-              : t("Reading the photo…"),
-          );
-          let data: string;
-          try {
-            data = await downscaleImage(images[i]);
-          } catch {
-            problems.push(t("This photo format can't be read here. Try a JPEG, or take a screenshot of it."));
-            continue;
-          }
+        try {
           const r = await parseImage({ data, mediaType: "image/jpeg" });
           if (r.ok) found.push(...r.drafts);
           else problems.push(t(r.error));
+        } catch {
+          problems.push(t("Something went wrong. Try again."));
         }
-        if (found.length) setDrafts(found.slice(0, 25));
-        setMsg(problems.length ? Array.from(new Set(problems)).join(" ") : null);
-      });
-      return;
-    }
-
-    if (!aiEnabled || !initialText.trim()) return;
-    start(async () => {
-      const r = await parseQuickAdd(initialText);
-      if (r.ok) setDrafts(r.drafts);
-      else setMsg(t(r.error));
+      }
+      if (found.length) setDrafts(found.slice(0, 25));
+      setMsg(problems.length ? Array.from(new Set(problems)).join(" ") : null);
     });
-  }, [aiEnabled, initialText, sharedImages, t]);
+  }
 
   function parse() {
     setMsg(null);
     start(async () => {
-      const r = await parseQuickAdd(text);
-      if (r.ok) setDrafts(r.drafts);
-      else setMsg(t(r.error));
+      try {
+        const r = await parseQuickAdd(text);
+        if (r.ok) setDrafts(r.drafts);
+        else setMsg(t(r.error));
+      } catch {
+        setMsg(t("Something went wrong. Try again."));
+      }
     });
   }
 
   function saveDrafts() {
     if (!drafts?.length) return;
     start(async () => {
-      const r = await commitDrafts(drafts);
-      if (r.ok) router.replace("/today");
-      else setMsg(t(r.error ?? "Could not save"));
+      try {
+        const r = await commitDrafts(drafts);
+        if (r.ok) router.replace("/today");
+        else setMsg(t(r.error ?? "Could not save"));
+      } catch {
+        setMsg(t("Something went wrong. Try again."));
+      }
     });
   }
 
@@ -162,6 +179,31 @@ export function ShareCapture({
         </div>
       )}
 
+      {images.length > 0 && !drafts && (
+        <div className="card space-y-3 p-3">
+          <div className="flex gap-2">
+            {images.map((img, i) => (
+              // eslint-disable-next-line @next/next/no-img-element -- a local blob: URL, nothing for next/image to optimise
+              <img
+                key={img.url}
+                src={img.url}
+                alt={t("Shared photo {i}", { i: i + 1 })}
+                className="h-20 w-20 rounded-lg object-cover"
+              />
+            ))}
+          </div>
+          {aiEnabled && (
+            <button onClick={readPhotos} disabled={pending} className="btn btn-primary w-full">
+              {pending
+                ? t("Reading…")
+                : images.length > 1
+                  ? t("Read {n} photos", { n: images.length })
+                  : t("Read the photo")}
+            </button>
+          )}
+        </div>
+      )}
+
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -173,7 +215,11 @@ export function ShareCapture({
       {!drafts && (
         <div className="flex gap-2">
           {aiEnabled && (
-            <button onClick={parse} disabled={pending || !text.trim()} className="btn btn-primary flex-1">
+            <button
+              onClick={parse}
+              disabled={pending || !text.trim()}
+              className={`btn flex-1${images.length ? "" : " btn-primary"}`}
+            >
               {pending ? t("Reading…") : t("Parse")}
             </button>
           )}
