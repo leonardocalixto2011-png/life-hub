@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Cake, ChevronRight, Clock } from "lucide-react";
 import { endOfDay, format, isSameDay, startOfDay } from "date-fns";
 
 import { hubChrome, listEvents, type EventWithRefs } from "@/lib/data";
@@ -72,15 +73,19 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       : undefined;
 
   return (
-    <div className="space-y-4 p-3">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-lg font-bold">{t("Calendar")}</h1>
-        <div className="flex gap-3 text-[0.7rem] font-semibold">
-          <Link href="/calendar/dates" className="text-[var(--color-primary)]">
-            🎂 {t("Special dates")}
+    <div className="page">
+      <div className="px-1">
+        <h1 className="page-title">{t("Calendar")}</h1>
+        <div className="-mx-1 mt-2 flex gap-2">
+          <Link href="/calendar/dates" className="chip chip-filter">
+            <Cake size={15} strokeWidth={2} aria-hidden />
+            {t("Special dates")}
+            <ChevronRight size={14} strokeWidth={2.25} aria-hidden />
           </Link>
-          <Link href="/schedule" className="text-[var(--color-primary)]">
-            🕐 {t("Schedules")}
+          <Link href="/schedule" className="chip chip-filter">
+            <Clock size={15} strokeWidth={2} aria-hidden />
+            {t("Schedules")}
+            <ChevronRight size={14} strokeWidth={2.25} aria-hidden />
           </Link>
         </div>
       </div>
@@ -93,7 +98,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       />
 
       {days.length === 0 && (
-        <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
+        <p className="card px-5 py-8 text-center text-sm text-[var(--color-text-dim)]">
           {t("Nothing in the next six weeks. Add an event above.")}
         </p>
       )}

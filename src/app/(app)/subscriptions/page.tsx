@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight, TrendingUp } from "lucide-react";
 import { subDays } from "date-fns";
 
 import { hubChrome, listSubscriptions, type SubscriptionWithRefs } from "@/lib/data";
@@ -13,6 +14,7 @@ import { Avatar } from "@/components/Avatar";
 import { SubscriptionForm } from "./SubscriptionForm";
 import { setSubscriptionStatus } from "./actions";
 import { SubmitButton } from "@/components/SubmitButton";
+import { Figure } from "@/components/Figure";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +24,11 @@ function Row({ s, t, lang, locale }: { s: SubscriptionWithRefs; t: T; lang: Lang
   const cancelUrgent = cancelDays !== null && cancelDays <= 14;
 
   return (
-    <div className="flex items-start gap-3 px-3 py-3">
+    <div className="flex items-start gap-3 px-4 py-3.5">
       <div className="min-w-0 flex-1">
         <Link
           href={`/subscriptions/${s.id}`}
-          className="block truncate font-medium"
+          className="block truncate text-[0.9375rem] font-medium"
           style={{
             textDecoration: cancelled ? "line-through" : "none",
             color: cancelled ? "var(--color-text-dim)" : "var(--color-text)",
@@ -57,9 +59,9 @@ function Row({ s, t, lang, locale }: { s: SubscriptionWithRefs; t: T; lang: Lang
         </div>
       </div>
 
-      <div className="text-right">
-        <div className="font-semibold tabular-nums">{money(s.costCents, s.currency, locale)}</div>
-        <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
+      <div className="shrink-0 text-right">
+        <div className="row-amount tabular-nums">{money(s.costCents, s.currency, locale)}</div>
+        <div className="mt-0.5 text-[0.6875rem] text-[var(--color-text-dim)]">
           {t(BILLING_LABEL[s.billingCycle])}
         </div>
         <form action={setSubscriptionStatus} className="mt-1">
@@ -104,40 +106,45 @@ export default async function SubscriptionsPage() {
       : null;
 
   return (
-    <div className="space-y-4 p-3">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-lg font-bold">{t("Subscriptions")}</h1>
-        <Link href="/debts" className="text-[0.7rem] font-semibold text-[var(--color-primary)]">
-          {t("Debts")} →
+    <div className="page">
+      <div className="flex items-end justify-between gap-3 px-1">
+        <h1 className="page-title">{t("Subscriptions")}</h1>
+        <Link href="/debts" className="section-link">
+          {t("Debts")}
+          <ChevronRight size={14} strokeWidth={2.25} aria-hidden />
         </Link>
       </div>
 
+      {/* Same Figure as /budget and /debts, so a monthly total looks like a
+          monthly total everywhere. */}
       <div className="card grid grid-cols-2 divide-x divide-[var(--color-border)] p-0">
-        <div className="p-3 text-center">
-          <div className="text-lg font-bold tabular-nums">{money(monthTotal, currency, locale)}</div>
-          <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
-            {t("per month")}
-          </div>
+        <div className="px-2 py-4">
+          <Figure cents={monthTotal} currency={currency} locale={locale} label={t("per month")} size="lg" />
         </div>
-        <div className="p-3 text-center">
-          <div className="text-lg font-bold tabular-nums">{money(yearTotal, currency, locale)}</div>
-          <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
-            {t("per year")} · {t("{n} active", { n: active.length })}
-          </div>
+        <div className="px-2 py-4">
+          <Figure
+            cents={yearTotal}
+            currency={currency}
+            locale={locale}
+            label={`${t("per year")} · ${t("{n} active", { n: active.length })}`}
+          />
         </div>
       </div>
       {creep && (
-        <div className="card border-[var(--color-warn)] p-3 text-xs">
+        <div className="card flex items-start gap-2.5 border-[var(--color-warn)] p-4 text-xs">
+          <TrendingUp size={16} strokeWidth={2.25} className="mt-px shrink-0" style={{ color: "var(--color-warn)" }} aria-hidden />
+          <span>
           <span className="font-semibold" style={{ color: "var(--color-warn)" }}>
-            ↑ {t("{amount}/mo added in the last 60 days", { amount: money(creep.monthly, currency, locale) })}
+            {t("{amount}/mo added in the last 60 days", { amount: money(creep.monthly, currency, locale) })}
           </span>{" "}
           <span className="text-[var(--color-text-dim)]">
             {t("({n} new subscriptions) — worth a review.", { n: creep.count })}
           </span>
+          </span>
         </div>
       )}
       {active.some((s) => s.currency !== currency) && (
-        <p className="text-[0.68rem] text-[var(--color-text-dim)]">
+        <p className="px-1 text-xs text-[var(--color-text-dim)]">
           {t("Totals assume {currency}; mixed currencies aren't converted.", { currency })}
         </p>
       )}
@@ -148,17 +155,17 @@ export default async function SubscriptionsPage() {
       />
 
       {subs.length === 0 && (
-        <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
+        <p className="card px-5 py-8 text-center text-sm text-[var(--color-text-dim)]">
           {t("No subscriptions tracked. Add the recurring ones so renewals don't surprise you.")}
         </p>
       )}
 
       {active.length > 0 && (
         <section>
-          <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+          <h2 className="section-title">
             {t("Active")} · {active.length}
           </h2>
-          <div className="card divide-y divide-[var(--color-border)]">
+          <div className="list">
             {active.map((s) => (
               <Row key={s.id} s={s} t={t} lang={lang} locale={locale} />
             ))}
@@ -168,10 +175,10 @@ export default async function SubscriptionsPage() {
 
       {cancelled.length > 0 && (
         <section>
-          <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+          <h2 className="section-title">
             {t("Cancelled")} · {cancelled.length}
           </h2>
-          <div className="card divide-y divide-[var(--color-border)]">
+          <div className="list">
             {cancelled.map((s) => (
               <Row key={s.id} s={s} t={t} lang={lang} locale={locale} />
             ))}

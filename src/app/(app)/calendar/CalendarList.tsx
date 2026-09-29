@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { MapPin } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { eventTimeRange, initials } from "@/lib/format";
@@ -55,7 +56,10 @@ function EventBody({ e, members, lang }: { e: EventWithRefs; members: Member[]; 
       <div className="mt-1 flex flex-wrap items-center gap-1.5">
         {e.venture && <VentureChip name={e.venture.name} color={e.venture.color} />}
         {e.location && (
-          <span className="text-[0.72rem] text-[var(--color-text-dim)]">📍 {e.location}</span>
+          <span className="inline-flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+            <MapPin size={12} strokeWidth={2.25} aria-hidden />
+            {e.location}
+          </span>
         )}
         <AttendeeDots ids={e.attendeeIds} members={members} />
       </div>
@@ -140,7 +144,7 @@ export function CalendarList({ days, members }: { days: Day[]; members: Member[]
 
       {days.map(({ key, label, items, plans }) => (
         <section key={key}>
-          <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+          <h2 className="section-title">
             {label}
           </h2>
           <Plans plans={plans} spaced={items.length > 0} planWord={t("plan")} />
@@ -152,7 +156,7 @@ export function CalendarList({ days, members }: { days: Day[]; members: Member[]
                     key={e.id}
                     onClick={() => toggle(e.id)}
                     aria-pressed={selected.has(e.id)}
-                    className="card flex w-full items-start gap-3 p-3 text-left"
+                    className="card flex w-full items-start gap-3 p-4 text-left"
                     style={
                       selected.has(e.id)
                         ? { borderColor: "var(--color-primary)", background: "var(--color-surface-2)" }
@@ -175,7 +179,7 @@ export function CalendarList({ days, members }: { days: Day[]; members: Member[]
                     </div>
                   </button>
                 ) : (
-                  <Link key={e.id} href={`/calendar/${e.id}`} className="card block p-3">
+                  <Link key={e.id} href={`/calendar/${e.id}`} className="card block p-4">
                     <EventBody e={e} members={members} lang={lang} />
                   </Link>
                 ),

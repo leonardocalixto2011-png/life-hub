@@ -21,12 +21,12 @@ export default async function AccountPage({
   const t = await getT();
 
   return (
-    <div className="space-y-4 p-3">
+    <div className="page">
       <div>
-        <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
-          ← {t("Today")}
+        <Link href="/today" className="back-link">
+          {t("Today")}
         </Link>
-        <h1 className="mt-1 text-lg font-bold">{t("Your account")}</h1>
+        <h1 className="page-title">{t("Your account")}</h1>
         <p className="text-xs text-[var(--color-text-dim)]">
           {t("Signed in as {email}.", { email: user.email })}
         </p>

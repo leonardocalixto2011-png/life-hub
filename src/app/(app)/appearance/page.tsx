@@ -18,43 +18,43 @@ export default async function AppearancePage() {
   const t = await getT();
 
   return (
-    <div className="space-y-4 p-3">
+    <div className="page">
       <div>
-        <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
-          ← {t("Today")}
+        <Link href="/today" className="back-link">
+          {t("Today")}
         </Link>
-        <h1 className="mt-1 text-lg font-bold">{t("Appearance")}</h1>
-        <p className="text-xs text-[var(--color-text-dim)]">
+        <h1 className="page-title">{t("Appearance")}</h1>
+        <p className="page-sub">
           {t("Your theme and background are yours alone — everyone else in the hub keeps their own.")}
         </p>
       </div>
 
       <section className="space-y-2">
-        <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+        <h2 className="section-title">
           {t("Theme")}
         </h2>
         <ThemePicker current={resolveThemeId(user.themeId)} />
-        <p className="text-[0.68rem] text-[var(--color-text-dim)]">
+        <p className="px-1 text-xs text-[var(--color-text-dim)]">
           {t("Each theme has a light and a dark version — it follows whatever your phone is set to.")}
         </p>
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+        <h2 className="section-title">
           {t("Motion")}
         </h2>
         <MotionToggle />
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+        <h2 className="section-title">
           {t("Language & format")}
         </h2>
         <LocalePicker current={resolveLocale(user.locale)} currency={hub.currency} />
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+        <h2 className="section-title">
           {t("Background photo")}
         </h2>
 
@@ -70,7 +70,7 @@ export default async function AppearancePage() {
           </div>
         )}
 
-        <div className="card space-y-2 p-3">
+        <div className="card space-y-3 p-4">
           <div className="text-xs font-semibold">
             {user.backgroundImageUrl ? t("Change background") : t("Set a background")}
           </div>

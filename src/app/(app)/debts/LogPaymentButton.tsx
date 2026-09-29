@@ -44,7 +44,7 @@ export function LogPaymentButton({
       type="button"
       onClick={submit}
       disabled={pending}
-      className="mt-1 text-[0.62rem] font-semibold text-[var(--color-primary)] underline disabled:opacity-50"
+      className="mt-2 inline-flex min-h-[32px] items-center rounded-full bg-[var(--primary-wash)] px-3 text-xs font-semibold text-[var(--color-primary)] transition-transform active:scale-95 disabled:opacity-50"
     >
       {pending ? t("logging…") : error ? t("failed — retry") : t("log {amount} payment", { amount: money(amountCents, currency, locale) })}
     </button>

@@ -27,9 +27,9 @@ export default async function TaskDetailPage({
   if (!task) notFound();
 
   return (
-    <div className="space-y-3 p-3">
-      <Link href="/tasks" className="text-xs font-semibold text-[var(--color-text-dim)]">
-        ← {t("Tasks")}
+    <div className="page page-tight">
+      <Link href="/tasks" className="back-link">
+        {t("Tasks")}
       </Link>
       <TaskEditForm
         task={{

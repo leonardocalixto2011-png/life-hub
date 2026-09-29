@@ -55,9 +55,9 @@ export default async function SchedulePage({
   });
 
   return (
-    <div className="space-y-4 p-3">
+    <div className="page">
       <div className="flex items-baseline justify-between">
-        <h1 className="text-lg font-bold">{t("Schedules")}</h1>
+        <h1 className="page-title">{t("Schedules")}</h1>
         <Link href="/calendar" className="text-[0.7rem] font-semibold text-[var(--color-primary)]">
           {t("Calendar")} →
         </Link>
@@ -92,13 +92,13 @@ export default async function SchedulePage({
         const free = freeByDay.find((f) => isSameDay(f.date, day))?.free ?? [];
         return (
           <section key={day.toISOString()}>
-            <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+            <h2 className="section-title">
               {isSameDay(day, now) ? t("Today") : fmtDay(day, lang)}
             </h2>
             {dayShifts.length > 0 && (
               <DayTimeline day={day} people={people} shifts={dayShifts} free={free} lang={lang} now={now} />
             )}
-            <div className="card divide-y divide-[var(--color-border)]">
+            <div className="list">
               {members.map((m) => {
                 const mine = dayShifts.filter((s) => s.personId === m.id);
                 return (

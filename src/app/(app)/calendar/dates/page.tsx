@@ -26,12 +26,12 @@ export default async function SpecialDatesPage() {
     .sort((a, b) => a.next.getTime() - b.next.getTime());
 
   return (
-    <div className="space-y-4 p-3">
-      <Link href="/calendar" className="text-xs font-semibold text-[var(--color-text-dim)]">
-        ← {t("Calendar")}
+    <div className="page">
+      <Link href="/calendar" className="back-link">
+        {t("Calendar")}
       </Link>
       <div>
-        <h1 className="text-lg font-bold">{t("Special dates")}</h1>
+        <h1 className="page-title">{t("Special dates")}</h1>
         <p className="text-[0.68rem] text-[var(--color-text-dim)]">
           {t("Birthdays and anniversaries come back every year, with reminders. Holidays already show on the calendar")}
           {hub.showOccasions ? "." : ` — ${t("turned off for this hub (members page)")}.`}
@@ -41,13 +41,13 @@ export default async function SpecialDatesPage() {
       <SpecialDateForm />
 
       {dates.length === 0 ? (
-        <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
+        <p className="card px-5 py-8 text-center text-sm text-[var(--color-text-dim)]">
           {t("Nothing yet. Start with the birthdays you can't afford to forget.")}
         </p>
       ) : (
-        <div className="card divide-y divide-[var(--color-border)]">
+        <div className="list">
           {dates.map(({ s, next, meta }) => (
-            <div key={s.id} className="flex items-start justify-between gap-3 px-3 py-2.5">
+            <div key={s.id} className="flex items-start justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
                 <div className="truncate font-medium">
                   {SPECIAL_EMOJI[s.kind]} {s.title}

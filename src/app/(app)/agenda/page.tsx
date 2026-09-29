@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CalendarDays, CalendarClock, CircleCheck, Landmark, Repeat, type LucideIcon } from "lucide-react";
 import { addDays, isSameDay, startOfDay } from "date-fns";
 
 import { agendaItems, type AgendaItem } from "@/lib/data";
@@ -10,21 +11,24 @@ import { fmtDay, fmtTime } from "@/lib/i18n";
 import { daysUntil } from "@/lib/format";
 import { VentureChip } from "@/components/VentureChip";
 import { EmptyState, quickAddExamples } from "@/components/EmptyState";
+import { PageHeader, SectionHeader } from "@/components/SectionHeader";
 
 export const dynamic = "force-dynamic";
 
-const KIND_ICON: Record<AgendaItem["kind"], string> = {
-  task: "✓",
-  deadline: "⏳",
-  event: "📅",
-  subscription: "🔁",
-  debt: "🏦",
+/** Line icons for the app's own kinds of item. Holidays, birthdays and trips
+ *  keep their emoji — those are content (a cake is the occasion), not UI. */
+const KIND_ICON: Record<AgendaItem["kind"], LucideIcon> = {
+  task: CircleCheck,
+  deadline: CalendarClock,
+  event: CalendarDays,
+  subscription: Repeat,
+  debt: Landmark,
 };
 
 /** One timeline row — agenda items and plan items (holidays, dates, trips) alike. */
 type Row = {
   key: string;
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   at: Date;
   href: string | null;
@@ -36,19 +40,21 @@ type Row = {
 function RowView({ item, lang }: { item: Row; lang: "en" | "fr" }) {
   const body = (
     <>
-      <span className="mt-0.5 w-4 shrink-0 text-center text-sm">{item.icon}</span>
-      <div className="min-w-0 flex-1">
-        <span className="block truncate text-[0.95rem]">{item.title}</span>
+      <span className="icon-tile" aria-hidden>
+        {item.icon}
+      </span>
+      <div className="row-main">
+        <span className="row-title">{item.title}</span>
         {(item.venture || item.meta || !item.allDay) && (
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {!item.allDay && (
-              <span className="text-[0.72rem] font-semibold text-[var(--color-text-dim)]">
+              <span className="text-xs font-semibold tabular-nums text-[var(--color-text-dim)]">
                 {fmtTime(item.at, lang)}
               </span>
             )}
             {item.venture && <VentureChip name={item.venture.name} color={item.venture.color} />}
             {item.meta && (
-              <span className="truncate text-[0.72rem] text-[var(--color-text-dim)]">{item.meta}</span>
+              <span className="truncate text-xs text-[var(--color-text-dim)]">{item.meta}</span>
             )}
           </div>
         )}
@@ -56,11 +62,11 @@ function RowView({ item, lang }: { item: Row; lang: "en" | "fr" }) {
     </>
   );
   return item.href ? (
-    <Link href={item.href} className="flex items-start gap-3 px-3 py-2.5">
+    <Link href={item.href} className="row">
       {body}
     </Link>
   ) : (
-    <div className="flex items-start gap-3 px-3 py-2.5">{body}</div>
+    <div className="row">{body}</div>
   );
 }
 
@@ -77,7 +83,10 @@ export default async function AgendaPage() {
   const rows: Row[] = [
     ...items.map((i) => ({
       key: `${i.kind}-${i.id}`,
-      icon: KIND_ICON[i.kind],
+      icon: (() => {
+        const Icon = KIND_ICON[i.kind];
+        return <Icon size={17} strokeWidth={2} />;
+      })(),
       title:
         i.kind === "subscription"
           ? t("{name} renews", { name: i.title.replace(/ renews$/, "") })
@@ -113,13 +122,8 @@ export default async function AgendaPage() {
   }
 
   return (
-    <div className="space-y-4 p-3">
-      <div>
-        <h1 className="text-lg font-bold">{t("Agenda")}</h1>
-        <p className="text-xs text-[var(--color-text-dim)]">
-          {t("Everything dated on one timeline · next 30 days")}
-        </p>
-      </div>
+    <div className="page">
+      <PageHeader title={t("Agenda")} sub={t("Everything dated on one timeline · next 30 days")} />
 
       {rows.length === 0 && (
         <EmptyState
@@ -131,10 +135,8 @@ export default async function AgendaPage() {
 
       {overdue.length > 0 && (
         <section>
-          <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-danger)]">
-            {t("Overdue")} · {overdue.length}
-          </h2>
-          <div className="card divide-y divide-[var(--color-border)]">
+          <SectionHeader title={`${t("Overdue")} · ${overdue.length}`} tone="danger" />
+          <div className="list">
             {overdue.map((i) => (
               <RowView key={i.key} item={i} lang={lang} />
             ))}
@@ -144,10 +146,16 @@ export default async function AgendaPage() {
 
       {days.map(({ date, items: dayItems }) => (
         <section key={date.toISOString()}>
-          <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
-            {isSameDay(date, now) ? t("Today") : fmtDay(date, lang)}
-          </h2>
-          <div className="card divide-y divide-[var(--color-border)]">
+          <SectionHeader
+            title={
+              isSameDay(date, now) ? (
+                <span className="text-[var(--color-primary)]">{t("Today")}</span>
+              ) : (
+                fmtDay(date, lang)
+              )
+            }
+          />
+          <div className="list">
             {dayItems.map((i) => (
               <RowView key={i.key} item={i} lang={lang} />
             ))}

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Inbox } from "lucide-react";
 
 import { requireHub, listMyHubs, listPendingInvites } from "@/lib/session";
 import { getT } from "@/lib/i18n-server";
@@ -78,13 +79,19 @@ export default async function AppLayout({
           which is two colour systems arguing in the one place the eye lands
           first. The hairline says which hub you're in without that. */}
       <div className="relative z-10 h-[3px] shrink-0" style={{ background: "var(--hub)" }} aria-hidden />
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-2.5 backdrop-blur">
+      <header className="opaque sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 py-1 pl-4 pr-2 backdrop-blur">
         <HubSwitcher hubs={hubs} currentHubId={hub.id} pendingInvites={invites.length} />
-        <div className="flex items-center gap-3">
-          <Link href="/inbox" aria-label={t("Review inbox")} className="relative text-lg leading-none">
-            📥
+        <div className="flex items-center gap-1">
+          <Link
+            href="/inbox"
+            aria-label={
+              reviewCount > 0 ? `${t("Review inbox")} · ${reviewCount}` : t("Review inbox")
+            }
+            className="icon-btn"
+          >
+            <Inbox size={22} strokeWidth={1.9} aria-hidden />
             {reviewCount > 0 && (
-              <span className="absolute -right-1.5 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-[var(--color-danger)] px-1 text-[0.6rem] font-bold text-white">
+              <span className="badge" aria-hidden>
                 {reviewCount > 9 ? "9+" : reviewCount}
               </span>
             )}
@@ -117,7 +124,7 @@ export default async function AppLayout({
         {invites.length > 0 && (
           <Link
             href="/hubs/invites"
-            className="mx-3 mt-3 flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-sm"
+            className="mx-3 mt-3 flex min-h-[48px] items-center justify-between gap-3 rounded-2xl border px-4 py-2.5 text-sm"
             style={{
               borderColor: invites[0].color,
               background: `color-mix(in srgb, ${invites[0].color} 12%, var(--color-surface))`,

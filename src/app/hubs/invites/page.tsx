@@ -49,7 +49,7 @@ export default async function InvitesPage() {
       </div>
 
       {invites.length === 0 ? (
-        <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">
+        <p className="card px-5 py-8 text-center text-sm text-[var(--color-text-dim)]">
           {t("No pending invites.")}{" "}
           <Link href="/today" className="font-semibold underline">
             {t("Back to Life Hub")}

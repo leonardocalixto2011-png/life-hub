@@ -41,12 +41,12 @@ export default async function SharePage({
     .slice(0, 2000);
 
   return (
-    <div className="space-y-4 p-3">
+    <div className="page">
       <div>
-        <Link href="/today" className="text-xs font-semibold text-[var(--color-text-dim)]">
-          ← {t("Today")}
+        <Link href="/today" className="back-link">
+          {t("Today")}
         </Link>
-        <h1 className="mt-1 text-lg font-bold">{t("Capture")}</h1>
+        <h1 className="page-title">{t("Capture")}</h1>
         <p className="text-xs text-[var(--color-text-dim)]">
           {t("Shared from another app. Turn it into tasks, events, deadlines or budget entries.")}
         </p>

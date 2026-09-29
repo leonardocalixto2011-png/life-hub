@@ -47,14 +47,14 @@ export function Figure({
     <div className={align === "center" ? "text-center" : "text-left"}>
       <div
         className={`font-bold tabular-nums ${
-          size === "lg" ? "text-[1.6rem] leading-none tracking-[-0.035em]" : "text-lg leading-tight tracking-[-0.02em]"
+          size === "lg" ? "text-[1.75rem] leading-none tracking-[-0.035em]" : "text-[1.25rem] leading-none tracking-[-0.03em]"
         }`}
         style={{ color: TONE[tone] }}
       >
         {money(cents, currency, locale)}
       </div>
       {label && (
-        <div className="mt-1 text-[0.6rem] uppercase tracking-wide text-[var(--color-text-dim)]">
+        <div className="mt-1.5 text-[0.6875rem] font-medium text-[var(--color-text-dim)] first-letter:uppercase">
           {label}
         </div>
       )}

@@ -28,6 +28,7 @@ export const FR: Record<string, string> = {
   "Appearance": "Apparence",
   "Your account": "Ton compte",
   "Account menu": "Menu du compte",
+  "Main": "Navigation principale",
   "You": "Toi",
   "Sign out": "Se déconnecter",
   "Review inbox": "Boîte de révision",

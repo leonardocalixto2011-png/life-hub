@@ -69,13 +69,13 @@ function Row({
   const pct = progress(d);
 
   return (
-    <div className="px-3 py-3">
+    <div className="px-4 py-3.5">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           {own ? (
             <Link
               href={`/debts/${d.id}`}
-              className="block truncate font-medium"
+              className="block truncate text-[0.9375rem] font-medium"
               style={{
                 textDecoration: paidOff ? "line-through" : "none",
                 color: paidOff ? "var(--color-text-dim)" : "var(--color-text)",
@@ -84,7 +84,7 @@ function Row({
               {d.name}
             </Link>
           ) : (
-            <span className="block truncate font-medium">{d.name}</span>
+            <span className="block truncate text-[0.9375rem] font-medium">{d.name}</span>
           )}
 
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -125,9 +125,9 @@ function Row({
           </div>
         </div>
 
-        <div className="flex flex-col items-end text-right">
-          <div className="font-semibold tabular-nums">{money(d.balanceCents, currency, locale)}</div>
-          <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
+        <div className="flex shrink-0 flex-col items-end text-right">
+          <div className="row-amount tabular-nums">{money(d.balanceCents, currency, locale)}</div>
+          <div className="mt-0.5 text-[0.6875rem] tabular-nums text-[var(--color-text-dim)]">
             {payment != null
               ? `${money(payment, currency, locale)}${t(FREQ_SUFFIX[d.paymentFrequency])}`
               : t("balance")}
@@ -140,11 +140,11 @@ function Row({
       </div>
 
       {pct != null && !paidOff && (
-        <div className="mt-2">
-          <div className="h-1 rounded-full bg-[var(--color-surface-2)]">
+        <div className="mt-2.5">
+          <div className="h-1.5 rounded-full bg-[var(--color-surface-2)]">
             <div className="h-full rounded-full bg-[var(--color-ok)]" style={{ width: `${Math.max(2, pct * 100)}%` }} />
           </div>
-          <div className="mt-0.5 text-[0.6rem] text-[var(--color-text-dim)]">
+          <div className="mt-1 text-[0.6875rem] text-[var(--color-text-dim)]">
             {t("{pct}% paid off", { pct: Math.round(pct * 100) })}
           </div>
         </div>
@@ -184,27 +184,27 @@ export default async function DebtsPage() {
   const rowProps = { currency, locale, t, lang };
 
   return (
-    <div className="space-y-4 p-3">
-      <div>
-        <h1 className="text-lg font-bold">{t("Debts")}</h1>
-        <p className="text-[0.68rem] text-[var(--color-text-dim)]">
+    <div className="page">
+      <div className="px-1">
+        <h1 className="page-title">{t("Debts")}</h1>
+        <p className="page-sub">
           {t("Yours alone, and only in {hub} — unless you share them below.", { hub: hub.name })}
         </p>
       </div>
 
       {elsewhere > 0 && (
-        <form action={moveMyDebtsHere} className="card flex items-center justify-between gap-3 p-3 text-xs">
+        <form action={moveMyDebtsHere} className="card flex items-center justify-between gap-3 p-4 text-xs">
           <span className="text-[var(--color-text-dim)]">
             {t("{n} of your debts live in another hub, so they aren't shown here.", { n: elsewhere })}
           </span>
-          <SubmitButton className="btn btn-primary shrink-0 px-3 py-1.5 text-xs" pendingLabel="…">
+          <SubmitButton className="btn btn-primary btn-sm shrink-0" pendingLabel="…">
             {t("Move here")}
           </SubmitButton>
         </form>
       )}
 
       {needsReview.length > 0 && (
-        <div className="card border-[var(--color-danger)] p-3 text-xs">
+        <div className="card border-[var(--color-danger)] bg-[var(--danger-wash)] p-4 text-xs">
           <div className="font-semibold text-[var(--color-danger)]">
             {t("{n} debts assigned to you automatically", { n: needsReview.length })}
           </div>
@@ -217,10 +217,10 @@ export default async function DebtsPage() {
 
       {/* The balance is what this page is about — the only `lg` figure on it. */}
       <div className="card grid grid-cols-2 divide-x divide-[var(--color-border)] p-0">
-        <div className="p-3">
+        <div className="px-2 py-4">
           <Figure cents={totalBalance} currency={currency} locale={locale} label={t("total balance")} size="lg" />
         </div>
-        <div className="p-3">
+        <div className="px-2 py-4">
           <Figure cents={totalMonthly} currency={currency} locale={locale} label={`${t("per month")} · ${t("{n} current", { n: current.length })}`} />
         </div>
       </div>
@@ -228,15 +228,15 @@ export default async function DebtsPage() {
       <DebtForm ventures={ventures.map((v) => ({ id: v.id, name: v.name }))} members={members} />
 
       {mine.length === 0 && (
-        <p className="card p-6 text-center text-sm text-[var(--color-text-dim)]">{t("No debts tracked yet.")}</p>
+        <p className="card px-5 py-8 text-center text-sm text-[var(--color-text-dim)]">{t("No debts tracked yet.")}</p>
       )}
 
       {current.length > 0 && (
         <section>
-          <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+          <h2 className="section-title">
             {t("Current")} · {current.length}
           </h2>
-          <div className="card divide-y divide-[var(--color-border)]">
+          <div className="list">
             {current.map((d) => (
               <Row key={d.id} d={d} own {...rowProps} />
             ))}
@@ -246,10 +246,10 @@ export default async function DebtsPage() {
 
       {paidOff.length > 0 && (
         <section>
-          <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+          <h2 className="section-title">
             {t("Paid off")} · {paidOff.length}
           </h2>
-          <div className="card divide-y divide-[var(--color-border)]">
+          <div className="list">
             {paidOff.map((d) => (
               <Row key={d.id} d={d} own {...rowProps} />
             ))}
@@ -261,14 +261,14 @@ export default async function DebtsPage() {
 
       {(shared.length > 0 || summaries.length > 0) && (
         <section>
-          <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+          <h2 className="section-title">
             {t("Shared with {hub}", { hub: hub.name })}
           </h2>
 
           {summaries.length > 0 && (
-            <div className="card mb-2 divide-y divide-[var(--color-border)]">
+            <div className="list mb-2">
               {summaries.map((s) => (
-                <div key={s.ownerId} className="flex items-start justify-between gap-3 px-3 py-3">
+                <div key={s.ownerId} className="flex items-start justify-between gap-3 px-4 py-3.5">
                   <div className="min-w-0">
                     <div className="truncate font-medium">{s.ownerName}</div>
                     <div className="text-[0.68rem] text-[var(--color-text-dim)]">
@@ -277,8 +277,8 @@ export default async function DebtsPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-semibold tabular-nums">{money(s.totalBalanceCents, currency, locale)}</div>
-                    <div className="text-[0.62rem] uppercase tracking-wide text-[var(--color-text-dim)]">
+                    <div className="row-amount tabular-nums">{money(s.totalBalanceCents, currency, locale)}</div>
+                    <div className="mt-0.5 text-[0.6875rem] tabular-nums text-[var(--color-text-dim)]">
                       {money(s.monthlyPaymentCents, currency, locale)}{t("/mo")}
                     </div>
                   </div>
@@ -288,7 +288,7 @@ export default async function DebtsPage() {
           )}
 
           {shared.length > 0 && (
-            <div className="card divide-y divide-[var(--color-border)]">
+            <div className="list">
               {shared.map((d) => (
                 <Row key={d.id} d={d} own={false} {...rowProps} />
               ))}

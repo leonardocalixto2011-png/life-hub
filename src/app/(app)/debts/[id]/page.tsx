@@ -32,9 +32,9 @@ export default async function DebtDetailPage({
   if (!debt || debt.ownerId !== user.id) notFound();
 
   return (
-    <div className="space-y-3 p-3">
-      <Link href="/debts" className="text-xs font-semibold text-[var(--color-text-dim)]">
-        ← {t("Debts")}
+    <div className="page page-tight">
+      <Link href="/debts" className="back-link">
+        {t("Debts")}
       </Link>
       <DebtForm
         ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}

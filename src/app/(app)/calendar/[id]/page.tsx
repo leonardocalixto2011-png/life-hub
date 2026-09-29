@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Clock } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { getEvent, hubChrome } from "@/lib/data";
@@ -27,9 +28,9 @@ export default async function EventDetailPage({
   if (!event) notFound();
 
   return (
-    <div className="space-y-3 p-3">
-      <Link href="/calendar" className="text-xs font-semibold text-[var(--color-text-dim)]">
-        ← {t("Calendar")}
+    <div className="page page-tight">
+      <Link href="/calendar" className="back-link">
+        {t("Calendar")}
       </Link>
       <EventForm
         ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}
@@ -67,7 +68,7 @@ export default async function EventDetailPage({
           ))}
         </select>
         <SubmitButton className="btn w-full">
-          🕐 {t("Move to Schedules")}
+          <Clock size={17} strokeWidth={2} aria-hidden /> {t("Move to Schedules")}
         </SubmitButton>
       </form>
     </div>

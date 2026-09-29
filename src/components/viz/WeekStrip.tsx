@@ -2,6 +2,7 @@ import "./viz.css";
 
 import Link from "next/link";
 import { addDays, format, isSameDay, startOfDay } from "date-fns";
+import { CalendarClock, CalendarDays, Clock } from "lucide-react";
 
 import { hubChrome, listEvents } from "@/lib/data";
 import { listShifts, planItemsBetween } from "@/lib/plans";
@@ -127,8 +128,18 @@ export async function WeekStrip({
 
               <span className="flex h-3.5 items-center gap-0.5 text-[0.6rem] leading-none text-[var(--color-text-dim)]" aria-hidden>
                 {plan ? <span>{plan.emoji}</span> : null}
-                {nEvents > 0 && <span className="tabular-nums">📅{nEvents}</span>}
-                {nDue > 0 && <span className="tabular-nums">⏳{nDue}</span>}
+                {nEvents > 0 && (
+                  <span className="flex items-center gap-px tabular-nums">
+                    <CalendarDays size={10} strokeWidth={2.25} />
+                    {nEvents}
+                  </span>
+                )}
+                {nDue > 0 && (
+                  <span className="flex items-center gap-px tabular-nums">
+                    <CalendarClock size={10} strokeWidth={2.25} />
+                    {nDue}
+                  </span>
+                )}
               </span>
             </Link>
           );
@@ -143,7 +154,9 @@ export async function WeekStrip({
               {p.name}
             </span>
           ))}
-          <span>🕐 {t("work, 6am – midnight")}</span>
+          <span className="flex items-center gap-1">
+            <Clock size={11} strokeWidth={2.25} aria-hidden /> {t("work, 6am – midnight")}
+          </span>
         </figcaption>
       )}
     </figure>

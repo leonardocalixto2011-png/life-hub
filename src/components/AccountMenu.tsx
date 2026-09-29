@@ -3,6 +3,19 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import {
+  Bell,
+  CalendarDays,
+  Clock,
+  ListOrdered,
+  LogOut,
+  Palette,
+  Plane,
+  Settings,
+  Sparkles,
+  Star,
+  type LucideIcon,
+} from "lucide-react";
 
 import { Avatar } from "@/components/Avatar";
 import { useLang, useT } from "@/components/I18nProvider";
@@ -14,16 +27,16 @@ import { signOutAction } from "@/app/(app)/auth-actions";
  * icons plus a text "Sign out" overflowed the 375px header on a phone; behind
  * the avatar they get real labels and the header keeps three elements.
  */
-const LINKS = [
-  { href: "/agenda", label: "Agenda", icon: "📋" },
-  { href: "/calendar", label: "Calendar", icon: "📅" },
-  { href: "/schedule", label: "Schedules", icon: "🕐" },
-  { href: "/trips", label: "Trips", icon: "✈️" },
-  { href: "/favorites", label: "Favourites", icon: "⭐" },
-  { href: "/assistant", label: "Assistant", icon: "✨" },
-  { href: "/notifications", label: "Notifications", icon: "🔔" },
-  { href: "/appearance", label: "Appearance", icon: "🖼️" },
-  { href: "/account", label: "Your account", icon: "⚙️" },
+const LINKS: { href: string; label: string; Icon: LucideIcon }[] = [
+  { href: "/agenda", label: "Agenda", Icon: ListOrdered },
+  { href: "/calendar", label: "Calendar", Icon: CalendarDays },
+  { href: "/schedule", label: "Schedules", Icon: Clock },
+  { href: "/trips", label: "Trips", Icon: Plane },
+  { href: "/favorites", label: "Favourites", Icon: Star },
+  { href: "/assistant", label: "Assistant", Icon: Sparkles },
+  { href: "/notifications", label: "Notifications", Icon: Bell },
+  { href: "/appearance", label: "Appearance", Icon: Palette },
+  { href: "/account", label: "Your account", Icon: Settings },
 ];
 
 /**
@@ -46,7 +59,7 @@ function LanguageSwitch() {
   }
 
   return (
-    <div role="group" aria-label={t("Language")} className="flex gap-1 px-3 pb-2">
+    <div role="group" aria-label={t("Language")} className="flex gap-1 p-1">
       {(["fr", "en"] as const).map((l) => (
         <button
           key={l}
@@ -54,10 +67,10 @@ function LanguageSwitch() {
           onClick={() => pick(l)}
           aria-pressed={lang === l}
           disabled={pending}
-          className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${
+          className={`min-h-[36px] flex-1 rounded-[10px] px-2 text-xs font-semibold ${
             lang === l
               ? "bg-[var(--color-primary)] text-[var(--color-primary-fg)]"
-              : "border border-[var(--color-border)] text-[var(--color-text-dim)]"
+              : "bg-[var(--color-surface-2)] text-[var(--color-text-dim)]"
           }`}
         >
           {l === "fr" ? "Français" : "English"}
@@ -84,50 +97,44 @@ export function AccountMenu({
         onClick={() => setOpen((v) => !v)}
         aria-label={t("Account menu")}
         aria-expanded={open}
-        className="block rounded-full"
+        className="icon-btn"
       >
-        <Avatar name={name} email={email} size={28} />
+        <Avatar name={name} email={email} size={32} />
       </button>
 
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="card absolute right-0 top-full z-40 mt-2 w-52 divide-y divide-[var(--color-border)] p-0">
-            <div className="px-3 py-2">
-              <div className="truncate text-sm font-semibold">{name ?? t("You")}</div>
-              {email && (
-                <div className="truncate text-[0.68rem] text-[var(--color-text-dim)]">{email}</div>
-              )}
+          <div className="menu absolute right-0 top-full z-40 mt-1 max-h-[calc(100dvh-5rem)] w-60 overflow-y-auto" style={{ transformOrigin: "top right" }}>
+            <div className="flex items-center gap-3 px-3 py-2.5">
+              <Avatar name={name} email={email} size={36} />
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold">{name ?? t("You")}</div>
+                {email && (
+                  <div className="truncate text-xs text-[var(--color-text-dim)]">{email}</div>
+                )}
+              </div>
             </div>
 
-            <div className="pt-2">
-              <LanguageSwitch />
-            </div>
+            <LanguageSwitch />
 
-            <div className="p-1">
-              {LINKS.map((l) => (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm"
-                >
-                  <span className="text-base leading-none">{l.icon}</span>
-                  {t(l.label)}
-                </Link>
-              ))}
-            </div>
+            <div className="menu-sep" />
 
-            <div className="p-1">
-              <form action={signOutAction}>
-                <button
-                  type="submit"
-                  className="w-full rounded-lg px-2 py-2 text-left text-sm text-[var(--color-text-dim)]"
-                >
-                  {t("Sign out")}
-                </button>
-              </form>
-            </div>
+            {LINKS.map(({ href, label, Icon }) => (
+              <Link key={href} href={href} onClick={() => setOpen(false)} className="menu-item">
+                <Icon size={18} strokeWidth={1.9} aria-hidden />
+                {t(label)}
+              </Link>
+            ))}
+
+            <div className="menu-sep" />
+
+            <form action={signOutAction}>
+              <button type="submit" className="menu-item text-[var(--color-text-dim)]">
+                <LogOut size={18} strokeWidth={1.9} aria-hidden />
+                {t("Sign out")}
+              </button>
+            </form>
           </div>
         </>
       )}

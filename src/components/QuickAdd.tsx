@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowUp, Camera, ChevronDown, Loader2, Mic, Pencil, SlidersHorizontal, Star } from "lucide-react";
 
 import { createTask } from "@/app/(app)/tasks/actions";
 import {
@@ -461,11 +462,11 @@ export function QuickAdd({
 
   return (
     <div
-      className="border-b border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+      className="opaque border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 pb-2.5 pt-3"
       onKeyDown={onKeyDown}
     >
       <form ref={formRef} onSubmit={onSubmit}>
-        <div className="flex gap-2">
+        <div className="composer">
           <input
             ref={inputRef}
             name="title"
@@ -478,7 +479,6 @@ export function QuickAdd({
             }
             autoComplete="off"
             enterKeyHint="send"
-            className="field min-w-0 flex-1"
             aria-label={t("Quick add")}
           />
           {canSpeak && (
@@ -486,12 +486,12 @@ export function QuickAdd({
               type="button"
               onClick={toggleVoice}
               disabled={pending && !listening}
-              className={`btn shrink-0 px-2.5${listening ? " mic-live" : ""}`}
+              className={`btn btn-icon${listening ? " mic-live" : ""}`}
               aria-label={listening ? t("Stop listening") : t("Speak")}
               aria-pressed={listening}
               title={listening ? t("Stop listening") : t("Speak")}
             >
-              <span aria-hidden>🎤</span>
+              <Mic size={20} strokeWidth={2} aria-hidden />
             </button>
           )}
           {aiEnabled && (
@@ -499,20 +499,32 @@ export function QuickAdd({
               type="button"
               onClick={openCamera}
               disabled={pending}
-              className="btn shrink-0 px-2.5"
+              className="btn btn-icon"
               aria-label={t("Snap a photo")}
               title={t("Snap a photo")}
             >
-              <span aria-hidden>📷</span>
+              <Camera size={20} strokeWidth={2} aria-hidden />
             </button>
           )}
-          <button type="submit" className="btn btn-primary shrink-0" disabled={pending}>
-            {pending ? "…" : t("Add")}
+          <button
+            type="submit"
+            className="btn btn-primary ml-1 shrink-0 px-3.5"
+            disabled={pending}
+            aria-label={t("Add")}
+          >
+            {pending ? (
+              <Loader2 size={18} strokeWidth={2.25} className="animate-spin" aria-hidden />
+            ) : (
+              <>
+                <span className="hidden min-[400px]:inline">{t("Add")}</span>
+                <ArrowUp size={18} strokeWidth={2.4} className="min-[400px]:hidden" aria-hidden />
+              </>
+            )}
           </button>
         </div>
         {favorites.length > 0 && !drafts && (
           <div
-            className="-mx-3 mt-2 flex gap-1.5 overflow-x-auto px-3 pb-0.5"
+            className="no-scrollbar -mx-3 mt-2 flex gap-1.5 overflow-x-auto px-3"
             role="group"
             aria-label={t("Favourites")}
           >
@@ -543,7 +555,7 @@ export function QuickAdd({
               aria-label={t("Edit favourites")}
               title={t("Edit favourites")}
             >
-              <span aria-hidden>✎</span>
+              <Pencil size={14} strokeWidth={2} aria-hidden />
             </Link>
           </div>
         )}
@@ -564,22 +576,41 @@ export function QuickAdd({
           <button
             type="button"
             onClick={prompt === "snap" ? openCamera : startVoice}
-            className="btn btn-primary mt-2 w-full py-3 text-base"
+            className="btn btn-primary btn-lg mt-2 w-full"
           >
-            {prompt === "snap" ? `📷 ${t("Take photo")}` : `🎤 ${t("Tap to speak")}`}
+            {prompt === "snap" ? (
+              <>
+                <Camera size={20} aria-hidden /> {t("Take photo")}
+              </>
+            ) : (
+              <>
+                <Mic size={20} aria-hidden /> {t("Tap to speak")}
+              </>
+            )}
           </button>
         )}
 
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="mt-2 text-xs font-semibold text-[var(--color-text-dim)]"
+          aria-expanded={open}
+          className="-ml-1 mt-1.5 inline-flex min-h-[32px] items-center gap-1.5 rounded-lg px-1 text-xs font-semibold text-[var(--color-text-dim)]"
         >
-          {open ? t("Hide details") : t("+ Details")}
+          <SlidersHorizontal size={14} strokeWidth={2} aria-hidden />
+          {open ? t("Hide details") : t("Details")}
+          <ChevronDown
+            size={14}
+            strokeWidth={2.25}
+            aria-hidden
+            style={{
+              transform: open ? "rotate(180deg)" : undefined,
+              transition: "transform var(--fast) var(--ease)",
+            }}
+          />
         </button>
 
         {open && (
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-3">
             <label className="text-xs font-semibold text-[var(--color-text-dim)]">
               {t("Due")}
               <input type="date" name="dueDate" className="field mt-1" />
@@ -666,9 +697,9 @@ export function QuickAdd({
         <button
           type="button"
           onClick={saveOfferAsFavorite}
-          className="mt-1 text-xs font-semibold text-[var(--color-primary)]"
+          className="mt-1 inline-flex min-h-[32px] items-center gap-1.5 text-xs font-semibold text-[var(--color-primary)]"
         >
-          ⭐ {t("Save as favourite")}
+          <Star size={14} strokeWidth={2.25} aria-hidden /> {t("Save as favourite")}
         </button>
       )}
     </div>
