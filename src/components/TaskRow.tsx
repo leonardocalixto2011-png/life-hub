@@ -9,6 +9,7 @@ import { AlarmClock, Check } from "lucide-react";
 import { setTaskDone, setTaskFields } from "@/app/(app)/tasks/actions";
 import { dueLabel, isOverdue, money, toDateInput } from "@/lib/format";
 import { showToast } from "@/components/Toast";
+import { haptic } from "@/lib/haptics";
 import { Avatar } from "@/components/Avatar";
 import { VentureChip } from "@/components/VentureChip";
 import { useLang, useT } from "@/components/I18nProvider";
@@ -70,6 +71,8 @@ export function TaskRow({
 
   /** `next` is absolute, not a toggle, so a double-tap can't land inverted. */
   function setDone(next: boolean) {
+    // A buzz only on completing — un-ticking is a correction, not an event.
+    if (next) haptic();
     startTransition(async () => {
       setDoneOptimistic(next);
       await setTaskDone(task.id, next);
@@ -111,7 +114,13 @@ export function TaskRow({
     if (!drag.current.active && Math.abs(mx) > 12 && Math.abs(mx) > Math.abs(my) * 1.5) {
       drag.current.active = true;
     }
-    if (drag.current.active) setDx(Math.max(-120, Math.min(120, mx)));
+    if (drag.current.active) {
+      const next = Math.max(-120, Math.min(120, mx));
+      // One short buzz the moment the swipe "arms" — the thumb learns where
+      // the threshold is without having to look.
+      if (Math.abs(next) >= SWIPE_THRESHOLD && Math.abs(dx) < SWIPE_THRESHOLD) haptic(8);
+      setDx(next);
+    }
   }
   function onTouchEnd() {
     if (drag.current.active) {
@@ -129,10 +138,18 @@ export function TaskRow({
         className="pointer-events-none absolute inset-0 flex items-center justify-between px-5 text-xs font-bold uppercase tracking-wide"
         aria-hidden
       >
-        <span className="flex items-center gap-1.5" style={{ color: "var(--color-ok)", opacity: dx > 12 ? 1 : 0 }}>
+        <span
+          className="swipe-hint flex items-center gap-1.5"
+          data-armed={dx >= SWIPE_THRESHOLD ? "" : undefined}
+          style={{ color: "var(--color-ok)", opacity: dx > 12 ? 1 : 0 }}
+        >
           <Check size={16} strokeWidth={2.5} /> {t("Done")}
         </span>
-        <span className="flex items-center gap-1.5" style={{ color: "var(--color-warn)", opacity: dx < -12 ? 1 : 0 }}>
+        <span
+          className="swipe-hint flex items-center gap-1.5"
+          data-armed={dx <= -SWIPE_THRESHOLD ? "" : undefined}
+          style={{ color: "var(--color-warn)", opacity: dx < -12 ? 1 : 0 }}
+        >
           {t("Tomorrow")} <AlarmClock size={16} strokeWidth={2.25} />
         </span>
       </div>

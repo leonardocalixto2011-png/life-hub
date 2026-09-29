@@ -1012,4 +1012,23 @@ export const FR: Record<string, string> = {
   "Deadlines and special dates: on the days you choose (e.g. 7, 3, 1 days before).": "Échéances et dates spéciales : aux jours que tu choisis (ex. 7, 3, 1 jours avant).",
   "When someone assigns you a task.": "Quand quelqu'un t'assigne une tâche.",
   "Pushes need notifications turned on for each phone or computer you use.": "Il faut activer les notifications sur chaque téléphone ou ordinateur que tu utilises.",
+
+  // ---- /today: progress ring, week recap, empty states -------------------------
+  "{done} of {total} done today": "{done} sur {total} faits aujourd'hui",
+  "{n} to do today": "{n} à faire aujourd'hui",
+  "{n} left — nice pace": "Plus que {n} — beau rythme",
+  "Day wrapped ✓": "Journée bouclée ✓",
+  "Everything due today is done.": "Tout ce qui était prévu aujourd'hui est fait.",
+  "Your week": "Ta semaine",
+  "A big week. Well played.": "Grosse semaine. Bien joué.",
+  "Every box you ticked counts.": "Chaque case cochée compte.",
+  "You kept your money in view — that counts.": "Tu as gardé un œil sur tes sous — ça compte.",
+  "done last week": "faits la semaine passée",
+  "{n} entries logged": "{n} entrées notées",
+  "Dismiss": "Fermer",
+  "Say it": "Dis-le",
+  "Type it": "Écris-le",
+  "For example": "Par exemple",
+  "Add something by voice 🎤 or in a few plain words.": "Ajoute quelque chose à la voix 🎤 ou en quelques mots.",
+  "Anything with a date lands here — say it or type it.": "Tout ce qui a une date arrive ici — dis-le ou écris-le.",
 };

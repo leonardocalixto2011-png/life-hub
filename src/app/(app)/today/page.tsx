@@ -3,7 +3,10 @@ import { CalendarDays, Cake, Clock, ListOrdered, Plane, type LucideIcon } from "
 import { Figure } from "@/components/Figure";
 import { addDays, startOfDay } from "date-fns";
 
-import { dashboard, hubChrome } from "@/lib/data";
+import { dashboard, hubChrome, weekRecap } from "@/lib/data";
+import { daypartOf } from "@/lib/daypart";
+import { GreetingBand } from "@/components/GreetingBand";
+import { WeekRecap } from "@/components/WeekRecap";
 import { listShifts, planHref, planItemsBetween } from "@/lib/plans";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
@@ -33,12 +36,13 @@ export default async function DashboardPage() {
   const now = new Date();
   const todayStart = startOfDay(now);
 
-  const [[d, plans, shifts], { ventures, members: membersRaw }] = await Promise.all([
+  const [[d, plans, shifts, recap], { ventures, members: membersRaw }] = await Promise.all([
     withHub(user.id, (tx) =>
       Promise.all([
         dashboard(tx, hub.id, user.id, hub.currency),
         planItemsBetween(tx, hub, user.id, now, addDays(todayStart, 21), lang),
         listShifts(tx, hub.id, user.id, todayStart, addDays(todayStart, 1)),
+        weekRecap(tx, hub.id, user.id, hub.currency),
       ]),
     ),
     hubChrome(user.id, hub.id),
@@ -64,21 +68,22 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6 px-3 pb-8 pt-4">
-      <div className="px-1">
-        {/* The greeting is the app addressing a person by name — the clearest
-            case for the display serif, and the first thing seen each morning. */}
-        <h1 className="display text-[1.75rem] leading-tight">
-          {first ? t("Hi, {name}", { name: first }) : t("Today")}
-        </h1>
-        <p className="mt-0.5 text-sm text-[var(--color-text-dim)] first-letter:uppercase">
-          {fmt(d.now, lang === "fr" ? "EEEE d MMMM" : "EEEE, MMMM d", lang)}
-        </p>
-      </div>
+      <GreetingBand
+        daypart={daypartOf(d.now)}
+        greeting={first ? t("Hi, {name}", { name: first }) : t("Today")}
+        date={fmt(d.now, lang === "fr" ? "EEEE d MMMM" : "EEEE, MMMM d", lang)}
+      />
 
-      {/* Your day: up to three tappable figures. A .card, so it stays opaque
-          and legible over a background photo without any [data-photo]
-          special-casing. Routine information: no animation, no display face. */}
+      {/* Your day: today's progress ring plus up to three tappable figures. A
+          .card, so it stays opaque and legible over a background photo
+          without any [data-photo] special-casing. */}
       <DayCard day={d.day} currency={currency} locale={locale} t={t} />
+
+      {/* Last week, looked back on once — first visit of a new week only. */}
+      <WeekRecap
+        data={recap}
+        formatMoney={{ in: money(recap.inCents, currency, locale), out: money(recap.outCents, currency, locale) }}
+      />
 
       <nav className="no-scrollbar -mx-3 flex gap-2 overflow-x-auto px-3" aria-label={t("Plan")}>
         {SHORTCUTS.map(({ href, label, Icon }) => (
@@ -94,7 +99,7 @@ export default async function DashboardPage() {
       {nothing && (
         <EmptyState
           headline={t("All clear this week.")}
-          title={t("Capture something — the box up top understands plain sentences:")}
+          title={t("Add something by voice 🎤 or in a few plain words.")}
           examples={quickAddExamples(lang)}
         />
       )}

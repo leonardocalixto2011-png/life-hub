@@ -128,7 +128,7 @@ export default async function AgendaPage() {
       {rows.length === 0 && (
         <EmptyState
           headline={t("A clear week ahead.")}
-          title={t("Add something with a date — the box up top understands plain sentences:")}
+          title={t("Anything with a date lands here — say it or type it.")}
           examples={quickAddExamples(lang)}
         />
       )}

@@ -139,7 +139,7 @@ export default async function AppLayout({
           </Link>
         )}
 
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main className="page-fade flex-1 overflow-y-auto">{children}</main>
       </div>
 
       <ToastHost />
