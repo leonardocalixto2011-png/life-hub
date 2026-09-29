@@ -21,6 +21,8 @@ import { applyFavorite, undoFavorite, saveDraftAsFavorite } from "@/app/(app)/fa
 import { downscaleImage } from "@/lib/downscale";
 import { sameFavorite, type FavoriteChip } from "@/lib/favorites";
 import { dollarsToCents } from "@/lib/money";
+import { haptic } from "@/lib/haptics";
+import { QUICKADD_EVENT, type QuickAddIntent } from "@/lib/quickadd-bus";
 
 type Option = { id: string; name: string | null; email?: string | null };
 
@@ -349,6 +351,24 @@ export function QuickAdd({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ---- "start here" buttons in empty states --------------------------------
+  // An empty screen offers "Speak it" / "Type it"; they land here. Synchronous
+  // with the click, so the mic still counts as user-initiated.
+  const startVoiceRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    startVoiceRef.current = startVoice;
+  });
+  useEffect(() => {
+    const onIntent = (e: Event) => {
+      const intent = (e as CustomEvent<QuickAddIntent>).detail;
+      inputRef.current?.scrollIntoView({ block: "nearest" });
+      if (intent === "voice" && speechCtor() && !recRef.current) startVoiceRef.current();
+      else inputRef.current?.focus();
+    };
+    window.addEventListener(QUICKADD_EVENT, onIntent);
+    return () => window.removeEventListener(QUICKADD_EVENT, onIntent);
+  }, []);
+
   // ---- favourites ----------------------------------------------------------
   // One tap = the entry exists, for today. Routine rung of the ladder: the
   // chip presses (160ms), a toast offers Undo, nothing celebrates.
@@ -359,6 +379,7 @@ export function QuickAdd({
     }
     if (favInFlight.current) return;
     favInFlight.current = true;
+    haptic();
     setFavBusy(f.id);
     setMsg(null);
     setFavOffer(null);

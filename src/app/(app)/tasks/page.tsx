@@ -107,7 +107,7 @@ export default async function TasksPage({
           ) : (
             <EmptyState
               headline={t("Nothing on your list.")}
-              title={t("The box up top takes plain sentences:")}
+              title={t("Add something by voice 🎤 or in a few plain words.")}
               examples={quickAddExamples(lang)}
             />
           )

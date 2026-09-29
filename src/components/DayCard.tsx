@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { money } from "@/lib/format";
 import type { T } from "@/lib/i18n";
+import { DayRing } from "@/components/DayRing";
 
 /** One figure in the "Your day" card — sized like Figure (md) so it reads as
  *  the same system as the Budget row below, but takes a pre-formatted value
@@ -20,7 +21,7 @@ function DayStat({
   return (
     <Link
       href={href}
-      className="block min-w-0 rounded-xl px-2 py-2.5 text-center transition-colors hover:bg-[var(--color-surface-2)] active:bg-[var(--color-surface-2)]"
+      className="press block min-w-0 rounded-xl px-2 py-2.5 text-center transition-colors hover:bg-[var(--color-surface-2)] active:bg-[var(--color-surface-2)]"
     >
       <div
         className="truncate text-[1.375rem] font-bold leading-none tracking-[-0.03em] tabular-nums"
@@ -39,7 +40,12 @@ export function DayCard({
   locale,
   t,
 }: {
-  day: { dueToday: number; outWeekCents: number; budgetLeftCents: number | null };
+  day: {
+    dueToday: number;
+    outWeekCents: number;
+    budgetLeftCents: number | null;
+    progress?: { done: number; total: number };
+  };
   currency: string;
   locale: string;
   t: T;
@@ -62,13 +68,21 @@ export function DayCard({
     });
   }
   const calm = day.dueToday === 0 && day.outWeekCents === 0;
+  const ring = day.progress && day.progress.total > 0 ? day.progress : null;
 
   return (
     <section aria-labelledby="your-day" className="card overflow-hidden p-4 pb-3">
       <h2 id="your-day" className="section-title px-0">
         {t("Your day")}
       </h2>
-      {calm && <p className="text-[0.9375rem] font-medium">{t("Nothing urgent today.")}</p>}
+      {/* The ring only exists when something was due today; a day with
+          nothing on it isn't a 0% day and must never look like one. */}
+      {ring && (
+        <div className={stats.length > 0 ? "mb-3 border-b border-[var(--color-border)] pb-3" : ""}>
+          <DayRing done={ring.done} total={ring.total} />
+        </div>
+      )}
+      {calm && !ring && <p className="text-[0.9375rem] font-medium">{t("Nothing urgent today.")}</p>}
       {stats.length > 0 && (
         // auto-fit: three across on a phone, wrapping rather than squeezing
         // when a long amount or a narrow screen needs the room.

@@ -4,6 +4,7 @@ import {
   endOfMonth,
   startOfDay,
   startOfMonth,
+  startOfWeek,
 } from "date-fns";
 import type { BillingCycle, Prisma } from "@prisma/client";
 
@@ -779,6 +780,25 @@ export async function dashboard(tx: HubTx, hubId: string, userId: string, curren
     tx.budgetTarget.findMany({ where: { hubId }, select: { category: true, monthlyCents: true } }),
   ]);
 
+  // ---- today's progress ring. "Today's list" = everything that was due by
+  // tonight: still-open tasks due today or earlier (from `tasks` above) and
+  // open deadlines due by tonight, plus whatever was finished today. Same hub
+  // + visibility clauses as the rows above, so a hub-mate's private task can
+  // never move your ring. Events are left out: nothing to tick.
+  const [tasksDoneToday, deadlinesDoneToday, deadlinesOpenByToday] = await Promise.all([
+    tx.task.count({
+      where: { hubId, status: "DONE", completedAt: { gte: todayStart, lte: todayEnd }, ...visibilityFilter(userId) },
+    }),
+    tx.deadline.count({
+      where: { hubId, doneAt: { gte: todayStart, lte: todayEnd }, ...deadlineVisibility(userId) },
+    }),
+    tx.deadline.count({
+      where: { hubId, doneAt: null, dueDate: { lte: todayEnd }, ...deadlineVisibility(userId) },
+    }),
+  ]);
+  const progressDone = tasksDoneToday + deadlinesDoneToday;
+  const progressOpen = tasks.filter((t) => t.dueDate && t.dueDate <= todayEnd).length + deadlinesOpenByToday;
+
   const overdue = tasks.filter((t) => t.dueDate && t.dueDate < todayStart);
   const dueSoon = tasks.filter((t) => !t.dueDate || t.dueDate >= todayStart);
 
@@ -836,6 +856,50 @@ export async function dashboard(tx: HubTx, hubId: string, userId: string, curren
     events,
     debts,
     budget: { income: month.income, expense: month.expense, net: month.net },
-    day: { dueToday, outWeekCents, budgetLeftCents },
+    day: {
+      dueToday,
+      outWeekCents,
+      budgetLeftCents,
+      progress: { done: progressDone, total: progressDone + progressOpen },
+    },
   };
 }
+
+/**
+ * Last week (Monday to Sunday, just ended) in three facts for the "Your week"
+ * recap on /today: what got done, and what money was written down. Counts
+ * only — no rows — and every clause mirrors the pages that list these things
+ * (hub + task/deadline privacy; settle-ups excluded from money, like /budget).
+ */
+export async function weekRecap(tx: HubTx, hubId: string, userId: string, currency = "CAD") {
+  const thisWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const from = addWeeks(thisWeek, -1);
+  const to = new Date(thisWeek.getTime() - 1);
+
+  const [tasksDone, deadlinesDone, entries] = await Promise.all([
+    tx.task.count({
+      where: { hubId, status: "DONE", completedAt: { gte: from, lte: to }, ...visibilityFilter(userId) },
+    }),
+    tx.deadline.count({
+      where: { hubId, doneAt: { gte: from, lte: to }, ...deadlineVisibility(userId) },
+    }),
+    tx.budgetEntry.groupBy({
+      by: ["type"],
+      where: { hubId, isSettlement: false, currency, date: { gte: from, lte: to } },
+      _sum: { amountCents: true },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const sum = (type: "INCOME" | "EXPENSE") => entries.find((e) => e.type === type)?._sum.amountCents ?? 0;
+  return {
+    /** Monday of the week the recap belongs to — the client keys its "seen" flag on this. */
+    weekOf: thisWeek.toISOString().slice(0, 10),
+    done: tasksDone + deadlinesDone,
+    entries: entries.reduce((n, e) => n + e._count._all, 0),
+    inCents: sum("INCOME"),
+    outCents: sum("EXPENSE"),
+  };
+}
+
+export type WeekRecapData = Awaited<ReturnType<typeof weekRecap>>;

@@ -308,9 +308,10 @@ html[data-theme="mono"] {
 /* Only text sitting *directly* on the photo needs the halo. Anything inside a
    card already has an opaque surface under it, and haloed text on a white
    card looks smudged — hence the `:not(.card *)`. `.list`, `.menu` and
-   `.opaque` (the header, tab bar and quick-add bar) are opaque surfaces too. */
+   `.opaque` (the header, tab bar and quick-add bar) and `.greeting-band` are
+   opaque surfaces too. */
 [data-photo]
-  :is(h1, h2, p, a, span):not(:is(.card, .list, .menu, .opaque) *):not(.chip):not(.btn) {
+  :is(h1, h2, p, a, span):not(:is(.card, .list, .menu, .opaque, .greeting-band) *):not(.chip):not(.btn) {
   text-shadow:
     0 1px 2px color-mix(in srgb, var(--bg) 75%, transparent),
     0 0 10px color-mix(in srgb, var(--bg) 60%, transparent);
@@ -1151,5 +1152,212 @@ button {
     100% {
       box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 0%, transparent);
     }
+  }
+}
+
+/* ------------------------------------------------------ ambient backdrop
+   The page used to be one flat `--bg`. Now a few very soft glows of the
+   user's own accent sit behind everything, so each of the six themes has a
+   light of its own instead of six shades of grey-white.
+
+   Contrast is the constraint, and it is why the glows are mixed into
+   `--surface` rather than into `--bg`: in light mode that makes them a touch
+   *lighter* than the page (a luminous tint, not a stain), so `--text-dim`
+   headings sitting on the backdrop lose almost nothing — worst case, the mono
+   theme's grey accent, still clears 4.5:1 at the brightest point. In dark
+   mode the glows lift the page a hair toward the accent and the bottom sinks
+   darker — deeper and calmer, and light text only gains contrast.
+
+   A fixed pseudo-element rather than `background-attachment: fixed` on body
+   (mobile Safari ignores or janks that). Static: one fade on first paint at
+   the arrival rung, zeroed with everything else by reduced motion / calm.
+   With a background photo set, the photo + scrim own the page and this is
+   switched off — never both. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(85% 50% at 8% -4%, color-mix(in srgb, var(--primary) 8%, var(--surface)) 0%, transparent 72%),
+    radial-gradient(65% 42% at 104% 34%, color-mix(in srgb, var(--primary) 5%, var(--surface)) 0%, transparent 70%),
+    radial-gradient(80% 45% at 24% 104%, color-mix(in srgb, var(--primary) 6%, var(--surface)) 0%, transparent 72%);
+  animation: ambient-in var(--moment) var(--ease-out);
+}
+@media (prefers-color-scheme: dark) {
+  body::before {
+    background:
+      radial-gradient(90% 55% at 6% -6%, color-mix(in srgb, var(--primary) 13%, var(--bg)) 0%, transparent 70%),
+      radial-gradient(60% 40% at 106% 38%, color-mix(in srgb, var(--primary) 7%, var(--bg)) 0%, transparent 70%),
+      linear-gradient(to bottom, transparent 55%, color-mix(in srgb, #000 22%, var(--bg)) 100%);
+  }
+}
+body:has([data-photo])::before {
+  display: none;
+}
+@keyframes ambient-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ------------------------------------------------------- greeting band
+   /today's greeting sits on a panel tinted by the time of day in Montréal
+   (see src/lib/daypart.ts): warm at dawn, the user's own accent at midday,
+   amber at dusk, indigo at night. Fixed hues, deliberately — the time of day
+   is the same for everyone, whatever their theme — but every tint is mixed
+   into `--surface`, so it lands light in light mode and dark in dark mode.
+
+   Opaque (color-mix into an opaque surface), so over a background photo it
+   reads as a card does and needs no halo. Inside it, dim text is raised to
+   80% of full text: the date must stay AA on the strongest tint (night), and
+   hierarchy here comes from the serif's size, not from grey. Both names are
+   overridden — see the `@theme inline` note under [data-photo] above. */
+.greeting-band {
+  --text-dim: color-mix(in srgb, var(--text) 80%, var(--surface));
+  --color-text-dim: color-mix(in srgb, var(--text) 80%, var(--surface));
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 22px var(--sp-4) var(--sp-4);
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in srgb, var(--band-ink) 14%, var(--border));
+  background:
+    radial-gradient(120% 140% at 100% 0%, var(--band-b) 0%, transparent 60%),
+    linear-gradient(160deg, var(--band-a), color-mix(in srgb, var(--band-a) 55%, var(--surface)));
+  box-shadow: var(--elev-1);
+  animation: fade-in var(--moment) var(--ease-out);
+}
+.greeting-glyph {
+  flex-shrink: 0;
+  margin-bottom: 4px;
+  color: var(--band-ink);
+  opacity: 0.85;
+}
+.greeting-band[data-daypart="dawn"] {
+  --band-ink: #d97706;
+  --band-a: color-mix(in srgb, #f59e0b 15%, var(--surface));
+  --band-b: color-mix(in srgb, #f472b6 12%, var(--surface));
+}
+.greeting-band[data-daypart="day"] {
+  --band-ink: var(--primary);
+  --band-a: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  --band-b: color-mix(in srgb, #38bdf8 8%, var(--surface));
+}
+.greeting-band[data-daypart="dusk"] {
+  --band-ink: #ea580c;
+  --band-a: color-mix(in srgb, #f97316 15%, var(--surface));
+  --band-b: color-mix(in srgb, #c026d3 10%, var(--surface));
+}
+.greeting-band[data-daypart="night"] {
+  --band-ink: #4f46e5;
+  --band-a: color-mix(in srgb, #4f46e5 14%, var(--surface));
+  --band-b: color-mix(in srgb, #1e3a8a 12%, var(--surface));
+}
+@media (prefers-color-scheme: dark) {
+  .greeting-band[data-daypart="dawn"] {
+    --band-ink: #fbbf24;
+    --band-a: color-mix(in srgb, #f59e0b 16%, var(--surface));
+    --band-b: color-mix(in srgb, #f472b6 12%, var(--surface));
+  }
+  .greeting-band[data-daypart="day"] {
+    --band-ink: var(--primary);
+    --band-a: color-mix(in srgb, var(--primary) 12%, var(--surface));
+    --band-b: color-mix(in srgb, #38bdf8 8%, var(--surface));
+  }
+  .greeting-band[data-daypart="dusk"] {
+    --band-ink: #fb923c;
+    --band-a: color-mix(in srgb, #f97316 16%, var(--surface));
+    --band-b: color-mix(in srgb, #c026d3 12%, var(--surface));
+  }
+  .greeting-band[data-daypart="night"] {
+    --band-ink: #a5b4fc;
+    --band-a: color-mix(in srgb, #4f46e5 22%, var(--surface));
+    --band-b: color-mix(in srgb, #0ea5e9 8%, var(--surface));
+  }
+}
+
+@layer components {
+  /* ---- press states (routine rung) -------------------------------------
+     Everything tappable gives under the thumb: a 2% shrink at --fast. A
+     touchscreen has no hover, so this is the only "I felt that" there is.
+     Re-declares the transition lists after their originals above so
+     transform joins background/color rather than replacing them. */
+  a.row,
+  .press,
+  .chip-filter,
+  .menu-item,
+  .icon-btn {
+    transition-property: background, background-color, color, transform;
+    transition-duration: var(--fast);
+    transition-timing-function: var(--ease);
+  }
+  a.row:active,
+  .press:active,
+  .chip-filter:active,
+  .menu-item:active {
+    transform: scale(0.98);
+  }
+  .icon-btn:active {
+    transform: scale(0.94);
+  }
+
+  /* Swipe backdrop label swells a touch the moment the swipe would commit,
+     paired with a short buzz in TaskRow — the threshold becomes something
+     you can feel instead of guess. */
+  .swipe-hint {
+    transition: transform var(--fast) var(--ease);
+  }
+  .swipe-hint[data-armed] {
+    transform: scale(1.12);
+  }
+
+  /* Skeleton -> content. Each route's root is a new element when it replaces
+     the loading skeleton, so it fades in once at the routine rung; a
+     router.refresh() reconciles in place and does not re-trigger it. */
+  .page-fade > * {
+    animation: fade-in var(--fast) var(--ease-out);
+  }
+
+  /* ---- today's ring (progress rung) ------------------------------------- */
+  .day-ring-track {
+    fill: none;
+    stroke: var(--color-surface-2);
+    stroke-width: 5;
+  }
+  .day-ring-arc {
+    fill: none;
+    stroke: var(--color-primary);
+    stroke-width: 5;
+    stroke-linecap: round;
+    transition:
+      stroke-dashoffset var(--base) var(--ease),
+      stroke var(--base) var(--ease);
+  }
+  .day-ring[data-complete] .day-ring-arc {
+    stroke: var(--color-ok);
+  }
+
+  /* "Day wrapped" — the arrival rung, once a day at most. A settle, not a
+     burst. The weekly recap arrives the same way. */
+  .day-arrive,
+  .recap-in {
+    animation: arrive var(--moment) var(--ease-out);
+  }
+  @keyframes arrive {
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.97);
+    }
+  }
+
+  /* Empty states get a faint glow of the accent from the top — an open,
+     inviting surface rather than a blank one. Still an opaque card. */
+  .empty-state {
+    background:
+      radial-gradient(110% 70% at 50% 0%, var(--primary-wash) 0%, transparent 70%),
+      var(--color-surface);
   }
 }
