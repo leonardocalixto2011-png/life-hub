@@ -984,11 +984,31 @@ export const FR: Record<string, string> = {
   "{actor} assigned you \"{title}\"": "{actor} t'a assigné « {title} »",
 
   // ---- /today: your day at a glance ----------------------------------------------
-  "Your day at a glance": "Ta journée en un coup d'œil",
-  "{n} thing due today": "{n} chose à faire aujourd'hui",
-  "{n} things due today": "{n} choses à faire aujourd'hui",
-  "{amount} going out in the next 7 days": "{amount} à payer d'ici 7 jours",
-  "{amount} left in your budget this month": "Il te reste {amount} dans ton budget ce mois-ci",
-  "{amount} over budget this month": "{amount} au-dessus du budget ce mois-ci",
   "Nothing urgent today.": "Rien d'urgent aujourd'hui.",
+
+  // ---- /today: Your day card -------------------------------------------------
+  "due today": "à faire aujourd'hui",
+  "out in 7 days": "à payer d'ici 7 jours",
+  "left in budget": "reste au budget",
+  "over budget": "au-dessus du budget",
+
+  // ---- timely reminders (lib/timely.ts) ---------------------------------------
+  "In 1 h: {title} ({time})": "Dans 1 h : {title} ({time})",
+  "In {n} min: {title} ({time})": "Dans {n} min : {title} ({time})",
+  "Last day to cancel: {name}": "Dernier jour pour annuler : {name}",
+  "Cancel {name} within {n} days": "Annule {name} d'ici {n} jours",
+  "Otherwise it keeps billing {amount}.": "Sinon, il continue de facturer {amount}.",
+  "Payment due tomorrow: {name}": "Paiement demain : {name}",
+  "{amount} due {date}": "{amount} à payer {date}",
+  "Due {date}": "À payer {date}",
+
+  // ---- /notifications: what you'll get -----------------------------------------
+  "What you’ll be notified about": "Ce qui te sera notifié",
+  "A morning summary around 8 a.m. — what’s due today and tomorrow.": "Un résumé vers 8 h — ce qui arrive aujourd'hui et demain.",
+  "1 hour before an event on your calendar.": "1 h avant un événement de ton calendrier.",
+  "Subscriptions: 3 days before the cancel-by date, and on the day.": "Abonnements : 3 jours avant la date limite d'annulation, puis le jour même.",
+  "Debts: the day before a payment is due.": "Dettes : la veille d'un paiement.",
+  "Deadlines and special dates: on the days you choose (e.g. 7, 3, 1 days before).": "Échéances et dates spéciales : aux jours que tu choisis (ex. 7, 3, 1 jours avant).",
+  "When someone assigns you a task.": "Quand quelqu'un t'assigne une tâche.",
+  "Pushes need notifications turned on for each phone or computer you use.": "Il faut activer les notifications sur chaque téléphone ou ordinateur que tu utilises.",
 };

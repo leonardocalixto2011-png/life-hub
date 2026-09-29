@@ -41,6 +41,32 @@ export default async function NotificationsPage() {
       )}
 
       <PushToggle />
+
+      {/* What arrives, and when — so "will it remind me?" has an answer. */}
+      <section className="card p-4" aria-labelledby="notify-what">
+        <h2 id="notify-what" className="text-sm font-semibold">
+          {t("What you’ll be notified about")}
+        </h2>
+        <ul className="mt-2 space-y-1.5 text-xs leading-relaxed">
+          {[
+            ["☀️", t("A morning summary around 8 a.m. — what’s due today and tomorrow.")],
+            ["📅", t("1 hour before an event on your calendar.")],
+            ["🔁", t("Subscriptions: 3 days before the cancel-by date, and on the day.")],
+            ["🏦", t("Debts: the day before a payment is due.")],
+            ["⏳", t("Deadlines and special dates: on the days you choose (e.g. 7, 3, 1 days before).")],
+            ["👤", t("When someone assigns you a task.")],
+          ].map(([icon, text]) => (
+            <li key={icon} className="flex gap-2">
+              <span aria-hidden>{icon}</span>
+              <span>{text}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[0.7rem] text-[var(--color-text-dim)]">
+          {t("Pushes need notifications turned on for each phone or computer you use.")}
+        </p>
+      </section>
+
       <InstallHint />
 
       <DigestPrefsForm

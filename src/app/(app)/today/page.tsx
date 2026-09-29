@@ -37,7 +37,39 @@ function SectionHead({ title, href, cta }: { title: string; href: string; cta: s
   );
 }
 
-function DayLine({
+/** One figure in the "Your day" card — sized like Figure (md) so it reads as
+ *  the same system as the Budget row below, but takes a pre-formatted value
+ *  because one of the three is a count, not money. */
+function DayStat({
+  href,
+  value,
+  label,
+  danger,
+}: {
+  href: string;
+  value: string;
+  label: string;
+  danger?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className="block min-w-0 rounded-lg px-2 py-2 text-center hover:bg-[var(--color-surface-2)]"
+    >
+      <div
+        className="truncate text-lg font-bold leading-tight tracking-[-0.02em] tabular-nums"
+        style={{ color: danger ? "var(--color-danger)" : undefined }}
+      >
+        {value}
+      </div>
+      <div className="mt-1 text-[0.6rem] uppercase tracking-wide text-[var(--color-text-dim)]">
+        {label}
+      </div>
+    </Link>
+  );
+}
+
+function DayCard({
   day,
   currency,
   locale,
@@ -49,40 +81,42 @@ function DayLine({
   t: T;
 }) {
   const $ = (cents: number) => money(cents, currency, locale);
-  const parts: { href: string; text: string; danger?: boolean }[] = [];
+  const stats: { href: string; value: string; label: string; danger?: boolean }[] = [];
   if (day.dueToday > 0) {
-    parts.push({
-      href: "/agenda",
-      text: t(day.dueToday === 1 ? "{n} thing due today" : "{n} things due today", { n: day.dueToday }),
-    });
+    stats.push({ href: "/agenda", value: String(day.dueToday), label: t("due today") });
   }
   if (day.outWeekCents > 0) {
-    parts.push({ href: "/budget", text: t("{amount} going out in the next 7 days", { amount: $(day.outWeekCents) }) });
+    stats.push({ href: "/budget", value: $(day.outWeekCents), label: t("out in 7 days") });
   }
   if (day.budgetLeftCents != null) {
-    parts.push(
-      day.budgetLeftCents >= 0
-        ? { href: "/budget", text: t("{amount} left in your budget this month", { amount: $(day.budgetLeftCents) }) }
-        : { href: "/budget", text: t("{amount} over budget this month", { amount: $(-day.budgetLeftCents) }), danger: true },
-    );
+    const over = day.budgetLeftCents < 0;
+    stats.push({
+      href: "/budget",
+      value: $(Math.abs(day.budgetLeftCents)),
+      label: over ? t("over budget") : t("left in budget"),
+      danger: over,
+    });
   }
   const calm = day.dueToday === 0 && day.outWeekCents === 0;
 
   return (
-    <section aria-label={t("Your day at a glance")} className="card px-3 py-2.5 text-sm leading-relaxed">
-      {calm && <span className="text-[var(--color-text)]">{t("Nothing urgent today.")}</span>}
-      {parts.map((p, i) => (
-        <span key={p.text}>
-          {(i > 0 || calm) && <span className="text-[var(--color-text-dim)]" aria-hidden> · </span>}
-          <Link
-            href={p.href}
-            className="font-medium underline-offset-2 hover:underline"
-            style={{ color: p.danger ? "var(--color-danger)" : "var(--color-text)" }}
-          >
-            {p.text}
-          </Link>
-        </span>
-      ))}
+    <section aria-labelledby="your-day" className="card p-3">
+      <h2
+        id="your-day"
+        className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-dim)]"
+      >
+        {t("Your day")}
+      </h2>
+      {calm && <p className="mt-1.5 text-sm font-medium">{t("Nothing urgent today.")}</p>}
+      {stats.length > 0 && (
+        // auto-fit: three across on a phone, wrapping rather than squeezing
+        // when a long amount or a narrow screen needs the room.
+        <div className="-mx-1 mt-1.5 grid grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))] gap-1">
+          {stats.map((s) => (
+            <DayStat key={s.label} {...s} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -135,10 +169,10 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Your day, in one line. A .card, so it stays opaque and legible over a
-          background photo without any [data-photo] special-casing. Routine
-          information: no animation, no display face. */}
-      <DayLine day={d.day} currency={currency} locale={locale} t={t} />
+      {/* Your day: up to three tappable figures. A .card, so it stays opaque
+          and legible over a background photo without any [data-photo]
+          special-casing. Routine information: no animation, no display face. */}
+      <DayCard day={d.day} currency={currency} locale={locale} t={t} />
 
       <nav className="-mx-3 flex gap-1.5 overflow-x-auto px-3" aria-label={t("Plan")}>
         {SHORTCUTS.map((s) => (

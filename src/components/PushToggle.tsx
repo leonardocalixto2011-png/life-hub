@@ -124,7 +124,12 @@ export function PushToggle() {
     status === "on" ? "var(--color-ok)" : status === "loading" ? "var(--color-text-dim)" : "var(--color-danger)";
 
   return (
-    <div className="card p-4">
+    // Off is the state that needs a person to act, so it gets the accent
+    // border and a full-width button instead of a quiet status row.
+    <div
+      className="card p-4"
+      style={status === "off" ? { borderColor: "var(--color-primary)", borderWidth: 2 } : undefined}
+    >
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold">{t("Push notifications")}</span>
         <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide">
@@ -152,7 +157,11 @@ export function PushToggle() {
 
       <div className="mt-3 flex flex-wrap gap-2">
         {(status === "off" || status === "unsupported") && (
-          <button onClick={enable} disabled={busy || status === "unsupported"} className="btn btn-primary">
+          <button
+            onClick={enable}
+            disabled={busy || status === "unsupported"}
+            className={`btn btn-primary${status === "off" ? " w-full justify-center py-3 text-base" : ""}`}
+          >
             {busy ? "…" : t("Enable on this device")}
           </button>
         )}

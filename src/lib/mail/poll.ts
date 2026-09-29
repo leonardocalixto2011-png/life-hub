@@ -176,13 +176,16 @@ async function pollMailAccount(account: MailAccount, runStartedAt: number): Prom
  * IMAP/REST round trip — so budget is checked before starting it, not
  * just between messages) and picked up on the next scheduled run.
  */
-export async function pollAllMailAccounts(): Promise<{
+export async function pollAllMailAccounts(
+  // Passed in by /api/mail/poll so the timely reminders it runs first count
+  // against the same whole-request budget.
+  runStartedAt: number = Date.now(),
+): Promise<{
   accounts: number;
   errors: number;
   skipped: number;
 }> {
   const accounts = await prisma.mailAccount.findMany({ where: { status: { not: "REVOKED" } } });
-  const runStartedAt = Date.now();
   let errors = 0;
   let processed = 0;
   let skipped = 0;
