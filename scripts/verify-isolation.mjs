@@ -239,6 +239,69 @@ async function main() {
       crossItemInsertBlocked = true;
     }
     check("B1 cannot add an item to a Hub A trip", crossItemInsertBlocked);
+
+    // --- quick-add favourites: personal, not just hub-scoped -----------------
+    // Torn down by the hub delete below (QuickFavorite cascades from Hub).
+    const favA1 = await db.quickFavorite.create({
+      data: { hubId: hubA.id, createdById: userA1.id, label: "Essence", kind: "BUDGET", amountCents: 6000 },
+    });
+
+    const a1Favs = await asAppUser(userA1.id, (tx) => tx.quickFavorite.findMany());
+    check("A1 sees their own favourite", a1Favs.some((f) => f.id === favA1.id));
+
+    const a2Favs = await asAppUser(userA2.id, (tx) => tx.quickFavorite.findMany());
+    check("A2 (same hub) cannot see A1's favourite", !a2Favs.some((f) => f.id === favA1.id));
+    const a2FavById = await asAppUser(userA2.id, (tx) =>
+      tx.quickFavorite.findUnique({ where: { id: favA1.id } }),
+    );
+    check("A2 gets null reading A1's favourite by id", a2FavById === null);
+
+    const b1Favs = await asAppUser(userB1.id, (tx) => tx.quickFavorite.findMany());
+    check("B1 (other hub) cannot see A1's favourite", !b1Favs.some((f) => f.id === favA1.id));
+
+    const a2FavDelete = await asAppUser(userA2.id, (tx) =>
+      tx.quickFavorite.deleteMany({ where: { id: favA1.id } }),
+    );
+    const b1FavDelete = await asAppUser(userB1.id, (tx) =>
+      tx.quickFavorite.deleteMany({ where: { id: favA1.id } }),
+    );
+    const favIntact = await db.quickFavorite.findUnique({ where: { id: favA1.id } });
+    check(
+      "Neither A2 nor B1 can delete A1's favourite (0 rows, still there)",
+      a2FavDelete.count === 0 && b1FavDelete.count === 0 && favIntact !== null,
+    );
+
+    let a2Relabel = 0;
+    try {
+      a2Relabel = (
+        await asAppUser(userA2.id, (tx) =>
+          tx.quickFavorite.updateMany({ where: { id: favA1.id }, data: { label: "hijacked" } }),
+        )
+      ).count;
+    } catch {
+      a2Relabel = 0;
+    }
+    check("A2 cannot rename A1's favourite", a2Relabel === 0);
+
+    let a2ImpersonateBlocked = false;
+    try {
+      await asAppUser(userA2.id, (tx) =>
+        tx.quickFavorite.create({ data: { hubId: hubA.id, createdById: userA1.id, label: "planted", kind: "TASK" } }),
+      );
+    } catch {
+      a2ImpersonateBlocked = true;
+    }
+    check("A2 cannot insert a favourite in A1's name", a2ImpersonateBlocked);
+
+    let b1CrossHubBlocked = false;
+    try {
+      await asAppUser(userB1.id, (tx) =>
+        tx.quickFavorite.create({ data: { hubId: hubA.id, createdById: userB1.id, label: "intruder", kind: "TASK" } }),
+      );
+    } catch {
+      b1CrossHubBlocked = true;
+    }
+    check("B1 cannot insert a favourite into Hub A", b1CrossHubBlocked);
   } finally {
     // --- teardown (owner role) ------------------------------------------------
     await db.debtShare.deleteMany({ where: { ownerId: { in: [userA1.id, userA2.id, userB1.id] } } });

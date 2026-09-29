@@ -437,6 +437,27 @@ button {
     white-space: nowrap;
   }
 
+  /* Quick-add favourites. Routine rung: a press you can feel (--fast), no
+     more — tapping one is the most repeated money action in the app. Sized up
+     from .chip because it is a button a thumb hits, not a label. */
+  .fav-chip {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.78rem;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    transition:
+      transform var(--fast) var(--ease),
+      opacity var(--fast) var(--ease);
+  }
+  .fav-chip:active {
+    transform: scale(0.95);
+  }
+  .fav-chip:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
   .safe-b {
     padding-bottom: env(safe-area-inset-bottom);
   }

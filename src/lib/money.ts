@@ -40,9 +40,27 @@ export function perMonth(cents: number, frequency: "WEEKLY" | "BIWEEKLY" | "MONT
   return cents;
 }
 
+/**
+ * "4,50" / "1 234,56" / "1,234.56" / "$12" -> a number. French input writes a
+ * decimal comma; stripping it as noise turned $4.50 into $450. Whichever of
+ * , or . comes last is the decimal mark; a lone comma counts as decimal only
+ * when one or two digits follow it, so "1,234" is still a thousand.
+ */
+export function parseDecimal(raw: string): number {
+  let s = raw.replace(/[^0-9.,-]/g, "");
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  if (lastComma > lastDot && (lastDot !== -1 || /,\d{1,2}$/.test(s))) {
+    s = s.replace(/\./g, "").replace(/,(?=[^,]*$)/, ".").replace(/,/g, "");
+  } else {
+    s = s.replace(/,/g, "");
+  }
+  return s === "" || s === "-" ? NaN : Number(s);
+}
+
 export function dollarsToCents(value: string | null | undefined): number | null {
   if (value == null || value === "") return null;
-  const n = Number(String(value).replace(/[^0-9.-]/g, ""));
+  const n = parseDecimal(String(value));
   if (!Number.isFinite(n)) return null;
   return Math.round(n * 100);
 }
@@ -56,7 +74,7 @@ export function centsToInput(cents: number | null | undefined): string {
 /** "25.99" -> 2599 (basis points). Returns null on empty/unparseable input. */
 export function percentToBasisPoints(value: string | null | undefined): number | null {
   if (value == null || value === "") return null;
-  const n = Number(String(value).replace(/[^0-9.-]/g, ""));
+  const n = parseDecimal(String(value));
   if (!Number.isFinite(n)) return null;
   return Math.round(n * 100);
 }

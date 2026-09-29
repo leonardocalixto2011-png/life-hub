@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireHub, listMyHubs, listPendingInvites } from "@/lib/session";
 import { getT } from "@/lib/i18n-server";
 import { hubChrome } from "@/lib/data";
+import { money } from "@/lib/format";
 import { QuickAdd } from "@/components/QuickAdd";
 import { BottomNav } from "@/components/BottomNav";
 import { AccountMenu } from "@/components/AccountMenu";
@@ -17,7 +18,7 @@ export default async function AppLayout({
 }) {
   const { user, hub } = await requireHub();
   const t = await getT();
-  const [{ ventures, members, reviewCount }, hubs, invites] = await Promise.all([
+  const [{ ventures, members, reviewCount, favorites }, hubs, invites] = await Promise.all([
     hubChrome(user.id, hub.id),
     listMyHubs(user.id),
     listPendingInvites(user.id),
@@ -99,6 +100,15 @@ export default async function AppLayout({
           members={members}
           defaultAssigneeId={user.id}
           aiEnabled={Boolean(process.env.ANTHROPIC_API_KEY)}
+          favorites={favorites.map((f) => ({
+            id: f.id,
+            label: f.label,
+            kind: f.kind,
+            amountCents: f.amountCents,
+            entryType: f.entryType,
+            amountLabel:
+              f.amountCents != null ? money(f.amountCents, hub.currency, user.locale ?? undefined) : null,
+          }))}
         />
 
         {/* An invite is the one thing that should interrupt every page: until

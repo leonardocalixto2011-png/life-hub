@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { createTask } from "@/app/(app)/tasks/actions";
@@ -14,8 +15,38 @@ import {
 import { DraftCard } from "@/components/DraftCard";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
 import { useLang, useT } from "@/components/I18nProvider";
+import { showToast } from "@/components/Toast";
+import { applyFavorite, undoFavorite, saveDraftAsFavorite } from "@/app/(app)/favorites/actions";
+import { downscaleImage } from "@/lib/downscale";
+import { sameFavorite, type FavoriteChip } from "@/lib/favorites";
+import { dollarsToCents } from "@/lib/money";
 
 type Option = { id: string; name: string | null; email?: string | null };
+
+/** What "⭐ Save as favourite" would save, taken from the draft just committed. */
+type FavOffer = {
+  kind: "task" | "budget";
+  title: string;
+  amount: string | null;
+  entryType: "INCOME" | "EXPENSE";
+  ventureId: string | null;
+};
+
+/** The first saved draft worth repeating: a budget entry, or a task with an amount. */
+function favoriteOffer(saved: Draft[], existing: FavoriteChip[]): FavOffer | null {
+  const d = saved.find((x) => (x.kind === "budget" || x.kind === "task") && dollarsToCents(x.amount));
+  if (!d || (d.kind !== "budget" && d.kind !== "task")) return null;
+  const title = d.title.trim().slice(0, 60);
+  if (!title) return null;
+  const candidate = {
+    label: title,
+    kind: d.kind === "budget" ? "BUDGET" : "TASK",
+    amountCents: dollarsToCents(d.amount),
+    entryType: d.entryType,
+  };
+  if (existing.some((f) => sameFavorite(f, candidate))) return null;
+  return { kind: d.kind, title, amount: d.amount, entryType: d.entryType, ventureId: d.ventureId };
+}
 
 /** Heuristic: does this look like a sentence worth parsing, vs. a bare title? */
 function worthParsing(text: string): boolean {
@@ -62,50 +93,18 @@ function speechCtor(): RecognitionCtor | null {
 const noop = () => () => {};
 const readSpeech = () => speechCtor() !== null;
 
-// ---- snap ----------------------------------------------------------------
-/** Long edge after downscaling. Plenty for a receipt's small print. */
-const SNAP_MAX_EDGE = 1600;
-
-/**
- * Photo file → base64 JPEG, at most SNAP_MAX_EDGE on the long side. Goes
- * through an <img> rather than createImageBitmap because <img> applies the
- * EXIF rotation, so a portrait receipt isn't sent sideways. Throws when the
- * browser can't decode the file at all — HEIC outside Safari, mainly.
- */
-async function downscale(file: File): Promise<string> {
-  const url = URL.createObjectURL(file);
-  try {
-    const img = new Image();
-    img.src = url;
-    await img.decode();
-    const scale = Math.min(1, SNAP_MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
-    const w = Math.max(1, Math.round(img.naturalWidth * scale));
-    const h = Math.max(1, Math.round(img.naturalHeight * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("no canvas");
-    ctx.drawImage(img, 0, 0, w, h);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
-    const b64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
-    if (!dataUrl.startsWith("data:image/jpeg") || !b64) throw new Error("encode failed");
-    return b64;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
-
 export function QuickAdd({
   ventures,
   members,
   defaultAssigneeId,
   aiEnabled,
+  favorites = [],
 }: {
   ventures: { id: string; name: string }[];
   members: Option[];
   defaultAssigneeId?: string;
   aiEnabled: boolean;
+  favorites?: FavoriteChip[];
 }) {
   const router = useRouter();
   const t = useT();
@@ -121,6 +120,10 @@ export function QuickAdd({
   // Set by the home-screen shortcuts when the browser won't open the camera
   // or mic without a tap: a big one-tap button replaces the missing gesture.
   const [prompt, setPrompt] = useState<"snap" | "voice" | null>(null);
+  const [favOffer, setFavOffer] = useState<FavOffer | null>(null);
+  const [favBusy, setFavBusy] = useState<string | null>(null);
+  const pressTimer = useRef<number | null>(null);
+  const longPressed = useRef(false);
   const [pending, startTransition] = useTransition();
   const canSpeak = useSyncExternalStore(noop, readSpeech, () => false);
 
@@ -179,6 +182,7 @@ export function QuickAdd({
     const title = String(fd.get("title") ?? "").trim();
     if (!title) return;
     setMsg(null);
+    setFavOffer(null);
 
     if (aiEnabled && !open && worthParsing(title)) parseAndReview(title, fd);
     else addPlain(fd);
@@ -190,6 +194,7 @@ export function QuickAdd({
     if (!Ctor || recRef.current) return;
     setPrompt(null);
     setMsg(null);
+    setFavOffer(null);
 
     const rec = new Ctor();
     rec.lang = lang === "fr" ? "fr-CA" : "en-CA";
@@ -264,11 +269,12 @@ export function QuickAdd({
     e.target.value = ""; // so picking the same photo again still fires
     if (!file) return;
     setMsg(t("Reading the photo…"));
+    setFavOffer(null);
     setDrafts(null);
     startTransition(async () => {
       let data: string;
       try {
-        data = await downscale(file);
+        data = await downscaleImage(file);
       } catch {
         setMsg(t("This photo format can't be read here. Try a JPEG, or take a screenshot of it."));
         return;
@@ -312,6 +318,68 @@ export function QuickAdd({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ---- favourites ----------------------------------------------------------
+  // One tap = the entry exists, for today. Routine rung of the ladder: the
+  // chip presses (160ms), a toast offers Undo, nothing celebrates.
+  function tapFavorite(f: FavoriteChip) {
+    if (longPressed.current) {
+      longPressed.current = false;
+      return;
+    }
+    if (favBusy) return;
+    setFavBusy(f.id);
+    setMsg(null);
+    setFavOffer(null);
+    applyFavorite(f.id)
+      .then((r) => {
+        if (!r.ok) {
+          setMsg(t(r.error));
+          return;
+        }
+        router.refresh();
+        const what = f.amountLabel ? `${f.label} · ${f.amountLabel}` : f.label;
+        showToast({
+          message: t("Added {what}", { what }),
+          actionLabel: t("Undo"),
+          onAction: () => {
+            void undoFavorite(r.created).then(() => router.refresh());
+          },
+        });
+      })
+      .catch(() => setMsg(t("Could not add")))
+      .finally(() => setFavBusy(null));
+  }
+
+  /** Long-press a chip → manage favourites. */
+  function pressStart() {
+    longPressed.current = false;
+    if (pressTimer.current) window.clearTimeout(pressTimer.current);
+    pressTimer.current = window.setTimeout(() => {
+      longPressed.current = true;
+      router.push("/favorites");
+    }, 550);
+  }
+  function pressEnd() {
+    if (pressTimer.current) window.clearTimeout(pressTimer.current);
+    pressTimer.current = null;
+  }
+
+  function saveOfferAsFavorite() {
+    const offer = favOffer;
+    if (!offer) return;
+    setFavOffer(null);
+    saveDraftAsFavorite(offer)
+      .then((r) => {
+        if (r.status === "saved") {
+          setMsg(t("Saved as a favourite — it's one tap now."));
+          router.refresh();
+        } else if (r.status === "exists") setMsg(t("That's already a favourite."));
+        else if (r.status === "full") setMsg(t("You can keep up to 12 favourites per hub. Delete one first."));
+        else setMsg(t("Could not save"));
+      })
+      .catch(() => setMsg(t("Could not save")));
+  }
+
   // ---- review --------------------------------------------------------------
   function patchDraft(i: number, patch: Partial<Draft>) {
     setDrafts((cur) => cur?.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) ?? null);
@@ -330,6 +398,7 @@ export function QuickAdd({
       const r = await commitDrafts(drafts);
       if (r.ok) {
         setMsg(`${t("Added {n}", { n: r.created.length })}: ${r.created.join(" · ")}`);
+        setFavOffer(favoriteOffer(drafts, favorites));
         reset();
         router.refresh();
         ready();
@@ -347,9 +416,10 @@ export function QuickAdd({
     } else if (drafts) {
       reset();
       ready();
-    } else if (inputRef.current?.value || msg || prompt) {
+    } else if (inputRef.current?.value || msg || prompt || favOffer) {
       reset();
       setMsg(null);
+      setFavOffer(null);
       setPrompt(null);
     } else return;
     e.preventDefault();
@@ -406,6 +476,43 @@ export function QuickAdd({
             {pending ? "…" : t("Add")}
           </button>
         </div>
+        {favorites.length > 0 && !drafts && (
+          <div
+            className="-mx-3 mt-2 flex gap-1.5 overflow-x-auto px-3 pb-0.5"
+            role="group"
+            aria-label={t("Favourites")}
+          >
+            {favorites.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => tapFavorite(f)}
+                onPointerDown={pressStart}
+                onPointerUp={pressEnd}
+                onPointerLeave={pressEnd}
+                onPointerCancel={pressEnd}
+                onContextMenu={(e) => e.preventDefault()}
+                disabled={favBusy !== null}
+                aria-busy={favBusy === f.id || undefined}
+                className="chip fav-chip shrink-0 select-none"
+                title={t("Tap to add for today · hold to edit")}
+              >
+                {f.label}
+                {f.amountLabel && (
+                  <span className="font-normal text-[var(--color-text-dim)]">{f.amountLabel}</span>
+                )}
+              </button>
+            ))}
+            <Link
+              href="/favorites"
+              className="chip fav-chip shrink-0"
+              aria-label={t("Edit favourites")}
+              title={t("Edit favourites")}
+            >
+              <span aria-hidden>✎</span>
+            </Link>
+          </div>
+        )}
         {aiEnabled && (
           <input
             ref={fileRef}
@@ -521,6 +628,15 @@ export function QuickAdd({
       )}
 
       {msg && <p className="mt-2 text-xs text-[var(--color-text-dim)]" role="status">{msg}</p>}
+      {favOffer && (
+        <button
+          type="button"
+          onClick={saveOfferAsFavorite}
+          className="mt-1 text-xs font-semibold text-[var(--color-primary)]"
+        >
+          ⭐ {t("Save as favourite")}
+        </button>
+      )}
     </div>
   );
 }
