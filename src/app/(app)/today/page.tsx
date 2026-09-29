@@ -7,7 +7,7 @@ import { listShifts, planHref, planItemsBetween } from "@/lib/plans";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { getLang, getT } from "@/lib/i18n-server";
-import { fmt, fmtTime } from "@/lib/i18n";
+import { fmt, fmtTime, type T } from "@/lib/i18n";
 import { countdownLabel, eventTimeRange, money } from "@/lib/format";
 import { TaskListCard } from "@/components/TaskListCard";
 import { VentureChip } from "@/components/VentureChip";
@@ -37,6 +37,56 @@ function SectionHead({ title, href, cta }: { title: string; href: string; cta: s
   );
 }
 
+function DayLine({
+  day,
+  currency,
+  locale,
+  t,
+}: {
+  day: { dueToday: number; outWeekCents: number; budgetLeftCents: number | null };
+  currency: string;
+  locale: string;
+  t: T;
+}) {
+  const $ = (cents: number) => money(cents, currency, locale);
+  const parts: { href: string; text: string; danger?: boolean }[] = [];
+  if (day.dueToday > 0) {
+    parts.push({
+      href: "/agenda",
+      text: t(day.dueToday === 1 ? "{n} thing due today" : "{n} things due today", { n: day.dueToday }),
+    });
+  }
+  if (day.outWeekCents > 0) {
+    parts.push({ href: "/budget", text: t("{amount} going out in the next 7 days", { amount: $(day.outWeekCents) }) });
+  }
+  if (day.budgetLeftCents != null) {
+    parts.push(
+      day.budgetLeftCents >= 0
+        ? { href: "/budget", text: t("{amount} left in your budget this month", { amount: $(day.budgetLeftCents) }) }
+        : { href: "/budget", text: t("{amount} over budget this month", { amount: $(-day.budgetLeftCents) }), danger: true },
+    );
+  }
+  const calm = day.dueToday === 0 && day.outWeekCents === 0;
+
+  return (
+    <section aria-label={t("Your day at a glance")} className="card px-3 py-2.5 text-sm leading-relaxed">
+      {calm && <span className="text-[var(--color-text)]">{t("Nothing urgent today.")}</span>}
+      {parts.map((p, i) => (
+        <span key={p.text}>
+          {(i > 0 || calm) && <span className="text-[var(--color-text-dim)]" aria-hidden> · </span>}
+          <Link
+            href={p.href}
+            className="font-medium underline-offset-2 hover:underline"
+            style={{ color: p.danger ? "var(--color-danger)" : "var(--color-text)" }}
+          >
+            {p.text}
+          </Link>
+        </span>
+      ))}
+    </section>
+  );
+}
+
 export default async function DashboardPage() {
   const { user, hub } = await requireHub();
   const [t, lang] = await Promise.all([getT(), getLang()]);
@@ -46,7 +96,7 @@ export default async function DashboardPage() {
   const [[d, plans, shifts], { ventures, members: membersRaw }] = await Promise.all([
     withHub(user.id, (tx) =>
       Promise.all([
-        dashboard(tx, hub.id, user.id),
+        dashboard(tx, hub.id, user.id, hub.currency),
         planItemsBetween(tx, hub, user.id, now, addDays(todayStart, 21), lang),
         listShifts(tx, hub.id, user.id, todayStart, addDays(todayStart, 1)),
       ]),
@@ -84,6 +134,11 @@ export default async function DashboardPage() {
           {fmt(d.now, lang === "fr" ? "EEEE d MMMM" : "EEEE, MMMM d", lang)}
         </p>
       </div>
+
+      {/* Your day, in one line. A .card, so it stays opaque and legible over a
+          background photo without any [data-photo] special-casing. Routine
+          information: no animation, no display face. */}
+      <DayLine day={d.day} currency={currency} locale={locale} t={t} />
 
       <nav className="-mx-3 flex gap-1.5 overflow-x-auto px-3" aria-label={t("Plan")}>
         {SHORTCUTS.map((s) => (

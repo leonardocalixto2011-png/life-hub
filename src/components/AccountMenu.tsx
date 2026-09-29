@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
-import { useT } from "@/components/I18nProvider";
+import { useLang, useT } from "@/components/I18nProvider";
+import { setLocale } from "@/app/(app)/appearance/actions";
 import { signOutAction } from "@/app/(app)/auth-actions";
 
 /**
@@ -23,6 +25,47 @@ const LINKS = [
   { href: "/appearance", label: "Appearance", icon: "🖼️" },
   { href: "/account", label: "Your account", icon: "⚙️" },
 ];
+
+/**
+ * Français / English, one tap from every screen. The full picker (which also
+ * sets number formatting for other regions) stays on /appearance, but it sat
+ * below the fold there and people didn't find it.
+ */
+function LanguageSwitch() {
+  const lang = useLang();
+  const t = useT();
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  function pick(next: "fr" | "en") {
+    if (next === lang || pending) return;
+    start(async () => {
+      await setLocale(next === "fr" ? "fr-CA" : "en-CA");
+      router.refresh();
+    });
+  }
+
+  return (
+    <div role="group" aria-label={t("Language")} className="flex gap-1 px-3 pb-2">
+      {(["fr", "en"] as const).map((l) => (
+        <button
+          key={l}
+          type="button"
+          onClick={() => pick(l)}
+          aria-pressed={lang === l}
+          disabled={pending}
+          className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${
+            lang === l
+              ? "bg-[var(--color-primary)] text-[var(--color-primary-fg)]"
+              : "border border-[var(--color-border)] text-[var(--color-text-dim)]"
+          }`}
+        >
+          {l === "fr" ? "Français" : "English"}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function AccountMenu({
   name,
@@ -55,6 +98,10 @@ export function AccountMenu({
               {email && (
                 <div className="truncate text-[0.68rem] text-[var(--color-text-dim)]">{email}</div>
               )}
+            </div>
+
+            <div className="pt-2">
+              <LanguageSwitch />
             </div>
 
             <div className="p-1">
