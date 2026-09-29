@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight, Inbox } from "lucide-react";
 
 import { hubChrome, listPendingReviews } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
@@ -20,14 +21,16 @@ export default async function InboxPage() {
 
   return (
     <div className="page">
-      <div>
+      <div className="page-header">
         <Link href="/today" className="back-link">
           {t("Today")}
         </Link>
-        <h1 className="display mt-1 text-2xl">
+        {/* The display face on purpose: an empty review inbox is the app
+            speaking ("Nothing to review."), not a label. */}
+        <h1 className="display px-1 text-2xl">
           {items.length === 0 ? t("Nothing to review.") : t("{n} to review", { n: items.length })}
         </h1>
-        <p className="text-xs text-[var(--color-text-dim)]">
+        <p className="page-sub px-1">
           {t("Parsed from forwarded emails. Nothing here is live until you accept it.")}
         </p>
       </div>
@@ -36,15 +39,16 @@ export default async function InboxPage() {
         // An empty review inbox is the app working, not a gap to apologise
         // for — so it explains how mail gets here rather than restating that
         // there is none.
-        <div className="card p-6 text-center">
+        <div className="card empty-state flex flex-col items-center gap-3 p-6 text-center">
+          <span className="icon-tile h-11 w-11" aria-hidden>
+            <Inbox size={20} strokeWidth={2} />
+          </span>
           <p className="mx-auto max-w-[34ch] text-sm text-[var(--color-text-dim)]">
             {t("Forward a bill, renewal notice or booking to this hub's address and it lands here as a draft for you to check.")}
           </p>
-          <Link
-            href="/mail"
-            className="mt-3 inline-block text-xs font-semibold text-[var(--color-primary)]"
-          >
-            {t("Find the address →")}
+          <Link href="/mail" className="btn btn-secondary btn-sm">
+            {t("Find the address")}
+            <ChevronRight size={14} strokeWidth={2.25} aria-hidden />
           </Link>
         </div>
       ) : (

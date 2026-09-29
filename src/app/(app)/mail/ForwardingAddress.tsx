@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Check, Copy, Eye, RefreshCw } from "lucide-react";
 
 import { useT } from "@/components/I18nProvider";
 import { revealInboundAddress, rotateInbound } from "./actions";
@@ -40,36 +41,41 @@ export function ForwardingAddress({ initial }: { initial: string | null }) {
   }
 
   return (
-    <div className="card space-y-2 p-3">
-      <div className="text-xs font-semibold">{t("Forward mail to this hub")}</div>
-      <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-        {t(
-          "Forward a bill or confirmation to this address and it lands in this hub's review inbox. Treat it like a password — anyone who has it can put items in here.",
-        )}
-      </p>
+    <section>
+      <h2 className="section-title">{t("Forward mail to this hub")}</h2>
+      <div className="form-card">
+        <p className="field-hint mt-0">
+          {t(
+            "Forward a bill or confirmation to this address and it lands in this hub's review inbox. Treat it like a password — anyone who has it can put items in here.",
+          )}
+        </p>
 
-      {address ? (
-        <>
-          <div className="flex items-center gap-2">
-            <code className="field flex-1 truncate text-[0.7rem]">{address}</code>
-            <button type="button" onClick={copy} className="btn shrink-0 text-[0.7rem]">
-              {copied ? t("copied") : t("copy")}
+        {address ? (
+          <>
+            <div className="flex items-center gap-2">
+              <code className="field flex-1 truncate text-xs leading-[1.9]">{address}</code>
+              <button type="button" onClick={copy} className="btn btn-secondary shrink-0">
+                {copied ? <Check size={16} strokeWidth={2.25} aria-hidden /> : <Copy size={16} strokeWidth={2} aria-hidden />}
+                {copied ? t("copied") : t("copy")}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={rotate}
+              disabled={pending}
+              className="btn btn-quiet-danger btn-sm self-start"
+            >
+              <RefreshCw size={14} strokeWidth={2} aria-hidden />
+              {t("Issue a new address")}
             </button>
-          </div>
-          <button
-            type="button"
-            onClick={rotate}
-            disabled={pending}
-            className="text-[0.65rem] font-semibold text-[var(--color-danger)] underline disabled:opacity-60"
-          >
-            {t("Issue a new address")}
+          </>
+        ) : (
+          <button type="button" onClick={reveal} disabled={pending} className="btn btn-secondary w-full">
+            <Eye size={16} strokeWidth={2} aria-hidden />
+            {pending ? "…" : t("Show forwarding address")}
           </button>
-        </>
-      ) : (
-        <button type="button" onClick={reveal} disabled={pending} className="btn w-full">
-          {pending ? "…" : t("Show forwarding address")}
-        </button>
-      )}
-    </div>
+        )}
+      </div>
+    </section>
   );
 }

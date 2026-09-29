@@ -1031,4 +1031,31 @@ export const FR: Record<string, string> = {
   "For example": "Par exemple",
   "Add something by voice 🎤 or in a few plain words.": "Ajoute quelque chose à la voix 🎤 ou en quelques mots.",
   "Anything with a date lands here — say it or type it.": "Tout ce qui a une date arrive ici — dis-le ou écris-le.",
+
+  // ---- /today: usual payments ("À confirmer") ------------------------------
+  "To confirm": "À confirmer",
+  "expected on the {day}": "prévu le {day}",
+  "Logged {what}": "Noté : {what}",
+  "{what} hidden until next month": "{what} masqué jusqu'au mois prochain",
+  "Not this month": "Pas ce mois-ci",
+  "Not this month: {what}": "Pas ce mois-ci : {what}",
+  "Paid": "Payé",
+  "Paid: {what}": "Payé : {what}",
+  "Paid the usual? One tap logs it in the budget for today.":
+    "Payé comme d'habitude? Un toucher l'inscrit au budget d'aujourd'hui.",
+
+  // ---- edit screens: section headings & actions ----------------------------
+  "When": "Quand",
+  "Where & who": "Où et qui",
+  "Who & priority": "Qui et priorité",
+  "Reminders & notes": "Rappels et notes",
+  "Balance {amount}": "Solde : {amount}",
+  "Members": "Membres",
+  "Remove {name}": "Retirer {name}",
+  "Send invite": "Envoyer l'invitation",
+  "Hub settings": "Réglages du hub",
+  "Find the address": "Trouver l'adresse",
+  "Mailboxes": "Boîtes courriel",
+  "Connect Outlook": "Connecter Outlook",
+  "Photos": "Photos",
 };

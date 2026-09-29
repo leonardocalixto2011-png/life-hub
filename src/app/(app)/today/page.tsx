@@ -19,6 +19,8 @@ import { EmptyState, quickAddExamples } from "@/components/EmptyState";
 import { WeekStrip } from "@/components/viz/WeekStrip";
 import { SectionHeader } from "@/components/SectionHeader";
 import { DayCard } from "@/components/DayCard";
+import { UsualPayments, type UsualItem } from "@/components/UsualPayments";
+import { dueUsualPayments, usualPaymentsFor } from "@/lib/usual";
 
 export const dynamic = "force-dynamic";
 
@@ -30,19 +32,28 @@ const SHORTCUTS: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/agenda", label: "Agenda", Icon: ListOrdered },
 ];
 
+/** "1er" / "2" in French, "1st" / "2nd" in English — a day of the month. */
+function dayOrdinal(n: number, lang: "en" | "fr"): string {
+  if (lang === "fr") return n === 1 ? "1er" : String(n);
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th");
+  return `${n}${suffix}`;
+}
+
 export default async function DashboardPage() {
   const { user, hub } = await requireHub();
   const [t, lang] = await Promise.all([getT(), getLang()]);
   const now = new Date();
   const todayStart = startOfDay(now);
 
-  const [[d, plans, shifts, recap], { ventures, members: membersRaw }] = await Promise.all([
+  const [[d, plans, shifts, recap, usual], { ventures, members: membersRaw }] = await Promise.all([
     withHub(user.id, (tx) =>
       Promise.all([
         dashboard(tx, hub.id, user.id, hub.currency),
         planItemsBetween(tx, hub, user.id, now, addDays(todayStart, 21), lang),
         listShifts(tx, hub.id, user.id, todayStart, addDays(todayStart, 1)),
         weekRecap(tx, hub.id, user.id, hub.currency),
+        usualPaymentsFor(tx, hub.id, user.id, now),
       ]),
     ),
     hubChrome(user.id, hub.id),
@@ -53,6 +64,15 @@ export default async function DashboardPage() {
   const comingUp = plans.slice(0, 6);
   const currency = hub.currency;
   const locale = user.locale ?? "en-CA";
+  const usualItems: UsualItem[] = dueUsualPayments(usual, now).map((p) => ({
+    key: p.key,
+    category: p.category,
+    amountCents: p.amountCents,
+    amountLabel: money(p.amountCents, currency, locale),
+    dayLabel: t("expected on the {day}", { day: dayOrdinal(p.expectedDay, lang) }),
+    ventureId: p.ventureId,
+    late: p.late,
+  }));
 
   const nothing =
     d.overdue.length +
@@ -78,6 +98,9 @@ export default async function DashboardPage() {
           .card, so it stays opaque and legible over a background photo
           without any [data-photo] special-casing. */}
       <DayCard day={d.day} currency={currency} locale={locale} t={t} />
+
+      {/* Usual payments due about now: confirm in one tap, or skip the month. */}
+      {usualItems.length > 0 && <UsualPayments items={usualItems} month={fmt(now, "yyyy-MM", "en")} />}
 
       {/* Last week, looked back on once — first visit of a new week only. */}
       <WeekRecap

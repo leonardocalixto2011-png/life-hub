@@ -716,6 +716,89 @@ button {
     opacity: 0.55;
     cursor: not-allowed;
   }
+  /* Destructive, but quiet: danger-coloured text on nothing, so it never
+     competes with the primary action. Lives in a .danger-zone. */
+  .btn-quiet-danger {
+    background: transparent;
+    border-color: transparent;
+    color: var(--color-danger);
+  }
+  .btn-quiet-danger:hover {
+    background: var(--danger-wash);
+  }
+
+  /* ---- edit screens ------------------------------------------------------
+     Labelled groups in cards, the primary action full-width at the bottom,
+     destructive actions set apart below it. See components/Form.tsx. */
+  .page-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .form-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+    padding: var(--sp-4);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--elev-1);
+  }
+  .form-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+  }
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3);
+    /* A label that wraps to two lines must not push its input out of line
+       with its neighbour's. */
+    align-items: end;
+  }
+  .field-label {
+    display: block;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--color-text-dim);
+  }
+  .field-label > :is(.field, input, select, textarea) {
+    margin-top: 6px;
+  }
+  .field-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: var(--fs-xs);
+    font-weight: 400;
+    line-height: 1.4;
+    color: var(--color-text-dim);
+  }
+  /* A checkbox + its words, as one 44px target. */
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: 44px;
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    color: var(--color-text);
+  }
+  .check-row > input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--color-primary);
+    flex-shrink: 0;
+  }
+  .danger-zone {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    margin-top: var(--sp-8);
+    padding-top: var(--sp-4);
+    border-top: 1px solid var(--color-border);
+  }
 
   /* ---- inputs ----------------------------------------------------------
      16px text always (not only on iOS): under 16px Safari zooms the viewport

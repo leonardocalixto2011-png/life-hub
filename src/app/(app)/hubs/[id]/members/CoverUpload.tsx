@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { upload } from "@vercel/blob/client";
+import { Trash2 } from "lucide-react";
 
 import { useT } from "@/components/I18nProvider";
 import { setHubCover, removeHubCover } from "@/app/(app)/hubs/actions";
@@ -53,7 +54,7 @@ export function CoverUpload({ hubId, hasCover }: { hubId: string; hasCover: bool
         className="field w-full"
         aria-label={hasCover ? t("Replace the hub cover photo") : t("Add a hub cover photo")}
       />
-      <p className="text-[0.65rem] text-[var(--color-text-dim)]">
+      <p className="field-hint mt-0">
         {t("Everyone in this hub sees this one, and it's the first thing on an invite. Your own background photo stays private.")}
       </p>
       {pending && <p className="text-xs text-[var(--color-text-dim)]">{t("Uploading…")}</p>}
@@ -63,8 +64,9 @@ export function CoverUpload({ hubId, hasCover }: { hubId: string; hasCover: bool
           type="button"
           disabled={removing}
           onClick={() => startRemove(() => removeHubCover(hubId).catch(() => {}))}
-          className="text-[0.68rem] font-semibold text-[var(--color-danger)] underline"
+          className="btn btn-quiet-danger btn-sm"
         >
+          <Trash2 size={14} strokeWidth={2} aria-hidden />
           {removing ? t("Removing…") : t("Remove cover photo")}
         </button>
       )}

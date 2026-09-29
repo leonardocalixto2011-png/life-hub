@@ -24,33 +24,33 @@ type Existing = {
 type Member = { id: string; name: string | null; email: string | null };
 
 function Fields({ existing, members = [], t }: { existing?: Existing; members?: Member[]; t: T }) {
-  const label = "block text-xs font-semibold text-[var(--color-text-dim)]";
+  const label = "field-label";
   return (
     <>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="form-grid">
         <label className={label}>
           {t("Trip")}
           <input
             name="title"
             required
             defaultValue={existing?.title}
-            className="field mt-1"
+            className="field"
             placeholder={t("Punta Cana, weekend in Québec…")}
           />
         </label>
         <label className={label}>
           {t("Destination")}
-          <input name="destination" defaultValue={existing?.destination ?? ""} className="field mt-1" />
+          <input name="destination" defaultValue={existing?.destination ?? ""} className="field" />
         </label>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="form-grid">
         <label className={label}>
           {t("Leaving")}
-          <input type="date" name="startDate" required defaultValue={existing?.startDate} className="field mt-1" />
+          <input type="date" name="startDate" required defaultValue={existing?.startDate} className="field" />
         </label>
         <label className={label}>
           {t("Back")}
-          <input type="date" name="endDate" required defaultValue={existing?.endDate} className="field mt-1" />
+          <input type="date" name="endDate" required defaultValue={existing?.endDate} className="field" />
         </label>
       </div>
       <label className={label}>
@@ -62,12 +62,12 @@ function Fields({ existing, members = [], t }: { existing?: Existing; members?: 
           min="0"
           inputMode="decimal"
           defaultValue={existing?.budget}
-          className="field mt-1"
+          className="field"
         />
       </label>
       <label className={label}>
         {t("Notes")}
-        <textarea name="notes" rows={2} defaultValue={existing?.notes ?? ""} className="field mt-1" />
+        <textarea name="notes" rows={2} defaultValue={existing?.notes ?? ""} className="field" />
       </label>
       {members.length > 1 && (
         <fieldset className={label}>
@@ -75,7 +75,7 @@ function Fields({ existing, members = [], t }: { existing?: Existing; members?: 
           <input type="hidden" name="travelersShown" value="1" />
           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm font-normal text-[var(--color-text)]">
             {members.map((m) => (
-              <label key={m.id} className="flex min-h-11 items-center gap-2">
+              <label key={m.id} className="check-row">
                 <input
                   type="checkbox"
                   name="travelerIds"
@@ -86,7 +86,7 @@ function Fields({ existing, members = [], t }: { existing?: Existing; members?: 
               </label>
             ))}
           </div>
-          <p className="mt-1 font-normal">{t("Deposits are split between the people going.")}</p>
+          <p className="field-hint">{t("Deposits are split between the people going.")}</p>
         </fieldset>
       )}
       <PrivacyToggle defaultValue={existing?.visibility} />
@@ -102,7 +102,7 @@ export function TripForm({ existing, members }: { existing?: Existing; members?:
 
   if (existing) {
     return (
-      <ActionForm action={updateTrip} className="card space-y-3 p-4">
+      <ActionForm action={updateTrip} className="form-card mt-1">
         <input type="hidden" name="id" value={existing.id} />
         <Fields existing={existing} members={members} t={t} />
         <SubmitButton className="btn btn-primary w-full">
@@ -138,7 +138,7 @@ export function TripForm({ existing, members }: { existing?: Existing; members?:
   }
 
   return (
-    <form onSubmit={onSubmit} className="card space-y-3 p-4">
+    <form onSubmit={onSubmit} className="form-card">
       <Fields t={t} />
       {error && <p className="text-xs text-[var(--color-danger)]">{error}</p>}
       <div className="flex gap-2">

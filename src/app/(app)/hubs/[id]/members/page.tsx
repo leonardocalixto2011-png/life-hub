@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { LogOut, Send, UserMinus, UserPlus } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { requireHub } from "@/lib/session";
@@ -16,6 +16,8 @@ import {
   setShowOccasions,
 } from "../../actions";
 import { SubmitButton } from "@/components/SubmitButton";
+import { PageHeader, SectionHeader } from "@/components/SectionHeader";
+import { DangerZone, FormSection } from "@/components/Form";
 
 export const dynamic = "force-dynamic";
 
@@ -86,125 +88,133 @@ export default async function HubMembersPage({
 
   return (
     <div className="page">
-      <div>
-        <Link href="/today" className="back-link">
-          {t("Today")}
-        </Link>
-        <p className="mt-2 text-xs text-[var(--color-text-dim)]">
-          {activeCount === 1 ? t("1 member") : t("{n} members", { n: activeCount })}
-        </p>
-      </div>
+      <PageHeader
+        back={{ href: "/today", label: t("Today") }}
+        title={t("Members & invites")}
+        sub={activeCount === 1 ? t("1 member") : t("{n} members", { n: activeCount })}
+      />
 
       {/* The hub's own face, at the top of its own page. */}
       <div className="card overflow-hidden p-0">
         <HubCover name={hub.name} color={hub.color} imageUrl={hub.coverImageUrl} by={coverBy} height="h-32" />
         {isOwner && (
-          <div className="border-t border-[var(--color-border)] p-3">
+          <div className="border-t border-[var(--color-border)] p-4">
             <CoverUpload hubId={hubId} hasCover={Boolean(hub.coverImageUrl)} />
           </div>
         )}
       </div>
 
+      <section>
+        <SectionHeader title={t("Members")} />
+        <div className="list">
+          {members.map((m) => (
+            <div key={m.id} className="row pr-2">
+              <Avatar name={m.user.name} email={m.user.email} size={32} />
+              <div className="row-main">
+                <span className="row-title">{m.user.name ?? m.user.email}</span>
+                <span className="row-sub">
+                  {m.role === "OWNER" ? t("Owner") : t("Member")}
+                  {m.status === "INVITED" ? ` · ${t("invited")}` : ""}
+                </span>
+              </div>
+              {isOwner && m.user.id !== user.id && (
+                <form action={removeMember.bind(null, hubId, m.user.id)}>
+                  <SubmitButton
+                    className="btn btn-ghost btn-sm text-[var(--color-text-dim)]"
+                    pendingLabel="…"
+                    aria-label={t("Remove {name}", { name: m.user.name ?? m.user.email ?? "" })}
+                  >
+                    <UserMinus size={14} strokeWidth={2} aria-hidden />
+                    {t("remove")}
+                  </SubmitButton>
+                </form>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
       {isOwner && (
-        <div className="card space-y-3 p-4">
+        <FormSection title={t("Invite")}>
+          {known.length > 0 && (
+            <form action={addKnownMember.bind(null, hubId)} className="form-stack border-b border-[var(--color-border)] pb-4">
+              <label className="field-label">
+                {t("Invite someone already on Life Hub")}
+                <select name="userId" required className="field" defaultValue="">
+                  <option value="" disabled>
+                    {t("Pick a person…")}
+                  </option>
+                  {known.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.name ? `${k.name} (${k.email})` : k.email}
+                    </option>
+                  ))}
+                </select>
+                <span className="field-hint">{t("They get a notification and join once they accept.")}</span>
+              </label>
+              <SubmitButton className="btn btn-secondary w-full" pendingLabel="…">
+                <UserPlus size={16} strokeWidth={2} aria-hidden />
+                {t("Invite")}
+              </SubmitButton>
+            </form>
+          )}
+
+          <form action={inviteMember.bind(null, hubId)} className="form-stack">
+            <label className="field-label">
+              {t("Invite someone new by email")}
+              <input
+                name="email"
+                type="email"
+                required
+                autoComplete="off"
+                placeholder="someone@example.com"
+                className="field"
+              />
+              <span className="field-hint">
+                {t("They'll get an email to sign in and accept — works even if they've never used Life Hub before.")}
+              </span>
+            </label>
+            <SubmitButton className="btn btn-primary w-full" pendingLabel="…">
+              <Send size={16} strokeWidth={2} aria-hidden />
+              {t("Send invite")}
+            </SubmitButton>
+          </form>
+        </FormSection>
+      )}
+
+      {isOwner && (
+        <FormSection title={t("Hub settings")}>
           <CurrencyPicker hubId={hubId} current={hub.currency} />
           <form
             action={setShowOccasions.bind(null, hubId, !hub.showOccasions)}
-            className="flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-3"
+            className="flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-4"
           >
-            <div className="text-xs">
-              <div className="font-semibold">{t("Holidays on the calendar")}</div>
-              <div className="text-[var(--color-text-dim)]">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold">{t("Holidays on the calendar")}</div>
+              <div className="field-hint mt-0.5">
                 {t("Valentine's Day, Mother's Day, Christmas, the seasons… with a week's notice.")}
               </div>
             </div>
-            <SubmitButton className={`btn shrink-0 px-3 py-1.5 text-xs ${hub.showOccasions ? "btn-primary" : ""}`} pendingLabel="…">
+            <SubmitButton
+              className={`btn btn-sm shrink-0 ${hub.showOccasions ? "btn-primary" : "btn-secondary"}`}
+              pendingLabel="…"
+              aria-pressed={hub.showOccasions}
+            >
               {hub.showOccasions ? t("On") : t("Off")}
             </SubmitButton>
           </form>
-        </div>
+        </FormSection>
       )}
-
-      {isOwner && known.length > 0 && (
-        <form action={addKnownMember.bind(null, hubId)} className="card space-y-2 p-4">
-          <label htmlFor="add-known-member" className="block text-xs font-semibold text-[var(--color-text-dim)]">
-            {t("Invite someone already on Life Hub")}
-          </label>
-          <div className="flex gap-2">
-            <select id="add-known-member" name="userId" required className="field flex-1" defaultValue="">
-              <option value="" disabled>
-                {t("Pick a person…")}
-              </option>
-              {known.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.name ? `${k.name} (${k.email})` : k.email}
-                </option>
-              ))}
-            </select>
-            <SubmitButton className="btn btn-primary shrink-0" pendingLabel="…">
-              {t("Invite")}
-            </SubmitButton>
-          </div>
-          <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-            {t("They get a notification and join once they accept.")}
-          </p>
-        </form>
-      )}
-
-      {isOwner && (
-        <form action={inviteMember.bind(null, hubId)} className="card space-y-2 p-4">
-          <label htmlFor="invite-email" className="block text-xs font-semibold text-[var(--color-text-dim)]">
-            {t("Invite someone new by email")}
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="invite-email"
-              name="email"
-              type="email"
-              required
-              placeholder="someone@example.com"
-              className="input flex-1"
-            />
-            <SubmitButton className="btn btn-primary shrink-0" pendingLabel="…">
-              {t("Invite")}
-            </SubmitButton>
-          </div>
-          <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-            {t("They'll get an email to sign in and accept — works even if they've never used Life Hub before.")}
-          </p>
-        </form>
-      )}
-
-      <div className="list">
-        {members.map((m) => (
-          <div key={m.id} className="flex items-center justify-between gap-3 px-4 py-3">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <Avatar name={m.user.name} email={m.user.email} size={28} />
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium">{m.user.name ?? m.user.email}</div>
-                <div className="text-[0.68rem] text-[var(--color-text-dim)]">
-                  {m.role === "OWNER" ? t("Owner") : t("Member")}
-                  {m.status === "INVITED" ? ` · ${t("invited")}` : ""}
-                </div>
-              </div>
-            </div>
-            {isOwner && m.user.id !== user.id && (
-              <form action={removeMember.bind(null, hubId, m.user.id)}>
-                <SubmitButton className="shrink-0 text-[0.68rem] font-semibold text-[var(--color-text-dim)] underline" pendingLabel="…">
-                  {t("remove")}
-                </SubmitButton>
-              </form>
-            )}
-          </div>
-        ))}
-      </div>
 
       {!isOwner && (
-        <form action={leaveHub.bind(null, hubId)}>
-          <SubmitButton className="text-xs font-semibold text-[var(--color-danger)] underline" pendingLabel="…">
-            {t("Leave this hub")}
-          </SubmitButton>
-        </form>
+        <DangerZone>
+          <form action={leaveHub.bind(null, hubId)}>
+            <SubmitButton className="btn btn-quiet-danger w-full" pendingLabel="…">
+              <LogOut size={16} strokeWidth={2} aria-hidden />
+              {t("Leave this hub")}
+            </SubmitButton>
+          </form>
+        </DangerZone>
       )}
     </div>
   );

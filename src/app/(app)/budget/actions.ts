@@ -189,3 +189,51 @@ export async function deleteBudgetTarget(fd: FormData) {
   await withHub(user.id, (tx) => tx.budgetTarget.deleteMany({ where: { id, hubId: hub.id } }));
   revalidateContent();
 }
+
+// ---- usual payments (/today "À confirmer") ---------------------------------
+
+const usualSchema = z.object({
+  category: z.string().trim().min(1).max(60),
+  amountCents: z.number().int().positive().max(100_000_000),
+  ventureId: z.string().cuid().nullable(),
+});
+
+/**
+ * One tap on a usual payment: logs today's expense with the pattern's
+ * category and amount. Returns the row so the toast's Undo can remove it —
+ * the entry is plain (no description, not a settle-up), which is exactly
+ * what `undoFavorite` is scoped to delete, so the same undo serves both.
+ */
+export async function confirmUsualPayment(
+  input: z.input<typeof usualSchema>,
+): Promise<{ ok: true; created: { kind: "BUDGET"; id: string } } | { ok: false; error: string }> {
+  const { user, hub } = await requireHub();
+  const p = usualSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: "Invalid input" };
+  // A venture carried from an old entry may since have been deleted or be
+  // from elsewhere; drop it rather than refuse the payment.
+  let ventureId = p.data.ventureId;
+  try {
+    await assertVentureInHub(hub.id, ventureId);
+  } catch {
+    ventureId = null;
+  }
+
+  const row = await withHub(user.id, (tx) =>
+    tx.budgetEntry.create({
+      data: {
+        hubId: hub.id,
+        type: "EXPENSE",
+        amountCents: p.data.amountCents,
+        currency: hub.currency,
+        category: p.data.category,
+        ventureId,
+        date: new Date(),
+        createdById: user.id,
+      },
+      select: { id: true },
+    }),
+  );
+  revalidateContent();
+  return { ok: true, created: { kind: "BUDGET", id: row.id } };
+}

@@ -1,15 +1,23 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getSubscription, hubChrome } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { getT } from "@/lib/i18n-server";
-import { toDateInput } from "@/lib/format";
+import { money, toDateInput } from "@/lib/format";
 import { centsToInput } from "@/lib/money";
+import { PageHeader } from "@/components/SectionHeader";
 import { SubscriptionForm } from "../SubscriptionForm";
 
 export const dynamic = "force-dynamic";
+
+const CYCLE: Record<string, string> = {
+  WEEKLY: "Weekly",
+  MONTHLY: "Monthly",
+  QUARTERLY: "Quarterly",
+  YEARLY: "Yearly",
+  CUSTOM: "Custom",
+};
 
 export default async function SubscriptionDetailPage({
   params,
@@ -26,10 +34,12 @@ export default async function SubscriptionDetailPage({
   if (!sub) notFound();
 
   return (
-    <div className="page page-tight">
-      <Link href="/subscriptions" className="back-link">
-        {t("Subscriptions")}
-      </Link>
+    <div className="page">
+      <PageHeader
+        back={{ href: "/subscriptions", label: t("Subscriptions") }}
+        title={sub.name}
+        sub={`${money(sub.costCents, hub.currency, user.locale ?? undefined)} · ${t(CYCLE[sub.billingCycle] ?? "Monthly")}`}
+      />
       <SubscriptionForm
         ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}
         members={members}

@@ -2,8 +2,10 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Trash2 } from "lucide-react";
 
 import { createEvent, deleteEvent, deleteEventSeries, updateEvent } from "./actions";
+import { DangerZone, FormSection } from "@/components/Form";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
 import { SubmitButton } from "@/components/SubmitButton";
 import { useT } from "@/components/I18nProvider";
@@ -38,110 +40,118 @@ const WEEKDAYS = [
   { value: 0, label: "Sun" },
 ] as const;
 
+/** `grouped` = the edit screen's titled cards; the inline create form is
+ *  already a card, so it renders the same fields flat. */
 function Fields({
   ventures,
   members,
   existing,
   prefill,
   t,
+  grouped,
 }: {
   ventures: Venture[];
   members: Member[];
   existing?: Existing;
   prefill?: Prefill;
   t: T;
+  grouped?: boolean;
 }) {
   const attending = new Set(existing?.attendeeIds ?? []);
-  const label = "block text-xs font-semibold text-[var(--color-text-dim)]";
+  const plain = !grouped;
   return (
     <>
-      <label className={label}>
-        {t("Title")}
-        <input
-          name="title"
-          defaultValue={existing?.title ?? prefill?.title}
-          required
-          className="field mt-1"
-          placeholder={t("Dinner, supplier call, photoshoot…")}
-        />
-      </label>
-
-      <div className="grid grid-cols-2 gap-3">
-        <label className={label}>
-          {t("Starts")}
+      <FormSection title={t("Details")} plain={plain}>
+        <label className="field-label">
+          {t("Title")}
           <input
-            type="datetime-local"
-            name="startAt"
-            defaultValue={existing?.startAt ?? prefill?.startAt}
+            name="title"
+            defaultValue={existing?.title ?? prefill?.title}
             required
-            className="field mt-1"
+            className="field"
+            placeholder={t("Dinner, supplier call, photoshoot…")}
           />
         </label>
-        <label className={label}>
-          {t("Ends (same day)")}
-          <input type="datetime-local" name="endAt" defaultValue={existing?.endAt} className="field mt-1" />
-        </label>
-      </div>
-      {!existing && (
-        <p className="-mt-2 text-[0.65rem] text-[var(--color-text-dim)]">
-          {t("For something that repeats on several days, keep “Ends” on the same day and use Repeat below.")}
-        </p>
-      )}
 
-      {!existing && (
-        <fieldset className="rounded-lg border border-[var(--color-border)] p-2.5 text-xs font-semibold text-[var(--color-text-dim)]">
-          {t("Repeat (optional)")}
-          <div className="mt-1 flex flex-wrap gap-2">
-            {WEEKDAYS.map((w) => (
-              <label key={w.value} className="flex items-center gap-1 font-normal">
-                <input type="checkbox" name="repeatDays" value={w.value} />
-                {t(w.label)}
+        <div className="form-grid">
+          <label className="field-label">
+            {t("Starts")}
+            <input
+              type="datetime-local"
+              name="startAt"
+              defaultValue={existing?.startAt ?? prefill?.startAt}
+              required
+              className="field"
+            />
+          </label>
+          <label className="field-label">
+            {t("Ends (same day)")}
+            <input type="datetime-local" name="endAt" defaultValue={existing?.endAt} className="field" />
+          </label>
+        </div>
+        {!existing && (
+          <p className="field-hint -mt-2">
+            {t("For something that repeats on several days, keep “Ends” on the same day and use Repeat below.")}
+          </p>
+        )}
+
+        {!existing && (
+          <fieldset className="rounded-[var(--r-md)] border border-[var(--color-border)] p-3">
+            <legend className="field-label px-1">{t("Repeat (optional)")}</legend>
+            <div className="flex flex-wrap gap-x-3">
+              {WEEKDAYS.map((w) => (
+                <label key={w.value} className="check-row">
+                  <input type="checkbox" name="repeatDays" value={w.value} />
+                  {t(w.label)}
+                </label>
+              ))}
+            </div>
+            <label className="field-label mt-2">
+              {t("Repeat until")}
+              <input type="date" name="repeatUntil" className="field" />
+            </label>
+          </fieldset>
+        )}
+      </FormSection>
+
+      <FormSection title={t("Where & who")} plain={plain}>
+        <div className="form-grid">
+          <label className="field-label">
+            {t("Location")}
+            <input name="location" defaultValue={existing?.location ?? ""} className="field" />
+          </label>
+          <label className="field-label">
+            {t("Venture")}
+            <select name="ventureId" defaultValue={existing?.ventureId ?? ""} className="field">
+              <option value="">—</option>
+              {ventures.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <fieldset>
+          <legend className="field-label">{t("Attendees")}</legend>
+          <div className="flex flex-wrap gap-x-4">
+            {members.map((m) => (
+              <label key={m.id} className="check-row">
+                <input type="checkbox" name="attendeeIds" value={m.id} defaultChecked={attending.has(m.id)} />
+                {m.name ?? m.email}
               </label>
             ))}
           </div>
-          <label className="mt-2 block font-normal">
-            {t("Repeat until")}
-            <input type="date" name="repeatUntil" className="field mt-1" />
-          </label>
         </fieldset>
-      )}
 
-      <div className="grid grid-cols-2 gap-3">
-        <label className={label}>
-          {t("Location")}
-          <input name="location" defaultValue={existing?.location ?? ""} className="field mt-1" />
+        <label className="field-label">
+          {t("Notes")}
+          <textarea name="notes" defaultValue={existing?.notes ?? ""} rows={2} className="field" />
         </label>
-        <label className={label}>
-          {t("Venture")}
-          <select name="ventureId" defaultValue={existing?.ventureId ?? ""} className="field mt-1">
-            <option value="">—</option>
-            {ventures.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
 
-      <fieldset className="text-xs font-semibold text-[var(--color-text-dim)]">
-        {t("Attendees")}
-        <div className="mt-1 flex flex-wrap gap-3">
-          {members.map((m) => (
-            <label key={m.id} className="flex items-center gap-1.5 font-normal">
-              <input type="checkbox" name="attendeeIds" value={m.id} defaultChecked={attending.has(m.id)} />
-              {m.name ?? m.email}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <label className={label}>
-        {t("Notes")}
-        <textarea name="notes" defaultValue={existing?.notes ?? ""} rows={2} className="field mt-1" />
-      </label>
-
-      <PrivacyToggle defaultValue={existing?.visibility} />
+        <PrivacyToggle defaultValue={existing?.visibility} />
+      </FormSection>
     </>
   );
 }
@@ -151,11 +161,14 @@ export function EventForm({
   members,
   existing,
   prefill,
+  beforeDanger,
 }: {
   ventures: Venture[];
   members: Member[];
   existing?: Existing;
   prefill?: Prefill;
+  /** Edit screen only: secondary actions shown between Save and Delete. */
+  beforeDanger?: React.ReactNode;
 }) {
   const router = useRouter();
   const t = useT();
@@ -166,28 +179,33 @@ export function EventForm({
 
   if (existing) {
     return (
-      <div className="space-y-3">
-        <form action={updateEvent} className="card space-y-3 p-4">
+      <>
+        <form action={updateEvent} className="space-y-5">
           <input type="hidden" name="id" value={existing.id} />
-          <Fields ventures={ventures} members={members} existing={existing} t={t} />
-          <SubmitButton className="btn btn-primary w-full">{t("Save")}</SubmitButton>
+          <Fields ventures={ventures} members={members} existing={existing} t={t} grouped />
+          <SubmitButton className="btn btn-primary btn-lg w-full">{t("Save")}</SubmitButton>
         </form>
-        <form action={deleteEvent}>
-          <input type="hidden" name="id" value={existing.id} />
-          <SubmitButton className="btn w-full text-[var(--color-danger)]" pendingLabel={t("Deleting…")}>
-            {existing.recurrenceGroupId ? t("Delete just this one") : t("Delete event")}
-          </SubmitButton>
-        </form>
-        {existing.recurrenceGroupId && (
-          <form action={deleteEventSeries}>
-            <input type="hidden" name="recurrenceGroupId" value={existing.recurrenceGroupId} />
-            <input type="hidden" name="fromDate" value={existing.startAt} />
-            <SubmitButton className="btn w-full text-[var(--color-danger)]" pendingLabel={t("Deleting…")}>
-              {t("Delete this and future")}
+        {beforeDanger}
+        <DangerZone>
+          <form action={deleteEvent}>
+            <input type="hidden" name="id" value={existing.id} />
+            <SubmitButton className="btn btn-quiet-danger w-full" pendingLabel={t("Deleting…")}>
+              <Trash2 size={16} strokeWidth={2} aria-hidden />
+              {existing.recurrenceGroupId ? t("Delete just this one") : t("Delete event")}
             </SubmitButton>
           </form>
-        )}
-      </div>
+          {existing.recurrenceGroupId && (
+            <form action={deleteEventSeries}>
+              <input type="hidden" name="recurrenceGroupId" value={existing.recurrenceGroupId} />
+              <input type="hidden" name="fromDate" value={existing.startAt} />
+              <SubmitButton className="btn btn-quiet-danger w-full" pendingLabel={t("Deleting…")}>
+                <Trash2 size={16} strokeWidth={2} aria-hidden />
+                {t("Delete this and future")}
+              </SubmitButton>
+            </form>
+          )}
+        </DangerZone>
+      </>
     );
   }
 
@@ -218,7 +236,7 @@ export function EventForm({
   }
 
   return (
-    <form ref={formRef} onSubmit={onSubmit} className="card space-y-3 p-4">
+    <form ref={formRef} onSubmit={onSubmit} className="form-card">
       <Fields ventures={ventures} members={members} prefill={prefill} t={t} />
       {error && <p className="text-xs text-[var(--color-danger)]">{error}</p>}
       <div className="flex gap-2">

@@ -2,12 +2,14 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Trash2 } from "lucide-react";
 
 import {
   createSubscription,
   deleteSubscription,
   updateSubscription,
 } from "./actions";
+import { DangerZone, FormSection } from "@/components/Form";
 import { useT } from "@/components/I18nProvider";
 import type { T } from "@/lib/i18n";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -26,7 +28,7 @@ type Existing = {
   notes: string | null;
 };
 
-function Fields({
+function MoreFields({
   ventures,
   members,
   existing,
@@ -37,96 +39,124 @@ function Fields({
   existing?: Existing;
   t: T;
 }) {
-  const label = "block text-xs font-semibold text-[var(--color-text-dim)]";
   return (
     <>
-      <label className={label}>
-        {t("Name")}
-        <input
-          name="name"
-          defaultValue={existing?.name}
-          required
-          className="field mt-1"
-          placeholder={t("Adobe CC, Shopify, gym…")}
-        />
+      <label className="field-label">
+        {t("Cancel by")}
+        <input type="date" name="cancelByDate" defaultValue={existing?.cancelByDate} className="field" />
       </label>
 
-      {/* Name + cost + cycle + renewal are all it takes to add a sub. The other
-          five fields are rarely set on the first pass, so they start folded. */}
-      <div className="grid grid-cols-2 gap-2">
-        <label className={label}>
-          {t("Cost")}
-          <input
-            name="cost"
-            type="number"
-            step="0.01"
-            min="0"
-            inputMode="decimal"
-            defaultValue={existing?.cost}
-            required
-            className="field mt-1"
-          />
+      <div className="form-grid">
+        <label className="field-label">
+          {t("Venture")}
+          <select name="ventureId" defaultValue={existing?.ventureId ?? ""} className="field">
+            <option value="">—</option>
+            {ventures.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
         </label>
-        <label className={label}>
-          {t("Cycle")}
-          <select name="billingCycle" defaultValue={existing?.billingCycle ?? "MONTHLY"} className="field mt-1">
-            <option value="WEEKLY">{t("Weekly")}</option>
-            <option value="MONTHLY">{t("Monthly")}</option>
-            <option value="QUARTERLY">{t("Quarterly")}</option>
-            <option value="YEARLY">{t("Yearly")}</option>
-            <option value="CUSTOM">{t("Custom")}</option>
+        <label className="field-label">
+          {t("Owner")}
+          <select name="ownerId" defaultValue={existing?.ownerId ?? ""} className="field">
+            <option value="">{t("— (no owner)")}</option>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name ?? m.email}
+              </option>
+            ))}
           </select>
         </label>
       </div>
 
-      <label className={label}>
-        {t("Next renewal")}
-        <input type="date" name="renewalDate" defaultValue={existing?.renewalDate} required className="field mt-1" />
+      <label className="field-label">
+        {t("Notes")}
+        <textarea name="notes" defaultValue={existing?.notes ?? ""} rows={2} className="field" />
       </label>
+    </>
+  );
+}
 
-      <details open={Boolean(existing)} className="group">
-        <summary className="cursor-pointer list-none text-xs font-semibold text-[var(--color-primary)]">
-          <span className="group-open:hidden">{t("More options")}</span>
-          <span className="hidden group-open:inline">{t("Fewer options")}</span>
-        </summary>
+/** `grouped` = the edit screen: titled cards, everything visible. The inline
+ *  create form stays one card with the rarely-set fields folded away. */
+function Fields({
+  ventures,
+  members,
+  existing,
+  t,
+  grouped,
+}: {
+  ventures: { id: string; name: string }[];
+  members: Opt[];
+  existing?: Existing;
+  t: T;
+  grouped?: boolean;
+}) {
+  return (
+    <>
+      <FormSection title={t("Details")} plain={!grouped}>
+        <label className="field-label">
+          {t("Name")}
+          <input
+            name="name"
+            defaultValue={existing?.name}
+            required
+            className="field"
+            placeholder={t("Adobe CC, Shopify, gym…")}
+          />
+        </label>
 
-        <div className="mt-3 space-y-3">
-          <label className={label}>
-            {t("Cancel by")}
-            <input type="date" name="cancelByDate" defaultValue={existing?.cancelByDate} className="field mt-1" />
+        {/* Name + cost + cycle + renewal are all it takes to add a sub. The other
+            five fields are rarely set on the first pass, so they start folded. */}
+        <div className="form-grid">
+          <label className="field-label">
+            {t("Cost")}
+            <input
+              name="cost"
+              type="number"
+              step="0.01"
+              min="0"
+              inputMode="decimal"
+              defaultValue={existing?.cost}
+              required
+              className="field"
+            />
           </label>
-
-          <div className="grid grid-cols-2 gap-3">
-            <label className={label}>
-              {t("Venture")}
-              <select name="ventureId" defaultValue={existing?.ventureId ?? ""} className="field mt-1">
-                <option value="">—</option>
-                {ventures.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={label}>
-              {t("Owner")}
-              <select name="ownerId" defaultValue={existing?.ownerId ?? ""} className="field mt-1">
-                <option value="">{t("— (no owner)")}</option>
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name ?? m.email}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <label className={label}>
-            {t("Notes")}
-            <textarea name="notes" defaultValue={existing?.notes ?? ""} rows={2} className="field mt-1" />
+          <label className="field-label">
+            {t("Cycle")}
+            <select name="billingCycle" defaultValue={existing?.billingCycle ?? "MONTHLY"} className="field">
+              <option value="WEEKLY">{t("Weekly")}</option>
+              <option value="MONTHLY">{t("Monthly")}</option>
+              <option value="QUARTERLY">{t("Quarterly")}</option>
+              <option value="YEARLY">{t("Yearly")}</option>
+              <option value="CUSTOM">{t("Custom")}</option>
+            </select>
           </label>
         </div>
-      </details>
+
+        <label className="field-label">
+          {t("Next renewal")}
+          <input type="date" name="renewalDate" defaultValue={existing?.renewalDate} required className="field" />
+        </label>
+      </FormSection>
+
+      {grouped ? (
+        <FormSection title={t("More options")}>
+          <MoreFields ventures={ventures} members={members} existing={existing} t={t} />
+        </FormSection>
+      ) : (
+        <details className="group">
+          <summary className="cursor-pointer list-none text-xs font-semibold text-[var(--color-primary)]">
+            <span className="group-open:hidden">{t("More options")}</span>
+            <span className="hidden group-open:inline">{t("Fewer options")}</span>
+          </summary>
+          <div className="form-stack mt-4">
+            <MoreFields ventures={ventures} members={members} existing={existing} t={t} />
+          </div>
+        </details>
+      )}
     </>
   );
 }
@@ -149,21 +179,22 @@ export function SubscriptionForm({
 
   if (existing) {
     return (
-      <div className="space-y-3">
-        <form action={updateSubscription} className="card space-y-3 p-4">
+      <>
+        <form action={updateSubscription} className="space-y-5">
           <input type="hidden" name="id" value={existing.id} />
-          <Fields ventures={ventures} members={members} existing={existing} t={t} />
-          <SubmitButton className="btn btn-primary w-full">
-            {t("Save")}
-          </SubmitButton>
+          <Fields ventures={ventures} members={members} existing={existing} t={t} grouped />
+          <SubmitButton className="btn btn-primary btn-lg w-full">{t("Save")}</SubmitButton>
         </form>
-        <form action={deleteSubscription}>
-          <input type="hidden" name="id" value={existing.id} />
-          <SubmitButton className="btn w-full text-[var(--color-danger)]" pendingLabel={t("Deleting…")}>
-            {t("Delete subscription")}
-          </SubmitButton>
-        </form>
-      </div>
+        <DangerZone>
+          <form action={deleteSubscription}>
+            <input type="hidden" name="id" value={existing.id} />
+            <SubmitButton className="btn btn-quiet-danger w-full" pendingLabel={t("Deleting…")}>
+              <Trash2 size={16} strokeWidth={2} aria-hidden />
+              {t("Delete subscription")}
+            </SubmitButton>
+          </form>
+        </DangerZone>
+      </>
     );
   }
 
@@ -192,7 +223,7 @@ export function SubscriptionForm({
   }
 
   return (
-    <form ref={formRef} onSubmit={onSubmit} className="card space-y-3 p-4">
+    <form ref={formRef} onSubmit={onSubmit} className="form-card">
       <Fields ventures={ventures} members={members} t={t} />
       {error && <p className="text-xs text-[var(--color-danger)]">{error}</p>}
       <div className="flex gap-2">
