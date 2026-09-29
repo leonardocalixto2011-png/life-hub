@@ -4,17 +4,16 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Info, ListPlus, ScanText, Sparkles } from "lucide-react";
 
-import { createTask } from "@/app/(app)/tasks/actions";
+import { createTask, discardAttachments } from "@/app/(app)/tasks/actions";
 import {
   parseQuickAdd,
-  parseImage,
   commitDrafts,
   type Draft,
 } from "@/app/(app)/quick-actions";
 import { DraftCard } from "@/components/DraftCard";
 import { FormSection } from "@/components/Form";
 import { useT } from "@/components/I18nProvider";
-import { downscaleImage } from "@/lib/downscale";
+import { readPhoto } from "@/lib/photo-read";
 
 /** Must match SHARE_CACHE / SHARE_MAX_IMAGES in public/sw.js. */
 const SHARE_CACHE = "lifehub-share-v1";
@@ -48,12 +47,15 @@ export type ShareNotices = { more: number; skipped: number; noFile: boolean; err
 
 export function ShareCapture({
   initialText,
+  userId,
   ventures,
   aiEnabled,
   sharedImages = false,
   notices = { more: 0, skipped: 0, noFile: false, error: false },
 }: {
   initialText: string;
+  /** Whose attachment folder a pinned photo uploads into. */
+  userId: string;
   ventures: { id: string; name: string }[];
   aiEnabled: boolean;
   sharedImages?: boolean;
@@ -67,6 +69,15 @@ export function ShareCapture({
   const [pending, start] = useTransition();
   const [images, setImages] = useState<{ blob: Blob; url: string }[]>([]);
   const arrived = useRef(false);
+  // Photos uploaded while reading; handed to discardAttachments when the
+  // review ends, which keeps only the ones a saved task points at.
+  const uploadsRef = useRef<string[]>([]);
+
+  function releaseUploads() {
+    const urls = uploadsRef.current;
+    uploadsRef.current = [];
+    if (urls.length) void discardAttachments(urls).catch(() => {});
+  }
 
   // Nothing here calls Claude on arrival. /share/receive is a plain POST
   // endpoint, so any website can auto-submit a form to it: if landing here
@@ -105,6 +116,7 @@ export function ShareCapture({
     start(async () => {
       // One at a time: each is a paid call against the same hourly budget,
       // and a failure on one photo shouldn't lose the others.
+      releaseUploads();
       const found: Draft[] = [];
       const problems: string[] = [];
       for (let i = 0; i < images.length; i++) {
@@ -113,22 +125,16 @@ export function ShareCapture({
             ? t("Reading photo {i} of {n}…", { i: i + 1, n: images.length })
             : t("Reading the photo…"),
         );
-        let data: string;
-        try {
-          data = await downscaleImage(images[i].blob);
-        } catch {
-          problems.push(t("This photo format can't be read here. Try a JPEG, or take a screenshot of it."));
-          continue;
-        }
-        try {
-          const r = await parseImage({ data, mediaType: "image/jpeg" });
-          if (r.ok) found.push(...r.drafts);
-          else problems.push(t(r.error));
-        } catch {
-          problems.push(t("Something went wrong. Try again."));
-        }
+        // Read and upload together, so a "buy this" photo stays pinned to the
+        // task it becomes — same as quick-add.
+        const r = await readPhoto(images[i].blob, userId);
+        if (r.uploaded) uploadsRef.current.push(r.uploaded);
+        found.push(...r.drafts);
+        if (r.error) problems.push(t(r.error));
+        if (r.pinFailed) problems.push(t("The photo couldn't be attached this time — the items below are still fine."));
       }
       if (found.length) setDrafts(found.slice(0, 25));
+      else releaseUploads();
       setMsg(problems.length ? Array.from(new Set(problems)).join(" ") : null);
     });
   }
@@ -151,7 +157,10 @@ export function ShareCapture({
     start(async () => {
       try {
         const r = await commitDrafts(drafts);
-        if (r.ok) router.replace("/today");
+        if (r.ok) {
+          releaseUploads();
+          router.replace("/today");
+        }
         else setMsg(t(r.error ?? "Could not save"));
       } catch {
         setMsg(t("Something went wrong. Try again."));
@@ -272,7 +281,14 @@ export function ShareCapture({
             <Check size={18} strokeWidth={2.25} aria-hidden />
             {pending ? t("Saving…") : t("Save {n}", { n: drafts.length })}
           </button>
-          <button onClick={() => setDrafts(null)} disabled={pending} className="btn btn-ghost w-full">
+          <button
+            onClick={() => {
+              setDrafts(null);
+              releaseUploads();
+            }}
+            disabled={pending}
+            className="btn btn-ghost w-full"
+          >
             {t("Back")}
           </button>
         </section>

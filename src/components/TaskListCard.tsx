@@ -13,6 +13,7 @@ export function toRowData(t: TaskWithRefs): TaskRowData {
     priority: t.priority,
     dueDate: t.dueDate,
     amountCents: t.amountCents,
+    imageUrl: t.imageUrl,
     ventureId: t.ventureId,
     assignedToId: t.assignedToId,
     venture: t.venture ? { name: t.venture.name, color: t.venture.color } : null,

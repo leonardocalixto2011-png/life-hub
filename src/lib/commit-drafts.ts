@@ -56,6 +56,7 @@ export async function commitDraftsCore(
           dueDate: fromDateInput(d.date),
           priority: d.priority,
           amountCents: toCents(d.amount),
+          imageUrl: d.imageUrl ?? null,
           ventureId: d.ventureId,
           createdById: userId,
           visibility: d.visibility,

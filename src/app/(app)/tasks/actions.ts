@@ -14,6 +14,9 @@ import { revalidateContent } from "@/lib/revalidate";
 import { assertActiveMember, assertVentureInHub } from "@/lib/membership";
 import { visibleTo } from "@/lib/visibility";
 import { addMonthsOnDay, anchorOf, sameDay } from "@/lib/recur";
+import { blobUrlSchema } from "@/lib/blob-url";
+import { deleteBlobIfUnreferenced } from "@/lib/blob-delete";
+import { attachmentPrefix } from "@/lib/attachments";
 
 /**
  * Every write below goes by a client-supplied id. RLS already limits that to
@@ -86,7 +89,12 @@ const baseFields = {
   visibility: z.enum(["PRIVATE", "SHARED"]).default("SHARED"),
 };
 
-const createSchema = z.object(baseFields);
+// A photo is only set at creation here (quick-add "Attach a photo"); the
+// detail page changes it with setTaskImage, so the edit form can't clear it.
+const createSchema = z.object({
+  ...baseFields,
+  imageUrl: z.preprocess(emptyToNull, blobUrlSchema.nullable()).optional(),
+});
 const updateSchema = z.object({ ...baseFields, id: z.string().cuid() });
 
 function parse<T extends z.ZodTypeAny>(schema: T, formData: FormData): z.infer<T> {
@@ -115,6 +123,7 @@ export async function createTask(formData: FormData) {
         dueDate: fromDateInput(data.dueDate),
         dueDay: null,
         amountCents: dollarsToCents(data.amount),
+        imageUrl: data.imageUrl ?? null,
         priority: data.priority,
         isRecurring: data.isRecurring,
         recurrence: data.isRecurring ? data.recurrence : null,
@@ -204,13 +213,63 @@ export async function toggleTask(formData: FormData) {
 export async function deleteTask(formData: FormData) {
   const { user, hub } = await requireHub();
   const id = z.string().cuid().parse(formData.get("id"));
-  await withHub(user.id, async (tx) => {
-    const { count } = await tx.task.deleteMany({ where: scoped(id, hub.id, user.id) });
-    if (count === 0) throw new Error("Not found.");
+  const imageUrl = await withHub(user.id, async (tx) => {
+    const task = await findScopedTask(tx, id, hub.id, user.id);
+    await tx.task.delete({ where: { id: task.id } });
+    return task.imageUrl;
   });
+  // After the row is gone, and only if no other row still points at it.
+  await deleteBlobIfUnreferenced(imageUrl);
 
   revalidateContent();
   redirect("/tasks");
+}
+
+/**
+ * Pin, replace or remove a task's photo. Row first, blob cleanup second —
+ * the same order as the background photo, for the same reason: the old URL
+ * came from a client and might still be someone else's file.
+ */
+export async function setTaskImage(id: string, url: string | null) {
+  const { user, hub } = await requireHub();
+  z.string().cuid().parse(id);
+  const next = url == null ? null : blobUrlSchema.parse(url);
+  const before = await withHub(user.id, async (tx) => {
+    const task = await findScopedTask(tx, id, hub.id, user.id);
+    await tx.task.update({ where: { id }, data: { imageUrl: next } });
+    return task.imageUrl;
+  });
+  if (before && before !== next) await deleteBlobIfUnreferenced(before);
+  revalidateContent(`/tasks/${id}`);
+}
+
+/**
+ * Cleans up photos uploaded during a quick-add / share review. A photo is
+ * uploaded while it is being read, before anyone knows whether it will end up
+ * pinned to a task (a receipt becomes a budget entry; a draft gets discarded).
+ * When the review ends the client hands back every URL it uploaded, and each
+ * one not referenced by any row is deleted.
+ *
+ * Only the caller's own attachment folder: a URL is a client value, and this
+ * must not become a way to delete someone else's file — deleteBlobIfUnreferenced
+ * already refuses anything still in use, the prefix check covers the rest.
+ */
+export async function discardAttachments(urls: string[]) {
+  const { user } = await requireHub();
+  const list = z.array(z.string()).max(10).parse(urls);
+  const prefix = '/' + attachmentPrefix(user.id);
+  for (const raw of list) {
+    const ok = blobUrlSchema.safeParse(raw);
+    if (!ok.success) continue;
+    let path: string;
+    try {
+      path = new URL(ok.data).pathname;
+    } catch {
+      continue;
+    }
+    if (!path.startsWith(prefix)) continue;
+    await deleteBlobIfUnreferenced(ok.data);
+  }
 }
 
 // --- Plain-arg actions for inline editing + swipe gestures -------------------

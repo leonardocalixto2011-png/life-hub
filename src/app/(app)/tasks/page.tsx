@@ -10,7 +10,7 @@ import { RecurringNudge } from "@/components/RecurringNudge";
 
 export const dynamic = "force-dynamic";
 
-type SP = { venture?: string; mine?: string; show?: string };
+type SP = { venture?: string; mine?: string; show?: string; buy?: string };
 
 function qs(base: SP, patch: Partial<SP>): string {
   const merged = { ...base, ...patch };
@@ -18,6 +18,7 @@ function qs(base: SP, patch: Partial<SP>): string {
   if (merged.venture) p.set("venture", merged.venture);
   if (merged.mine === "1") p.set("mine", "1");
   if (merged.show === "all") p.set("show", "all");
+  if (merged.buy === "1") p.set("buy", "1");
   const s = p.toString();
   return s ? `/tasks?${s}` : "/tasks";
 }
@@ -46,10 +47,11 @@ export default async function TasksPage({
   const sp = await searchParams;
   const { user, hub } = await requireHub();
   const [t, lang] = await Promise.all([getT(), getLang()]);
-  const noFilters = !sp.venture && sp.mine !== "1" && sp.show !== "all";
+  const noFilters = !sp.venture && sp.mine !== "1" && sp.show !== "all" && sp.buy !== "1";
 
   const includeDone = sp.show === "all";
   const mine = sp.mine === "1";
+  const toBuy = sp.buy === "1";
 
   const [{ ventures, members }, [suggestions, tasks]] = await Promise.all([
     hubChrome(user.id, hub.id),
@@ -60,6 +62,7 @@ export default async function TasksPage({
           ventureSlug: sp.venture,
           mineUserId: mine ? user.id : undefined,
           includeDone,
+          toBuy,
         }),
       ]),
     ),
@@ -92,6 +95,9 @@ export default async function TasksPage({
         <Chip href={qs(sp, { mine: mine ? undefined : "1" })} active={mine}>
           {t("Mine")}
         </Chip>
+        <Chip href={qs(sp, { buy: toBuy ? undefined : "1" })} active={toBuy}>
+          {t("🛒 To buy")}
+        </Chip>
         <Chip href={qs(sp, { show: includeDone ? undefined : "all" })} active={includeDone}>
           {t("Show done")}
         </Chip>
@@ -102,7 +108,9 @@ export default async function TasksPage({
         ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}
         members={members}
         empty={
-          mine ? (
+          toBuy ? (
+            t("Nothing to buy. Snap a product photo to add one.")
+          ) : mine ? (
             t("No tasks assigned to you.")
           ) : (
             <EmptyState

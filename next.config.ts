@@ -38,7 +38,10 @@ const contentSecurityPolicy = [
   "font-src 'self' data:",
   // Same-origin only. This is the line that stops a script from posting
   // someone's balances to an attacker's server.
-  `connect-src 'self' https://*.public.blob.vercel-storage.com${isDev ? " ws: http://localhost:*" : ""}`,
+  // vercel.com/api/blob/ is where @vercel/blob/client upload() PUTs the file
+  // (the browser talks to the Blob API directly — that is the point of the
+  // client-upload flow); without it every photo upload is blocked by CSP.
+  `connect-src 'self' https://*.public.blob.vercel-storage.com https://vercel.com/api/blob/${isDev ? " ws: http://localhost:*" : ""}`,
   "form-action 'self'",
   "frame-ancestors 'none'",
   "base-uri 'self'",

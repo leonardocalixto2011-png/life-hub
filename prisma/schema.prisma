@@ -249,6 +249,8 @@ model Task {
   recurrence       String? // simple token e.g. "weekly" / "monthly" — expanded in Phase 3
   priority         Priority   @default(MED)
   amountCents      Int? // set when this task is a bill to pay (from mail classify or manual)
+  /// A photo pinned to the task (a Vercel Blob URL) — e.g. the product someone wants bought.
+  imageUrl         String?
   status           TaskStatus @default(OPEN)
   completedAt      DateTime?
   remindDaysBefore Int[]      @default([]) // e.g. [3, 1] — dispatched by lib/reminders.ts

@@ -3,12 +3,11 @@
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUp, Camera, ChevronDown, Images, Loader2, Mic, Pencil, SlidersHorizontal, Star } from "lucide-react";
+import { ArrowUp, Camera, ChevronDown, Images, Loader2, Mic, Paperclip, Pencil, SlidersHorizontal, Star, X } from "lucide-react";
 
-import { createTask } from "@/app/(app)/tasks/actions";
+import { createTask, discardAttachments } from "@/app/(app)/tasks/actions";
 import {
   parseQuickAdd,
-  parseImage,
   commitDrafts,
   type Draft,
   type ParseResult,
@@ -19,6 +18,8 @@ import { useLang, useT } from "@/components/I18nProvider";
 import { showToast } from "@/components/Toast";
 import { applyFavorite, undoFavorite, saveDraftAsFavorite } from "@/app/(app)/favorites/actions";
 import { downscaleImage } from "@/lib/downscale";
+import { jpegBlobFromBase64, uploadAttachment } from "@/lib/attachments";
+import { readPhoto } from "@/lib/photo-read";
 import { sameFavorite, type FavoriteChip } from "@/lib/favorites";
 import { dollarsToCents } from "@/lib/money";
 import { haptic } from "@/lib/haptics";
@@ -107,10 +108,13 @@ export function QuickAdd({
   defaultAssigneeId,
   aiEnabled,
   favorites = [],
+  userId,
 }: {
   ventures: { id: string; name: string }[];
   members: Option[];
   defaultAssigneeId?: string;
+  /** Whose attachment folder a pinned photo uploads into. */
+  userId: string;
   aiEnabled: boolean;
   favorites?: FavoriteChip[];
 }) {
@@ -122,6 +126,12 @@ export function QuickAdd({
   const fileRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLInputElement>(null);
   const [photoMenu, setPhotoMenu] = useState(false);
+  const attachRef = useRef<HTMLInputElement>(null);
+  // Details → "Attach a photo" for a plain task: held locally until Add.
+  const [attached, setAttached] = useState<{ file: File; preview: string } | null>(null);
+  // Every photo uploaded during this review. When it ends, each is handed to
+  // discardAttachments, which keeps the ones a saved task now points at.
+  const uploadsRef = useRef<string[]>([]);
   const recRef = useRef<Recognition | null>(null);
   const [open, setOpen] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -140,10 +150,26 @@ export function QuickAdd({
   const [pending, startTransition] = useTransition();
   const canSpeak = useSyncExternalStore(noop, readSpeech, () => false);
 
+  /** Photos uploaded for a review that no saved task kept are deleted. */
+  function releaseUploads() {
+    const urls = uploadsRef.current;
+    uploadsRef.current = [];
+    if (urls.length) void discardAttachments(urls).catch(() => {});
+  }
+
+  function clearAttached() {
+    setAttached((cur) => {
+      if (cur) URL.revokeObjectURL(cur.preview);
+      return null;
+    });
+  }
+
   function reset() {
     formRef.current?.reset();
     setDrafts(null);
     setOpen(false);
+    clearAttached();
+    releaseUploads();
   }
 
   /** After anything lands, the cursor is back in the box for the next one. */
@@ -186,8 +212,20 @@ export function QuickAdd({
   }
 
   function addPlain(fd: FormData) {
+    const photo = attached;
     startTransition(async () => {
       try {
+        if (photo) {
+          // Optional: a failed upload still adds the task, with a note.
+          try {
+            const small = jpegBlobFromBase64(await downscaleImage(photo.file));
+            const url = await uploadAttachment(small, userId);
+            uploadsRef.current.push(url);
+            fd.set("imageUrl", url);
+          } catch {
+            setMsg(t("The photo couldn't be pinned — the item was added without it."));
+          }
+        }
         await createTask(fd);
         reset();
         router.refresh();
@@ -208,12 +246,17 @@ export function QuickAdd({
       return;
     }
     const fd = new FormData(e.currentTarget);
-    const title = String(fd.get("title") ?? "").trim();
+    let title = String(fd.get("title") ?? "").trim();
+    // A photo on its own is enough: nobody should have to type to pin one.
+    if (!title && attached) {
+      title = t("See photo");
+      fd.set("title", title);
+    }
     if (!title) return;
     setMsg(null);
     setFavOffer(null);
 
-    if (aiEnabled && !open && worthParsing(title)) parseAndReview(title, fd);
+    if (aiEnabled && !open && !attached && worthParsing(title)) parseAndReview(title, fd);
     else addPlain(fd);
   }
 
@@ -312,33 +355,32 @@ export function QuickAdd({
     setMsg(files.length > 1 ? t("Reading {n} photos…", { n: files.length }) : t("Reading the photo…"));
     setFavOffer(null);
     setDrafts(null);
+    releaseUploads(); // a previous review abandoned by picking new photos
     startTransition(async () => {
       const all: Draft[] = [];
       let lastError: string | null = null;
+      let pinFailed = false;
       for (const file of files) {
-        let data: string;
-        try {
-          data = await downscaleImage(file);
-        } catch {
-          lastError = t("This photo format can't be read here. Try a JPEG, or take a screenshot of it.");
-          continue;
-        }
-        try {
-          const r = await parseImage({ data, mediaType: "image/jpeg" });
-          if (r.ok) all.push(...r.drafts);
-          else lastError = t(r.error);
-        } catch {
-          lastError = t("Something went wrong. Try again.");
-        }
+        // Each photo is read and uploaded at once; the upload is what lets
+        // the task it becomes carry the photo ("buy this" with no typing).
+        const r = await readPhoto(file, userId);
+        if (r.uploaded) uploadsRef.current.push(r.uploaded);
+        all.push(...r.drafts);
+        if (r.error) lastError = t(r.error);
+        if (r.pinFailed) pinFailed = true;
       }
       if (all.length) {
         setDrafts(all);
         setMsg(
-          extra > 0
-            ? t("Only the first {n} photos were read.", { n: MAX_PHOTOS })
-            : lastError,
+          [
+            extra > 0 ? t("Only the first {n} photos were read.", { n: MAX_PHOTOS }) : lastError,
+            pinFailed ? t("The photo couldn't be attached this time — the items below are still fine.") : null,
+          ]
+            .filter(Boolean)
+            .join(" ") || null,
         );
       } else {
+        releaseUploads();
         setMsg(lastError ?? t("Nothing to add from that photo."));
       }
     });
@@ -464,10 +506,17 @@ export function QuickAdd({
   }
 
   function removeDraft(i: number) {
-    setDrafts((cur) => {
-      const next = cur?.filter((_, idx) => idx !== i) ?? [];
-      return next.length ? next : null;
-    });
+    const next = drafts?.filter((_, idx) => idx !== i) ?? [];
+    setDrafts(next.length ? next : null);
+    if (!next.length) releaseUploads();
+  }
+
+  function onAttach(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    clearAttached();
+    setAttached({ file, preview: URL.createObjectURL(file) });
   }
 
   function saveDrafts() {
@@ -725,6 +774,43 @@ export function QuickAdd({
                 ))}
               </select>
             </label>
+            <div className="col-span-2 flex items-center gap-2">
+              {attached ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- a local blob: preview, nothing to optimise */}
+                  <img
+                    src={attached.preview}
+                    alt={t("Attached photo")}
+                    className="h-12 w-12 rounded-[var(--r-md)] border border-[var(--color-border)] object-cover"
+                  />
+                  <span className="flex-1 text-xs text-[var(--color-text-dim)]">
+                    {t("Pinned to this task when you add it.")}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={clearAttached}
+                    className="btn btn-ghost btn-icon"
+                    aria-label={t("Remove photo")}
+                  >
+                    <X size={18} strokeWidth={2.25} aria-hidden />
+                  </button>
+                </>
+              ) : (
+                <button type="button" onClick={() => attachRef.current?.click()} className="btn btn-secondary">
+                  <Paperclip size={16} strokeWidth={2} aria-hidden />
+                  {t("Attach a photo")}
+                </button>
+              )}
+              <input
+                ref={attachRef}
+                type="file"
+                accept="image/*"
+                onChange={onAttach}
+                className="hidden"
+                tabIndex={-1}
+                aria-hidden
+              />
+            </div>
             <div className="col-span-2">
               <PrivacyToggle />
             </div>
