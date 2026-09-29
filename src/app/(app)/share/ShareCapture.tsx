@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Check, Info, ListPlus, ScanText, Sparkles } from "lucide-react";
 
 import { createTask } from "@/app/(app)/tasks/actions";
 import {
@@ -11,6 +12,7 @@ import {
   type Draft,
 } from "@/app/(app)/quick-actions";
 import { DraftCard } from "@/components/DraftCard";
+import { FormSection } from "@/components/Form";
 import { useT } from "@/components/I18nProvider";
 import { downscaleImage } from "@/lib/downscale";
 
@@ -177,17 +179,20 @@ export function ShareCapture({
   ].filter((x): x is string => Boolean(x));
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
       {noticeLines.length > 0 && (
-        <div className="card space-y-1 p-3 text-xs text-[var(--color-text-dim)]" role="status">
-          {noticeLines.map((line) => (
-            <p key={line}>{line}</p>
-          ))}
+        <div className="card flex items-start gap-2 p-4 text-sm text-[var(--color-text-dim)]" role="status">
+          <Info size={17} strokeWidth={2} aria-hidden className="mt-0.5 shrink-0 text-[var(--color-primary)]" />
+          <div className="space-y-1">
+            {noticeLines.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          </div>
         </div>
       )}
 
       {images.length > 0 && !drafts && (
-        <div className="card space-y-3 p-3">
+        <FormSection title={t("Photos")}>
           <div className="flex gap-2">
             {images.map((img, i) => (
               // eslint-disable-next-line @next/next/no-img-element -- a local blob: URL, nothing for next/image to optimise
@@ -195,12 +200,13 @@ export function ShareCapture({
                 key={img.url}
                 src={img.url}
                 alt={t("Shared photo {i}", { i: i + 1 })}
-                className="h-20 w-20 rounded-lg object-cover"
+                className="h-20 w-20 rounded-[var(--r-md)] object-cover"
               />
             ))}
           </div>
           {aiEnabled && (
             <button onClick={readPhotos} disabled={pending} className="btn btn-primary w-full">
+              <ScanText size={17} strokeWidth={2} aria-hidden />
               {pending
                 ? t("Reading…")
                 : images.length > 1
@@ -208,39 +214,44 @@ export function ShareCapture({
                   : t("Read the photo")}
             </button>
           )}
-        </div>
+        </FormSection>
       )}
 
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={4}
-        className="field"
-        aria-label={t("Shared content")}
-      />
-
       {!drafts && (
-        <div className="flex gap-2">
-          {aiEnabled && (
+        <FormSection title={t("Shared content")}>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={4}
+            className="field"
+            aria-label={t("Shared content")}
+          />
+          <div className="form-stack gap-2">
+            {aiEnabled && (
+              <button
+                onClick={parse}
+                disabled={pending || !text.trim()}
+                className={`btn w-full ${images.length ? "btn-secondary" : "btn-primary btn-lg"}`}
+              >
+                <Sparkles size={17} strokeWidth={2} aria-hidden />
+                {pending ? t("Reading…") : t("Parse")}
+              </button>
+            )}
             <button
-              onClick={parse}
+              onClick={saveAsTask}
               disabled={pending || !text.trim()}
-              className={`btn flex-1${images.length ? "" : " btn-primary"}`}
+              className={`btn w-full ${aiEnabled ? "btn-secondary" : "btn-primary btn-lg"}`}
             >
-              {pending ? t("Reading…") : t("Parse")}
+              <ListPlus size={17} strokeWidth={2} aria-hidden />
+              {t("Save as task")}
             </button>
-          )}
-          <button onClick={saveAsTask} disabled={pending || !text.trim()} className="btn flex-1">
-            {t("Save as task")}
-          </button>
-        </div>
+          </div>
+        </FormSection>
       )}
 
       {drafts && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-[var(--color-text-dim)]">
-            {t("Review before saving:")}
-          </p>
+        <section className="space-y-3">
+          <h2 className="section-title">{t("Review before saving:")}</h2>
           {drafts.map((d, i) => (
             <DraftCard
               key={i}
@@ -257,18 +268,21 @@ export function ShareCapture({
               }
             />
           ))}
-          <div className="flex gap-2">
-            <button onClick={saveDrafts} disabled={pending} className="btn btn-primary flex-1">
-              {pending ? t("Saving…") : t("Save {n}", { n: drafts.length })}
-            </button>
-            <button onClick={() => setDrafts(null)} disabled={pending} className="btn">
-              {t("Back")}
-            </button>
-          </div>
-        </div>
+          <button onClick={saveDrafts} disabled={pending} className="btn btn-primary btn-lg w-full">
+            <Check size={18} strokeWidth={2.25} aria-hidden />
+            {pending ? t("Saving…") : t("Save {n}", { n: drafts.length })}
+          </button>
+          <button onClick={() => setDrafts(null)} disabled={pending} className="btn btn-ghost w-full">
+            {t("Back")}
+          </button>
+        </section>
       )}
 
-      {msg && <p className="text-xs text-[var(--color-text-dim)]">{msg}</p>}
+      {msg && (
+        <p role="status" className="px-1 text-sm text-[var(--color-text-dim)]">
+          {msg}
+        </p>
+      )}
     </div>
   );
 }

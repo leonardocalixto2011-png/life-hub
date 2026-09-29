@@ -36,14 +36,14 @@ export function CurrencyPicker({ hubId, current }: { hubId: string; current: str
   }
 
   return (
-    <div className="space-y-1.5">
-      <label className="block text-xs font-semibold text-[var(--color-text-dim)]">
+    <div className="form-stack gap-2">
+      <label className="field-label">
         {t("Currency")}
         <select
           value={value}
           disabled={pending}
           onChange={(e) => choose(e.target.value)}
-          className="field mt-1"
+          className="field"
         >
           {CURRENCIES.map((c) => (
             <option key={c.value} value={c.value}>
@@ -52,10 +52,10 @@ export function CurrencyPicker({ hubId, current }: { hubId: string; current: str
           ))}
         </select>
       </label>
-      <p className="text-[0.65rem] text-[var(--color-text-dim)]">
+      <p className="field-hint mt-0">
         {t("Applies to everyone in this hub. It re-labels existing amounts — it does not convert them, so only change this if the figures really are in the new currency.")}
       </p>
-      {err && <p className="text-[0.68rem] text-[var(--color-danger)]">{err}</p>}
+      {err && <p className="text-xs text-[var(--color-danger)]">{err}</p>}
     </div>
   );
 }

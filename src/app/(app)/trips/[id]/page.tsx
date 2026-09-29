@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { X } from "lucide-react";
+import { Check, Plus, Trash2, X } from "lucide-react";
 import { notFound } from "next/navigation";
 import { differenceInCalendarDays, eachDayOfInterval, format, startOfDay, startOfMonth } from "date-fns";
 
@@ -17,6 +17,7 @@ import { TripForm } from "../TripForm";
 import { addTripItem, addTripSavings, deleteTrip, deleteTripItem, importTripPlan, toggleTripItem } from "../actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ActionForm } from "@/components/ActionForm";
+import { DangerZone, FormSection } from "@/components/Form";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,6 @@ type Item = {
 };
 
 const dayKey = (d: Date) => format(d, "yyyy-MM-dd");
-const sectionTitle = "section-title";
 
 export default async function TripPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -167,13 +167,13 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
     const who = i.assignedToId ? memberName.get(i.assignedToId) : null;
     const tag = TAG[i.kind];
     return (
-      <div className="flex items-start gap-2.5 px-3 py-2">
+      <div className="flex items-start gap-3 px-4 py-3">
         <form action={toggleTripItem} className="pt-0.5">
           <input type="hidden" name="id" value={i.id} />
           <SubmitButton
             aria-label={i.done ? t("Mark not done") : t("Mark done")}
-            pendingLabel={i.done ? "✓" : ""}
-            className="hit grid h-5 w-5 place-items-center rounded border border-[var(--color-border)] text-xs"
+            pendingLabel=""
+            className="hit grid h-[22px] w-[22px] place-items-center rounded-[6px] border-[1.5px] border-[var(--color-border)]"
             style={
               i.done
                 ? {
@@ -184,7 +184,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                 : undefined
             }
           >
-            {i.done ? "✓" : ""}
+            {i.done ? <Check size={14} strokeWidth={3} aria-hidden /> : null}
           </SubmitButton>
         </form>
         <div className="min-w-0 flex-1">
@@ -201,9 +201,9 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
           >
             {i.title}
           </span>
-          {i.note && <p className="mt-0.5 text-[0.7rem] leading-snug text-[var(--color-text-dim)]">{i.note}</p>}
+          {i.note && <p className="mt-0.5 text-xs leading-snug text-[var(--color-text-dim)]">{i.note}</p>}
           {(tag || (showDate && i.date)) && (
-            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[0.66rem] text-[var(--color-text-dim)]">
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-[0.7rem] text-[var(--color-text-dim)]">
               {tag && (
                 <span className="font-bold uppercase tracking-wide" style={{ color: tag.color }}>
                   {t(tag.label)}
@@ -303,9 +303,9 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {next && (
-        <div className="card flex items-center gap-3 border-l-4 p-3" style={{ borderLeftColor: TAG[next.kind]?.color }}>
+        <div className="card flex items-center gap-3 border-l-4 p-4" style={{ borderLeftColor: TAG[next.kind]?.color }}>
           <div className="min-w-0 flex-1">
-            <div className="text-[0.6rem] font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+            <div className="text-[length:var(--fs-2xs)] font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
               {t("Next up")}
             </div>
             <div className="text-sm font-semibold leading-snug">{next.title}</div>
@@ -322,7 +322,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       {/* ---- day strip --------------------------------------------------- */}
       {stops.length > 0 && days.length <= 60 && (
         <section>
-          <h2 className={sectionTitle}>{t("At a glance")}</h2>
+          <h2 className="section-title">{t("At a glance")}</h2>
           <div
             className="grid gap-[3px]"
             style={{
@@ -362,7 +362,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       {/* ---- day by day -------------------------------------------------- */}
       {(activities.length > 0 || stops.length > 0) && days.length <= 60 && (
         <section>
-          <h2 className={sectionTitle}>
+          <h2 className="section-title">
             {t("Day by day")}
             {activities.length > 0 ? ` · ${activities.filter((a) => a.done).length}/${activities.length}` : ""}
           </h2>
@@ -379,13 +379,13 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                     borderLeftColor: s ? colorOf.get(s.id) : "var(--color-border)",
                   }}
                 >
-                  <div className="flex items-baseline justify-between gap-2 px-3 pt-2">
+                  <div className="flex items-baseline justify-between gap-2 px-4 pt-3">
                     <span className="text-sm font-semibold">
                       <span className="mr-1.5 text-[0.62rem] font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
                         {t("Day {n}", { n: n + 1 })}
                       </span>
                       {fmt(d, dayFmt, lang)}
-                      {allDone && <span className="ml-1.5 text-[var(--color-ok)]">✓</span>}
+                      {allDone && <Check size={14} strokeWidth={2.75} aria-label={t("Done")} className="ml-1.5 inline align-[-2px] text-[var(--color-ok)]" />}
                     </span>
                     <span
                       className="text-[0.62rem] font-bold uppercase tracking-wide"
@@ -397,7 +397,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                     </span>
                   </div>
                   {list.length === 0 ? (
-                    <p className="px-3 pb-2 pt-1 text-[0.72rem] text-[var(--color-text-dim)]">
+                    <p className="px-4 pb-3 pt-1 text-xs text-[var(--color-text-dim)]">
                       {t("Nothing planned yet")}
                     </p>
                   ) : (
@@ -417,7 +417,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       {/* ---- when to book, do and save ----------------------------------- */}
       {months.size > 0 && (
         <section>
-          <h2 className={sectionTitle}>
+          <h2 className="section-title">
             {t("Booking calendar")} · {dated.filter((i) => i.done).length}/{dated.length}
           </h2>
           <div className="space-y-3">
@@ -438,8 +438,8 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       {/* ---- savings ----------------------------------------------------- */}
       {(deposits.length > 0 || trip.budgetCents != null) && (
         <section>
-          <h2 className={sectionTitle}>{t("Savings plan")}</h2>
-          <div className="card space-y-3 p-3">
+          <h2 className="section-title">{t("Savings plan")}</h2>
+          <div className="card space-y-3 p-4">
             {deposits.length > 0 && (
               <SavingsChart deposits={deposits} dated={dated} t={t} lang={lang} short={(c) => shortMoney(c)} />
             )}
@@ -459,7 +459,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                     return (
                       <tr key={d.id} style={d.done ? { color: "var(--color-ok)" } : undefined}>
                         <td className="py-1 capitalize">
-                          {d.done ? "✓ " : ""}
+                          {d.done ? <Check size={12} strokeWidth={3} aria-label={t("Done")} className="mr-1 inline align-[-1px]" /> : null}
                           {d.date ? fmt(d.date, "MMM yyyy", lang) : "—"}
                         </td>
                         {heads > 1 && (
@@ -497,8 +497,8 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
 
       {/* ---- where the money goes ---------------------------------------- */}
       <section>
-        <h2 className={sectionTitle}>{t("Where the money goes")}</h2>
-        <div className="card space-y-3 p-3">
+        <h2 className="section-title">{t("Where the money goes")}</h2>
+        <div className="card space-y-3 p-4">
           {budgetLines.length > 0 && (
             <>
               <div className="flex h-4 overflow-hidden rounded-full" role="img" aria-label={t("Where the money goes")}>
@@ -569,12 +569,12 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         if (list.length === 0 && dated.some((i) => i.kind === sec.kind)) return null;
         return (
           <section key={sec.kind}>
-            <h2 className={sectionTitle}>
+            <h2 className="section-title">
               {t(sec.title)}
               {list.length > 0 ? ` · ${list.filter((i) => i.done).length}/${list.length}` : ""}
             </h2>
             {list.length === 0 ? (
-              <p className="card p-3 text-[0.72rem] text-[var(--color-text-dim)]">{t(sec.hint)}</p>
+              <p className="card p-4 text-xs text-[var(--color-text-dim)]">{t(sec.hint)}</p>
             ) : (
               <div className="list">
                 {list.map((i) => (
@@ -589,12 +589,12 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       {/* ---- good to know ----------------------------------------------- */}
       {tips.length > 0 && (
         <section>
-          <h2 className={sectionTitle}>{t("Good to know")}</h2>
+          <h2 className="section-title">{t("Good to know")}</h2>
           <div className="space-y-2">
             {tips.map((tip, n) => (
               <div
                 key={tip.id}
-                className="card border-t-4 p-3"
+                className="card border-t-4 p-4"
                 style={{
                   borderTopColor: routeColors[n % Math.max(1, routeColors.length)] ?? "var(--color-primary)",
                 }}
@@ -618,76 +618,79 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       )}
 
       {/* ---- add anything ------------------------------------------------ */}
-      <ActionForm action={add} className="card space-y-2 p-3">
-        <h2 className={sectionTitle}>{t("Add to the plan")}</h2>
-        <div className="grid grid-cols-[7.5rem_1fr] gap-2">
-          <select name="kind" defaultValue="ACTIVITY" className="field" aria-label={t("List")}>
-            <option value="ACTIVITY">{t("Activity")}</option>
-            <option value="BOOK">{t("To book")}</option>
-            <option value="TODO">{t("To do")}</option>
-            <option value="SAVE">{t("Savings deposit")}</option>
-            <option value="PACK">{t("To pack")}</option>
-            <option value="STOP">{t("Where we sleep")}</option>
-            <option value="BUDGET">{t("Budget line")}</option>
-            <option value="TIP">{t("Good to know")}</option>
-          </select>
-          <input
-            name="title"
-            required
-            className="field"
-            placeholder={t("Snorkel trip, hotel, sunscreen…")}
-            aria-label={t("Title")}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="grid gap-0.5 text-[0.62rem] text-[var(--color-text-dim)]">
-            {t("Date (day, or when it's due)")}
-            <input name="date" type="date" className="field" />
+      <ActionForm action={add}>
+        <FormSection title={t("Add to the plan")}>
+          <div className="grid grid-cols-[8rem_1fr] gap-3">
+            <label className="field-label">
+              {t("List")}
+              <select name="kind" defaultValue="ACTIVITY" className="field">
+                <option value="ACTIVITY">{t("Activity")}</option>
+                <option value="BOOK">{t("To book")}</option>
+                <option value="TODO">{t("To do")}</option>
+                <option value="SAVE">{t("Savings deposit")}</option>
+                <option value="PACK">{t("To pack")}</option>
+                <option value="STOP">{t("Where we sleep")}</option>
+                <option value="BUDGET">{t("Budget line")}</option>
+                <option value="TIP">{t("Good to know")}</option>
+              </select>
+            </label>
+            <label className="field-label">
+              {t("Title")}
+              <input name="title" required className="field" placeholder={t("Snorkel trip, hotel, sunscreen…")} />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label className="field-label">
+              {t("Date (day, or when it's due)")}
+              <input name="date" type="date" className="field" />
+            </label>
+            <label className="field-label">
+              {t("Leaving (stops only)")}
+              <input name="endDate" type="date" className="field" />
+            </label>
+          </div>
+          <label className="field-label">
+            {t("Details")}
+            <input name="note" className="field" placeholder={t("Details (optional)")} />
           </label>
-          <label className="grid gap-0.5 text-[0.62rem] text-[var(--color-text-dim)]">
-            {t("Leaving (stops only)")}
-            <input name="endDate" type="date" className="field" />
-          </label>
-        </div>
-        <input name="note" className="field" placeholder={t("Details (optional)")} aria-label={t("Details")} />
-        <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
-          <input
-            name="cost"
-            type="number"
-            step="0.01"
-            min="0"
-            inputMode="decimal"
-            className="field"
-            placeholder={t("Cost")}
-            aria-label={t("Cost")}
-          />
-          <select name="assignedToId" defaultValue="" className="field" aria-label={t("Who")}>
-            <option value="">{t("Anyone")}</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name ?? m.email}
-              </option>
-            ))}
-          </select>
-          <SubmitButton className="btn btn-primary">
+          <div className="form-grid">
+            <label className="field-label">
+              {t("Cost")}
+              <input name="cost" type="number" step="0.01" min="0" inputMode="decimal" className="field" placeholder="0.00" />
+            </label>
+            <label className="field-label">
+              {t("Who")}
+              <select name="assignedToId" defaultValue="" className="field">
+                <option value="">{t("Anyone")}</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name ?? m.email}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <SubmitButton className="btn btn-primary w-full">
+            <Plus size={17} strokeWidth={2.25} aria-hidden />
             {t("Add")}
           </SubmitButton>
-        </div>
+        </FormSection>
       </ActionForm>
 
-      {trip.notes && <p className="card p-3 text-sm whitespace-pre-wrap">{trip.notes}</p>}
+      {trip.notes && <p className="card p-4 text-sm whitespace-pre-wrap">{trip.notes}</p>}
 
       <details className="group" open={items.length === 0}>
-        <summary className="cursor-pointer list-none text-xs font-semibold text-[var(--color-primary)]">
+        <summary className="section-title cursor-pointer list-none text-[var(--color-primary)]">
           {t("Import a whole plan")}
         </summary>
-        <div className="mt-2 space-y-2">
-          <ActionForm action={importPlan} className="card space-y-2 p-3">
-            <p className="text-[0.72rem] text-[var(--color-text-dim)]">
+        <div className="space-y-3">
+          <ActionForm action={importPlan} className="form-card">
+            <p className="field-hint mt-0">
               {t("Adds stops, day-by-day activities, bookings, savings deposits and a packing list in one go.")}
             </p>
-            <div className="grid grid-cols-[1fr_auto] gap-2">
-              <select name="template" defaultValue="" className="field" aria-label={t("Ready-made plan")}>
+            <label className="field-label">
+              {t("Ready-made plan")}
+              <select name="template" defaultValue="" className="field">
                 <option value="">{t("Ready-made plan…")}</option>
                 {Object.entries(TRIP_TEMPLATES).map(([key, tpl]) => (
                   <option key={key} value={key}>
@@ -695,53 +698,53 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                   </option>
                 ))}
               </select>
-              <SubmitButton className="btn btn-primary">
-                {t("Import")}
-              </SubmitButton>
-            </div>
+            </label>
+            <SubmitButton className="btn btn-secondary w-full">{t("Import")}</SubmitButton>
           </ActionForm>
-          <ActionForm action={importPlan} className="card space-y-2 p-3">
-            <textarea
-              name="json"
-              rows={4}
-              className="field font-mono text-xs"
-              placeholder={t("…or paste a plan as JSON")}
-              aria-label={t("Plan as JSON")}
-            />
-            <SubmitButton className="btn w-full">
-              {t("Import pasted plan")}
-            </SubmitButton>
+          <ActionForm action={importPlan} className="form-card">
+            <label className="field-label">
+              {t("Plan as JSON")}
+              <textarea
+                name="json"
+                rows={4}
+                className="field font-mono text-xs"
+                placeholder={t("…or paste a plan as JSON")}
+              />
+            </label>
+            <SubmitButton className="btn btn-secondary w-full">{t("Import pasted plan")}</SubmitButton>
           </ActionForm>
         </div>
       </details>
 
       <details className="group">
-        <summary className="cursor-pointer list-none text-xs font-semibold text-[var(--color-primary)]">
+        <summary className="section-title cursor-pointer list-none text-[var(--color-primary)]">
           {t("Edit trip details")}
         </summary>
-        <div className="mt-2 space-y-2">
-          <TripForm
-            existing={{
-              id: trip.id,
-              title: trip.title,
-              destination: trip.destination,
-              startDate: toDateInput(trip.startDate),
-              endDate: toDateInput(trip.endDate),
-              budget: centsToInput(trip.budgetCents),
-              notes: trip.notes,
-              visibility: trip.visibility,
-              travelerIds: trip.travelerIds,
-            }}
-            members={members}
-          />
-          <form action={deleteTrip}>
-            <input type="hidden" name="id" value={trip.id} />
-            <SubmitButton className="btn w-full text-[var(--color-danger)]" pendingLabel={t("Deleting…")}>
-              {t("Delete trip")}
-            </SubmitButton>
-          </form>
-        </div>
+        <TripForm
+          existing={{
+            id: trip.id,
+            title: trip.title,
+            destination: trip.destination,
+            startDate: toDateInput(trip.startDate),
+            endDate: toDateInput(trip.endDate),
+            budget: centsToInput(trip.budgetCents),
+            notes: trip.notes,
+            visibility: trip.visibility,
+            travelerIds: trip.travelerIds,
+          }}
+          members={members}
+        />
       </details>
+
+      <DangerZone>
+        <form action={deleteTrip}>
+          <input type="hidden" name="id" value={trip.id} />
+          <SubmitButton className="btn btn-quiet-danger w-full" pendingLabel={t("Deleting…")}>
+            <Trash2 size={16} strokeWidth={2} aria-hidden />
+            {t("Delete trip")}
+          </SubmitButton>
+        </form>
+      </DangerZone>
     </div>
   );
 }

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getTask, hubChrome } from "@/lib/data";
@@ -7,6 +6,7 @@ import { requireHub } from "@/lib/session";
 import { getT } from "@/lib/i18n-server";
 import { toDateInput } from "@/lib/format";
 import { centsToInput } from "@/lib/money";
+import { PageHeader } from "@/components/SectionHeader";
 import { TaskEditForm } from "./TaskEditForm";
 
 export const dynamic = "force-dynamic";
@@ -27,10 +27,12 @@ export default async function TaskDetailPage({
   if (!task) notFound();
 
   return (
-    <div className="page page-tight">
-      <Link href="/tasks" className="back-link">
-        {t("Tasks")}
-      </Link>
+    <div className="page">
+      <PageHeader
+        back={{ href: "/tasks", label: t("Tasks") }}
+        title={task.title}
+        sub={t("Added by {name}", { name: task.createdBy.name ?? task.createdBy.email ?? "" })}
+      />
       <TaskEditForm
         task={{
           id: task.id,
@@ -48,9 +50,6 @@ export default async function TaskDetailPage({
         ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}
         members={members}
       />
-      <p className="px-1 text-[0.7rem] text-[var(--color-text-dim)]">
-        {t("Added by {name}", { name: task.createdBy.name ?? task.createdBy.email ?? "" })}
-      </p>
     </div>
   );
 }

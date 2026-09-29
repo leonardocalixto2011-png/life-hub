@@ -1,6 +1,9 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
+
 import { deleteTask, updateTask } from "@/app/(app)/tasks/actions";
+import { DangerZone, FormSection } from "@/components/Form";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
 import { SubmitButton } from "@/components/SubmitButton";
 import { useT } from "@/components/I18nProvider";
@@ -29,62 +32,63 @@ export function TaskEditForm({
   members: Option[];
 }) {
   const t = useT();
-  const label = "block text-xs font-semibold text-[var(--color-text-dim)]";
   return (
-    <div className="space-y-4">
-      <form action={updateTask} className="card space-y-3 p-4">
+    <>
+      <form action={updateTask} className="space-y-5">
         <input type="hidden" name="id" value={task.id} />
 
-        <label className={label}>
-          {t("Title")}
-          <input name="title" defaultValue={task.title} required className="field mt-1" />
-        </label>
+        <FormSection title={t("Details")}>
+          <label className="field-label">
+            {t("Title")}
+            <input name="title" defaultValue={task.title} required className="field" />
+          </label>
+          <label className="field-label">
+            {t("Notes")}
+            <textarea name="notes" defaultValue={task.notes ?? ""} rows={3} className="field" />
+          </label>
+        </FormSection>
 
-        <label className={label}>
-          {t("Notes")}
-          <textarea name="notes" defaultValue={task.notes ?? ""} rows={3} className="field mt-1" />
-        </label>
+        <FormSection title={t("When")}>
+          <div className="form-grid">
+            <label className="field-label">
+              {t("Due")}
+              <input type="date" name="dueDate" defaultValue={task.dueDate} className="field" />
+            </label>
+            <label className="field-label">
+              {t("Amount (if a bill)")}
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                inputMode="decimal"
+                name="amount"
+                defaultValue={task.amount}
+                placeholder="0.00"
+                className="field"
+              />
+            </label>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <label className="check-row">
+              <input type="checkbox" name="isRecurring" defaultChecked={task.isRecurring} />
+              {t("Recurring")}
+            </label>
+            <select
+              name="recurrence"
+              aria-label={t("Repeats")}
+              defaultValue={task.recurrence ?? "weekly"}
+              className="field max-w-[11rem]"
+            >
+              <option value="weekly">{t("Weekly")}</option>
+              <option value="monthly">{t("Monthly")}</option>
+            </select>
+          </div>
+        </FormSection>
 
-        <div className="grid grid-cols-2 gap-3">
-          <label className={label}>
-            {t("Due")}
-            <input type="date" name="dueDate" defaultValue={task.dueDate} className="field mt-1" />
-          </label>
-          <label className={label}>
-            {t("Amount (if a bill)")}
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              inputMode="decimal"
-              name="amount"
-              defaultValue={task.amount}
-              placeholder="0.00"
-              className="field mt-1"
-            />
-          </label>
-          <label className={label}>
-            {t("Priority")}
-            <select name="priority" defaultValue={task.priority} className="field mt-1">
-              <option value="LOW">{t("Low")}</option>
-              <option value="MED">{t("Medium")}</option>
-              <option value="HIGH">{t("High")}</option>
-            </select>
-          </label>
-          <label className={label}>
-            {t("Venture")}
-            <select name="ventureId" defaultValue={task.ventureId ?? ""} className="field mt-1">
-              <option value="">—</option>
-              {ventures.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={label}>
+        <FormSection title={t("Who & priority")}>
+          <label className="field-label">
             {t("Assignee")}
-            <select name="assignedToId" defaultValue={task.assignedToId ?? ""} className="field mt-1">
+            <select name="assignedToId" defaultValue={task.assignedToId ?? ""} className="field">
               <option value="">{t("Shared / unassigned")}</option>
               {members.map((m) => (
                 <option key={m.id} value={m.id}>
@@ -93,30 +97,42 @@ export function TaskEditForm({
               ))}
             </select>
           </label>
-        </div>
+          <div className="form-grid">
+            <label className="field-label">
+              {t("Priority")}
+              <select name="priority" defaultValue={task.priority} className="field">
+                <option value="LOW">{t("Low")}</option>
+                <option value="MED">{t("Medium")}</option>
+                <option value="HIGH">{t("High")}</option>
+              </select>
+            </label>
+            <label className="field-label">
+              {t("Venture")}
+              <select name="ventureId" defaultValue={task.ventureId ?? ""} className="field">
+                <option value="">—</option>
+                {ventures.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <PrivacyToggle defaultValue={task.visibility} />
+        </FormSection>
 
-        <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text-dim)]">
-            <input type="checkbox" name="isRecurring" defaultChecked={task.isRecurring} />
-            {t("Recurring")}
-          </label>
-          <select name="recurrence" aria-label={t("Repeats")} defaultValue={task.recurrence ?? "weekly"} className="field max-w-[8rem]">
-            <option value="weekly">{t("Weekly")}</option>
-            <option value="monthly">{t("Monthly")}</option>
-          </select>
-        </div>
-
-        <PrivacyToggle defaultValue={task.visibility} />
-
-        <SubmitButton className="btn btn-primary w-full">{t("Save")}</SubmitButton>
+        <SubmitButton className="btn btn-primary btn-lg w-full">{t("Save")}</SubmitButton>
       </form>
 
-      <form action={deleteTask}>
-        <input type="hidden" name="id" value={task.id} />
-        <SubmitButton className="btn w-full text-[var(--color-danger)]" pendingLabel={t("Deleting…")}>
-          {t("Delete task")}
-        </SubmitButton>
-      </form>
-    </div>
+      <DangerZone>
+        <form action={deleteTask}>
+          <input type="hidden" name="id" value={task.id} />
+          <SubmitButton className="btn btn-quiet-danger w-full" pendingLabel={t("Deleting…")}>
+            <Trash2 size={16} strokeWidth={2} aria-hidden />
+            {t("Delete task")}
+          </SubmitButton>
+        </form>
+      </DangerZone>
+    </>
   );
 }

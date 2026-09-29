@@ -2,8 +2,10 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Trash2 } from "lucide-react";
 
 import { createDeadline, deleteDeadline, updateDeadline } from "./actions";
+import { DangerZone, FormSection } from "@/components/Form";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
 import { useT } from "@/components/I18nProvider";
 import type { T } from "@/lib/i18n";
@@ -21,56 +23,72 @@ type Existing = {
   visibility?: "PRIVATE" | "SHARED";
 };
 
-function Fields({ ventures, existing, t }: { ventures: Venture[]; existing?: Existing; t: T }) {
-  const label = "block text-xs font-semibold text-[var(--color-text-dim)]";
+/** `grouped` splits the fields into titled cards (the edit screen); the
+ *  inline create form is already one card, so it renders them flat. */
+function Fields({
+  ventures,
+  existing,
+  t,
+  grouped,
+}: {
+  ventures: Venture[];
+  existing?: Existing;
+  t: T;
+  grouped?: boolean;
+}) {
+  const plain = !grouped;
   return (
     <>
-      <label className={label}>
-        {t("Title")}
-        <input
-          name="title"
-          defaultValue={existing?.title}
-          required
-          className="field mt-1"
-          placeholder={t("Tax filing, lease renewal, permit…")}
-        />
-      </label>
-
-      <div className="grid grid-cols-2 gap-3">
-        <label className={label}>
-          {t("Due date")}
-          <input type="date" name="dueDate" defaultValue={existing?.dueDate} required className="field mt-1" />
+      <FormSection title={t("Details")} plain={plain}>
+        <label className="field-label">
+          {t("Title")}
+          <input
+            name="title"
+            defaultValue={existing?.title}
+            required
+            className="field"
+            placeholder={t("Tax filing, lease renewal, permit…")}
+          />
         </label>
-        <label className={label}>
-          {t("Venture")}
-          <select name="ventureId" defaultValue={existing?.ventureId ?? ""} className="field mt-1">
-            <option value="">—</option>
-            {ventures.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
+
+        <div className="form-grid">
+          <label className="field-label">
+            {t("Due date")}
+            <input type="date" name="dueDate" defaultValue={existing?.dueDate} required className="field" />
+          </label>
+          <label className="field-label">
+            {t("Venture")}
+            <select name="ventureId" defaultValue={existing?.ventureId ?? ""} className="field">
+              <option value="">—</option>
+              {ventures.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </FormSection>
+
+      <FormSection title={t("Reminders & notes")} plain={plain}>
+        <label className="field-label">
+          {t("Remind days before")}
+          <input
+            name="remindDaysBefore"
+            defaultValue={(existing?.remindDaysBefore ?? [7, 3, 1]).join(", ")}
+            className="field"
+            placeholder="7, 3, 1"
+          />
+          <span className="field-hint">{t("Comma-separated. A notification on each of those days.")}</span>
         </label>
-      </div>
 
-      <label className={label}>
-        {t("Remind days before")}
-        <input
-          name="remindDaysBefore"
-          defaultValue={(existing?.remindDaysBefore ?? [7, 3, 1]).join(", ")}
-          className="field mt-1"
-          placeholder="7, 3, 1"
-        />
-        <span className="mt-1 block font-normal">{t("Comma-separated. A notification on each of those days.")}</span>
-      </label>
+        <label className="field-label">
+          {t("Notes")}
+          <textarea name="notes" defaultValue={existing?.notes ?? ""} rows={2} className="field" />
+        </label>
 
-      <label className={label}>
-        {t("Notes")}
-        <textarea name="notes" defaultValue={existing?.notes ?? ""} rows={2} className="field mt-1" />
-      </label>
-
-      <PrivacyToggle defaultValue={existing?.visibility} />
+        <PrivacyToggle defaultValue={existing?.visibility} />
+      </FormSection>
     </>
   );
 }
@@ -92,21 +110,22 @@ export function DeadlineForm({
   // ---- Edit mode: plain server-action forms (they redirect on success) ----
   if (existing) {
     return (
-      <div className="space-y-3">
-        <form action={updateDeadline} className="card space-y-3 p-4">
+      <>
+        <form action={updateDeadline} className="space-y-5">
           <input type="hidden" name="id" value={existing.id} />
-          <Fields ventures={ventures} existing={existing} t={t} />
-          <SubmitButton className="btn btn-primary w-full">
-            {t("Save")}
-          </SubmitButton>
+          <Fields ventures={ventures} existing={existing} t={t} grouped />
+          <SubmitButton className="btn btn-primary btn-lg w-full">{t("Save")}</SubmitButton>
         </form>
-        <form action={deleteDeadline}>
-          <input type="hidden" name="id" value={existing.id} />
-          <SubmitButton className="btn w-full text-[var(--color-danger)]" pendingLabel={t("Deleting…")}>
-            {t("Delete deadline")}
-          </SubmitButton>
-        </form>
-      </div>
+        <DangerZone>
+          <form action={deleteDeadline}>
+            <input type="hidden" name="id" value={existing.id} />
+            <SubmitButton className="btn btn-quiet-danger w-full" pendingLabel={t("Deleting…")}>
+              <Trash2 size={16} strokeWidth={2} aria-hidden />
+              {t("Delete deadline")}
+            </SubmitButton>
+          </form>
+        </DangerZone>
+      </>
     );
   }
 
@@ -136,7 +155,7 @@ export function DeadlineForm({
   }
 
   return (
-    <form ref={formRef} onSubmit={onSubmit} className="card space-y-3 p-4">
+    <form ref={formRef} onSubmit={onSubmit} className="form-card">
       <Fields ventures={ventures} t={t} />
       {error && <p className="text-xs text-[var(--color-danger)]">{error}</p>}
       <div className="flex gap-2">

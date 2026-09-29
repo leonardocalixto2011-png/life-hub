@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
+import { AlertTriangle, Check, Mail, VolumeX, X } from "lucide-react";
 
 import type { Draft } from "@/lib/parse";
 import { DraftCard } from "@/components/DraftCard";
@@ -84,15 +85,25 @@ export function ReviewCard({
   }
 
   return (
-    <div className="space-y-2 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[0.68rem] text-[var(--color-text-dim)]">
-        <span className="chip">{t(item.source)}</span>
-        {item.fromAddress && <span className="truncate">{t("from {email}", { email: item.fromAddress })}</span>}
-        <span>· {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: dateLocale(lang) })}</span>
-      </div>
+    <article className="space-y-3 rounded-[var(--r-lg)] border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
+      <header className="flex items-center gap-2 px-1 text-xs text-[var(--color-text-dim)]">
+        <span className="chip shrink-0">
+          <Mail size={12} strokeWidth={2} aria-hidden />
+          {t(item.source)}
+        </span>
+        <span className="min-w-0 flex-1 truncate">
+          {item.fromAddress ? t("from {email}", { email: item.fromAddress }) : null}
+        </span>
+        <time className="shrink-0" dateTime={new Date(item.createdAt).toISOString()}>
+          {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: dateLocale(lang) })}
+        </time>
+      </header>
 
       {item.note && (
-        <p className="px-1 text-[0.7rem] font-semibold text-[var(--color-warn)]">{item.note}</p>
+        <p className="flex items-start gap-1.5 px-1 text-xs font-semibold text-[var(--color-warn)]">
+          <AlertTriangle size={14} strokeWidth={2} aria-hidden className="mt-px shrink-0" />
+          {item.note}
+        </p>
       )}
 
       <DraftCard
@@ -104,22 +115,24 @@ export function ReviewCard({
 
       {item.sourceSnippet && (
         <details className="px-1">
-          <summary className="cursor-pointer text-[0.68rem] font-semibold text-[var(--color-text-dim)]">
+          <summary className="cursor-pointer text-xs font-semibold text-[var(--color-text-dim)]">
             {t("Source")}
           </summary>
-          <p className="mt-1 whitespace-pre-wrap text-[0.7rem] text-[var(--color-text-dim)]">
+          <p className="mt-2 whitespace-pre-wrap rounded-[var(--r-md)] bg-[var(--color-surface)] p-3 text-xs text-[var(--color-text-dim)]">
             {item.sourceSnippet}
           </p>
         </details>
       )}
 
-      {err && <p className="px-1 text-xs text-[var(--color-danger)]">{err}</p>}
+      {err && <p role="alert" className="px-1 text-xs text-[var(--color-danger)]">{err}</p>}
 
       <div className="flex gap-2">
         <button onClick={accept} disabled={pending} className="btn btn-primary flex-1">
+          <Check size={17} strokeWidth={2.25} aria-hidden />
           {pending ? "…" : t("Accept")}
         </button>
-        <button onClick={discard} disabled={pending} className="btn">
+        <button onClick={discard} disabled={pending} className="btn btn-secondary">
+          <X size={17} strokeWidth={2} aria-hidden />
           {t("Discard")}
         </button>
       </div>
@@ -128,11 +141,12 @@ export function ReviewCard({
         <button
           onClick={mute}
           disabled={pending}
-          className="text-[0.65rem] font-semibold text-[var(--color-text-dim)] underline disabled:opacity-60"
+          className="btn btn-ghost btn-sm w-full text-[var(--color-text-dim)]"
         >
-          {t("Never show mail from {email} again", { email: item.fromAddress })}
+          <VolumeX size={14} strokeWidth={2} aria-hidden />
+          <span className="truncate">{t("Never show mail from {email} again", { email: item.fromAddress })}</span>
         </button>
       )}
-    </div>
+    </article>
   );
 }

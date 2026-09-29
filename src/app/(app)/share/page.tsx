@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { PageHeader } from "@/components/SectionHeader";
 
 import { requireHub } from "@/lib/session";
 import { hubChrome } from "@/lib/data";
@@ -42,15 +42,11 @@ export default async function SharePage({
 
   return (
     <div className="page">
-      <div>
-        <Link href="/today" className="back-link">
-          {t("Today")}
-        </Link>
-        <h1 className="page-title">{t("Capture")}</h1>
-        <p className="text-xs text-[var(--color-text-dim)]">
-          {t("Shared from another app. Turn it into tasks, events, deadlines or budget entries.")}
-        </p>
-      </div>
+      <PageHeader
+        back={{ href: "/today", label: t("Today") }}
+        title={t("Capture")}
+        sub={t("Shared from another app. Turn it into tasks, events, deadlines or budget entries.")}
+      />
 
       <ShareCapture
         initialText={shared}

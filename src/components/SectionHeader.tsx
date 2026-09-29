@@ -43,15 +43,31 @@ export function SectionHeader({
   );
 }
 
+/**
+ * `back` puts the "‹ Tasks" link above the title, so a detail screen's
+ * header is one component rather than a loose link plus a heading.
+ */
 export function PageHeader({
   title,
   sub,
   action,
+  back,
 }: {
   title: React.ReactNode;
   sub?: React.ReactNode;
   action?: React.ReactNode;
+  back?: { href: string; label: React.ReactNode };
 }) {
+  if (back) {
+    return (
+      <div className="page-header">
+        <Link href={back.href} className="back-link">
+          {back.label}
+        </Link>
+        <PageHeader title={title} sub={sub} action={action} />
+      </div>
+    );
+  }
   return (
     <div className="flex items-end justify-between gap-3 px-1">
       <div className="min-w-0">
