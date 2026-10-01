@@ -376,12 +376,17 @@ body {
   overflow-wrap: anywhere;
 }
 
-input,
-select,
-textarea,
-button {
-  font: inherit;
-  color: inherit;
+/* In the base layer, not unlayered: an unlayered rule beats every @layer
+   rule regardless of specificity, so `button { color: inherit }` was
+   overriding `.btn-primary`'s white text on every <button>. */
+@layer base {
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    color: inherit;
+  }
 }
 
 /* Only `.field` had a focus style, so keyboard and switch users got no visible
@@ -1482,5 +1487,99 @@ body:has([data-photo])::before {
     from {
       opacity: 0;
     }
+  }
+}
+
+/* ---------------------------------------------------------------- welcome
+   First-run welcome (/welcome). Arrival rung throughout: each step settles in
+   over --moment (300ms), which reduced motion and html.calm zero like every
+   other animation in the app. */
+@layer components {
+  .welcome-step {
+    animation: welcome-in var(--moment) var(--ease-out);
+  }
+  @keyframes welcome-in {
+    from {
+      opacity: 0;
+      transform: translateX(12px);
+    }
+  }
+
+  .welcome-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--r-full);
+    background: var(--color-border);
+    transition:
+      width var(--moment) var(--ease-out),
+      background var(--moment) var(--ease-out);
+  }
+  .welcome-dot[data-state="done"] {
+    background: var(--color-primary);
+  }
+  .welcome-dot[data-state="now"] {
+    width: 22px;
+    background: var(--color-primary);
+  }
+
+  /* A choice you tap: a full-width card row, a real thumb target. */
+  .welcome-option {
+    display: flex;
+    width: 100%;
+    min-height: 60px;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: 0 var(--sp-4);
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--r-lg);
+    background: var(--color-surface);
+    text-align: left;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      border-color var(--fast) var(--ease),
+      background var(--fast) var(--ease);
+  }
+  .welcome-option[data-active] {
+    border-color: var(--color-primary);
+    background: var(--primary-wash);
+    color: var(--color-primary);
+  }
+
+  .welcome-swatch {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--r-full);
+    border: 3px solid transparent;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform var(--fast) var(--ease);
+  }
+  .welcome-swatch[data-active] {
+    border-color: var(--color-surface);
+    box-shadow: 0 0 0 2px var(--color-text);
+  }
+
+  /* "C'est parti ✓" — after the first saved item. A settle, not a burst. */
+  .welcome-arrival {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: grid;
+    place-items: center;
+    padding: var(--sp-4);
+    background: color-mix(in srgb, var(--color-bg) 80%, transparent);
+    animation: fade-in var(--moment) var(--ease-out);
+  }
+  .welcome-arrival-card {
+    display: grid;
+    justify-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-6) var(--sp-6);
+    border-radius: var(--r-lg);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    text-align: center;
+    animation: arrive var(--moment) var(--ease-out);
   }
 }

@@ -23,7 +23,7 @@ import { readPhoto } from "@/lib/photo-read";
 import { sameFavorite, type FavoriteChip } from "@/lib/favorites";
 import { dollarsToCents } from "@/lib/money";
 import { haptic } from "@/lib/haptics";
-import { QUICKADD_EVENT, type QuickAddIntent } from "@/lib/quickadd-bus";
+import { QUICKADD_EVENT, QUICKADD_FILL_EVENT, type QuickAddIntent } from "@/lib/quickadd-bus";
 
 type Option = { id: string; name: string | null; email?: string | null };
 
@@ -109,7 +109,10 @@ export function QuickAdd({
   aiEnabled,
   favorites = [],
   userId,
+  onSaved,
 }: {
+  /** Called after anything is actually saved (the welcome's last step). */
+  onSaved?: () => void;
   ventures: { id: string; name: string }[];
   members: Option[];
   defaultAssigneeId?: string;
@@ -207,6 +210,7 @@ export function QuickAdd({
         reset();
         router.refresh();
         ready();
+        onSaved?.();
       }
     });
   }
@@ -230,6 +234,7 @@ export function QuickAdd({
         reset();
         router.refresh();
         ready();
+        onSaved?.();
       } catch (err) {
         setMsg(err instanceof Error ? t(err.message) : t("Could not add"));
       }
@@ -432,6 +437,16 @@ export function QuickAdd({
     window.addEventListener(QUICKADD_EVENT, onIntent);
     return () => window.removeEventListener(QUICKADD_EVENT, onIntent);
   }, []);
+  useEffect(() => {
+    const onFill = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail;
+      if (!inputRef.current || typeof text !== "string") return;
+      inputRef.current.value = text;
+      inputRef.current.focus();
+    };
+    window.addEventListener(QUICKADD_FILL_EVENT, onFill);
+    return () => window.removeEventListener(QUICKADD_FILL_EVENT, onFill);
+  }, []);
 
   // ---- favourites ----------------------------------------------------------
   // One tap = the entry exists, for today. Routine rung of the ladder: the
@@ -529,6 +544,7 @@ export function QuickAdd({
         reset();
         router.refresh();
         ready();
+        onSaved?.();
       } else {
         setMsg(r.error ?? t("Could not save"));
       }

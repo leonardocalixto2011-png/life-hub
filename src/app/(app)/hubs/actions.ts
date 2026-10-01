@@ -15,6 +15,7 @@ import { withHub } from "@/lib/hub-context";
 import { CURRENT_HUB_COOKIE, listMyHubs, requireHub, requireUser } from "@/lib/session";
 import { sendEmail } from "@/lib/email";
 import { sendPushToUser } from "@/lib/push";
+import { acceptInviteFor, createHubFor, setCurrentHub } from "@/lib/hub-setup";
 
 /**
  * Hub creation itself runs on the owner-role client (bypasses RLS), same as
@@ -27,16 +28,8 @@ export async function createHub(formData: FormData) {
   const user = await requireUser();
   const name = z.string().trim().min(1, "Name is required").max(80).parse(formData.get("name"));
 
-  const hub = await prisma.$transaction(async (tx) => {
-    const hub = await tx.hub.create({ data: { name, createdById: user.id } });
-    await tx.hubMembership.create({
-      data: { hubId: hub.id, userId: user.id, role: "OWNER", status: "ACTIVE", joinedAt: new Date() },
-    });
-    return hub;
-  });
-
-  const store = await cookies();
-  store.set(CURRENT_HUB_COOKIE, hub.id, { httpOnly: true, sameSite: "lax", maxAge: 60 * 60 * 24 * 365 });
+  const hub = await createHubFor(user.id, name);
+  await setCurrentHub(hub.id);
   redirect("/today");
 }
 
@@ -155,12 +148,7 @@ export async function inviteMember(hubId: string, formData: FormData) {
 /** Self-scoped — RLS allows this straight through app_user. */
 export async function acceptInvite(hubId: string) {
   const user = await requireUser();
-  await withHub(user.id, (tx) =>
-    tx.hubMembership.update({
-      where: { hubId_userId: { hubId, userId: user.id } },
-      data: { status: "ACTIVE", joinedAt: new Date() },
-    }),
-  );
+  await acceptInviteFor(user.id, hubId);
   revalidatePath("/hubs/invites");
   redirect("/today");
 }

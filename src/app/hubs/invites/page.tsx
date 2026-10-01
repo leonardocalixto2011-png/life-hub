@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/session";
 import { getT } from "@/lib/i18n-server";
@@ -9,6 +10,8 @@ export const dynamic = "force-dynamic";
 
 export default async function InvitesPage() {
   const user = await requireUser();
+  // Someone new is walked through /welcome, which handles hubs and invites itself.
+  if (!user.onboardedAt) redirect("/welcome");
   const t = await getT();
   const invites = await prisma.hubMembership.findMany({
     where: { userId: user.id, status: "INVITED" },

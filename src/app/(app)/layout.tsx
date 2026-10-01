@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Inbox } from "lucide-react";
 
-import { requireHub, listMyHubs, listPendingInvites } from "@/lib/session";
+import { redirect } from "next/navigation";
+
+import { requireHub, requireUser, listMyHubs, listPendingInvites } from "@/lib/session";
 import { getT } from "@/lib/i18n-server";
 import { hubChrome } from "@/lib/data";
 import { money } from "@/lib/format";
@@ -17,6 +19,11 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // First-run welcome before anything else — including requireHub's own
+  // "no hub yet" redirect, since /welcome is where a first hub gets made.
+  // /welcome lives outside this layout, so this can't loop.
+  const me = await requireUser();
+  if (!me.onboardedAt) redirect("/welcome");
   const { user, hub } = await requireHub();
   const t = await getT();
   const [{ ventures, members, reviewCount, favorites }, hubs, invites] = await Promise.all([

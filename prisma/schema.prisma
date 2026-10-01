@@ -36,6 +36,13 @@ model User {
   // sign-in-provider avatar field, different concern)
   themeId            String? // slug from src/lib/themes.ts; null = the default palette
   locale             String? // BCP-47 tag for number/date formatting; null = en-CA
+  /// Set when the person finishes (or skips) the first-run welcome at /welcome.
+  /// Null = not onboarded yet; the (app) layout sends them there. Existing users
+  /// were backfilled to now() by the migration that added it.
+  onboardedAt        DateTime?
+  /// What they said they want to track at /welcome (tasks, budget, subscriptions,
+  /// debts, trips, schedules, dates). Only reorders Today's shortcut chips.
+  interests          String[]  @default([])
   role               UserRole  @default(MEMBER)
   createdAt          DateTime  @default(now())
 

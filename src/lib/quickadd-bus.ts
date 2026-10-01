@@ -9,6 +9,13 @@ export const QUICKADD_EVENT = "lh:quickadd";
 
 export type QuickAddIntent = "type" | "voice";
 
+/** Puts a sentence in the composer (the welcome's example chips) and focuses it. */
+export const QUICKADD_FILL_EVENT = "lh:quickadd-fill";
+
+export function fillQuickAdd(text: string): void {
+  window.dispatchEvent(new CustomEvent<string>(QUICKADD_FILL_EVENT, { detail: text }));
+}
+
 export function openQuickAdd(intent: QuickAddIntent): void {
   window.dispatchEvent(new CustomEvent<QuickAddIntent>(QUICKADD_EVENT, { detail: intent }));
 }
