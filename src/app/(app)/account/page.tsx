@@ -1,4 +1,5 @@
-import { Download, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Download, Sparkles, Trash2 } from "lucide-react";
 
 import { requireUser } from "@/lib/session";
 import { getT } from "@/lib/i18n-server";
@@ -44,6 +45,16 @@ export default async function AccountPage({
           <Download size={17} strokeWidth={2} aria-hidden />
           {t("Download JSON")}
         </a>
+      </FormSection>
+
+      <FormSection title={t("Replay the welcome")}>
+        <p className="field-hint mt-0">
+          {t("The first-run steps again — language, hub, what you track, notifications. Nothing you've added is reset.")}
+        </p>
+        <Link href="/welcome" className="btn btn-secondary w-full">
+          <Sparkles size={17} strokeWidth={2} aria-hidden />
+          {t("Replay the welcome")}
+        </Link>
       </FormSection>
 
       <DangerZone>

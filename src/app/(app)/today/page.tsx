@@ -1,5 +1,16 @@
 import Link from "next/link";
-import { CalendarDays, Cake, Clock, ListOrdered, Plane, type LucideIcon } from "lucide-react";
+import {
+  CalendarDays,
+  Cake,
+  Clock,
+  Landmark,
+  ListChecks,
+  ListOrdered,
+  Plane,
+  Repeat,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 import { Figure } from "@/components/Figure";
 import { addDays, startOfDay } from "date-fns";
 
@@ -21,6 +32,7 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { DayCard } from "@/components/DayCard";
 import { UsualPayments, type UsualItem } from "@/components/UsualPayments";
 import { dueUsualPayments, usualPaymentsFor } from "@/lib/usual";
+import { isInterest, type InterestKey } from "@/lib/onboarding";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +43,27 @@ const SHORTCUTS: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/calendar/dates", label: "Dates", Icon: Cake },
   { href: "/agenda", label: "Agenda", Icon: ListOrdered },
 ];
+
+/** Shortcut for each thing someone can say they track at /welcome. */
+const INTEREST_SHORTCUTS: Record<InterestKey, { href: string; label: string; Icon: LucideIcon }> = {
+  tasks: { href: "/tasks", label: "Tasks", Icon: ListChecks },
+  budget: { href: "/budget", label: "Budget", Icon: Wallet },
+  subscriptions: { href: "/subscriptions", label: "Subscriptions", Icon: Repeat },
+  debts: { href: "/debts", label: "Debts", Icon: Landmark },
+  trips: { href: "/trips", label: "Trips", Icon: Plane },
+  schedules: { href: "/schedule", label: "Schedules", Icon: Clock },
+  dates: { href: "/calendar/dates", label: "Dates", Icon: Cake },
+};
+
+/**
+ * What they said they track comes first; the usual shortcuts follow. Only an
+ * ordering — nothing they didn't pick is hidden, here or in the nav.
+ */
+function orderedShortcuts(interests: string[]) {
+  const picked = interests.filter(isInterest).map((k) => INTEREST_SHORTCUTS[k]);
+  const seen = new Set(picked.map((s) => s.href));
+  return [...picked, ...SHORTCUTS.filter((s) => !seen.has(s.href))];
+}
 
 /** "1er" / "2" in French, "1st" / "2nd" in English — a day of the month. */
 function dayOrdinal(n: number, lang: "en" | "fr"): string {
@@ -109,7 +142,7 @@ export default async function DashboardPage() {
       />
 
       <nav className="no-scrollbar -mx-3 flex gap-2 overflow-x-auto px-3" aria-label={t("Plan")}>
-        {SHORTCUTS.map(({ href, label, Icon }) => (
+        {orderedShortcuts(user.interests).map(({ href, label, Icon }) => (
           <Link key={href} href={href} className="chip chip-filter shrink-0">
             <Icon size={15} strokeWidth={2} aria-hidden />
             {t(label)}

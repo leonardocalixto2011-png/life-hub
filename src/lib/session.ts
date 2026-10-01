@@ -13,6 +13,9 @@ export type SessionUser = {
   backgroundImageUrl: string | null;
   themeId: string | null;
   locale: string | null;
+  /** Null until the first-run welcome (/welcome) is finished or skipped. */
+  onboardedAt: Date | null;
+  interests: string[];
 };
 
 export type SessionHub = {
@@ -45,6 +48,8 @@ export const getUser = cache(async (): Promise<SessionUser | null> => {
       backgroundImageUrl: true,
       themeId: true,
       locale: true,
+      onboardedAt: true,
+      interests: true,
     },
   });
   return user?.email
@@ -56,6 +61,8 @@ export const getUser = cache(async (): Promise<SessionUser | null> => {
         backgroundImageUrl: user.backgroundImageUrl,
         themeId: user.themeId,
         locale: user.locale,
+        onboardedAt: user.onboardedAt,
+        interests: user.interests,
       }
     : null;
 });

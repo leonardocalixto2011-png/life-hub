@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { requireUser, listMyHubs } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
@@ -10,6 +11,8 @@ export const dynamic = "force-dynamic";
 
 export default async function NewHubPage() {
   const user = await requireUser();
+  // Someone new is walked through /welcome, which handles hubs and invites itself.
+  if (!user.onboardedAt) redirect("/welcome");
   const t = await getT();
   const [hubs, pendingInvites] = await Promise.all([
     listMyHubs(user.id),
