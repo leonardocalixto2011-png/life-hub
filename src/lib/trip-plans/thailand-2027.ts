@@ -189,7 +189,8 @@ export const thailand2027: TripPlan = {
   deadlines: [
     { title: "Put $1,450 aside for Thailand ($725 each)", due: "2026-10-01", notes: "Then tick it in the trip's booking calendar.", remind: [3, 1] },
     { title: "Put $1,450 aside for Thailand ($725 each)", due: "2026-11-01", notes: "Then tick it in the trip's booking calendar.", remind: [3, 1] },
-    { title: "Put $1,000 aside for Thailand ($500 each)", due: "2026-12-01", notes: "Then tick it in the trip's booking calendar.", remind: [3, 1] },
+    { title: "Put $900 aside for Thailand ($450 each)", due: "2026-12-01", notes: "Then tick it in the trip's booking calendar.", remind: [3, 1] },
+    { title: "Put $100 more aside for Thailand ($50 each)", due: "2026-12-10", notes: "Covers the hotels due Dec 15. Then tick it in the trip's booking calendar.", remind: [3, 1] },
     { title: "Put $700 aside for Thailand ($350 each)", due: "2027-01-01", notes: "Then tick it in the trip's booking calendar.", remind: [3, 1] },
     { title: "Put $600 aside for Thailand ($300 each)", due: "2027-02-01", notes: "Then tick it in the trip's booking calendar.", remind: [3, 1] },
     { title: "Put $600 aside for Thailand ($300 each)", due: "2027-03-01", notes: "Then tick it in the trip's booking calendar.", remind: [3, 1] },

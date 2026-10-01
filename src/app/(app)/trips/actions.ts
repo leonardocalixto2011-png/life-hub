@@ -286,6 +286,7 @@ async function importTripPlanCore(tripId: string, fd: FormData) {
         endDate: true,
         budgetCents: true,
         notes: true,
+        visibility: true,
         items: { select: { id: true, kind: true, title: true, note: true, done: true } },
       },
     });
@@ -308,7 +309,7 @@ async function importTripPlanCore(tripId: string, fd: FormData) {
     const patch = planTripPatch(plan, trip);
     if (Object.keys(patch).length > 0) await tx.trip.update({ where: { id: tripId }, data: patch });
 
-    await syncPlanDeadlines(tx, plan, trip.hubId, user.id);
+    await syncPlanDeadlines(tx, plan, trip.hubId, user.id, trip.visibility);
   });
   revalidateContent(`/trips/${tripId}`, "/trips");
 }
@@ -319,7 +320,15 @@ async function importTripPlanCore(tripId: string, fd: FormData) {
  * match that isn't done takes the plan's notes and reminder days, a missing
  * one is created, and a retired one is removed unless it was done.
  */
-async function syncPlanDeadlines(tx: HubTx, plan: TripPlan, hubId: string, userId: string) {
+async function syncPlanDeadlines(
+  tx: HubTx,
+  plan: TripPlan,
+  hubId: string,
+  userId: string,
+  // A private trip's reminders stay private too, or they'd land in every
+  // member's deadlines and digest.
+  visibility: "PRIVATE" | "SHARED",
+) {
   const want = plan.deadlines ?? [];
   const gone = plan.retiredDeadlines ?? [];
   if (want.length === 0 && gone.length === 0) return;
@@ -336,6 +345,12 @@ async function syncPlanDeadlines(tx: HubTx, plan: TripPlan, hubId: string, userI
   const byKey = new Map(existing.map((d) => [deadlineKey(d.title, ymd(d.dueDate)), d]));
   const wanted = new Set(want.map((d) => deadlineKey(d.title, d.due)));
 
+  // A retired step someone already ticked (an old deposit amount, paid) also
+  // covers the new step due the same day: don't ask for that money twice.
+  const doneDays = new Set(
+    gone.filter((d) => byKey.get(deadlineKey(d.title, d.due))?.doneAt).map((d) => d.due),
+  );
+
   const dropIds = gone
     .map((d) => byKey.get(deadlineKey(d.title, d.due)))
     .filter((d): d is NonNullable<typeof d> => !!d && !d.doneAt && !wanted.has(deadlineKey(d.title, ymd(d.dueDate))))
@@ -346,8 +361,9 @@ async function syncPlanDeadlines(tx: HubTx, plan: TripPlan, hubId: string, userI
     const found = byKey.get(deadlineKey(d.title, d.due));
     const data = { notes: d.notes ?? null, remindDaysBefore: d.remind ?? [7, 3, 1] };
     if (!found) {
+      if (doneDays.has(d.due)) continue;
       await tx.deadline.create({
-        data: { ...data, hubId, title: d.title, dueDate: noon(d.due), createdById: userId },
+        data: { ...data, hubId, title: d.title, dueDate: noon(d.due), createdById: userId, visibility },
       });
     } else if (!found.doneAt) {
       await tx.deadline.update({ where: { id: found.id }, data });
