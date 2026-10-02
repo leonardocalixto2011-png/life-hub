@@ -1142,7 +1142,10 @@ upcoming event including holidays.
   since the title is the match key.
 - **Plans can shrink now (2026-10-01).** The Thailand template became one week
   in Thailand only (Hoi An dropped, home from Krabi Mar 20), then a budget
-  version ($4,850: 3-star hotels, street food). A plan may
+  version ($4,850: 3-star hotels, street food), then Krabi only (v4, $4,750:
+  7 nights Ao Nang, one ticket YUL ⇄ KBV via Bangkok, no domestic flights).
+  Import never moves an existing row's date, so a row kept across versions
+  must keep its date too, or give it a new title and retire the old. A plan may
   carry `retired` (kind + title rows earlier versions had: import deletes the
   ones nobody ticked), `previous[]` + `trip` (title/dates/budget/notes move only
   while the trip still holds the old value, so hand edits win), and
