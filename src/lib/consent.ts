@@ -160,3 +160,13 @@ export async function hubHasMailAiConsent(hubId: string): Promise<boolean> {
   });
   return row !== null;
 }
+
+/**
+ * A `Debt.owner` filter: owners who currently consent to keeping debts. Every
+ * aggregate that reads debts outside /debts (Today, Budget, Agenda, digests,
+ * timely pushes, shared summaries) adds it, so withdrawing consent stops the
+ * processing everywhere, not only on the Debts page.
+ */
+export const DEBT_CONSENTED = {
+  consents: { some: { kind: "DEBTS_SENSITIVE", revokedAt: null } },
+} satisfies Prisma.UserWhereInput;

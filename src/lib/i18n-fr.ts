@@ -174,6 +174,8 @@ export const FR: Record<string, string> = {
   // ---- today ---------------------------------------------------------------
   "Hi, {name}": "Salut, {name}",
   "All clear this week.": "Rien à signaler cette semaine.",
+  "Mail analysis is paused": "L'analyse des courriels est en pause",
+  "Your connected mailbox isn't being read. Turn on AI analysis on the Mail page to resume.": "Ta boîte courriel connectée n'est plus lue. Active l'analyse par l'IA sur la page Courriels pour reprendre.",
   "Capture something — the box up top understands plain sentences:":
     "Note quelque chose — la boîte en haut comprend les phrases simples :",
   "Schedules today": "Horaires du jour",
@@ -1152,6 +1154,7 @@ export const FR: Record<string, string> = {
   "You can withdraw this later, at the bottom of this page.": "Tu pourras retirer ton accord plus tard, au bas de cette page.",
   "Tick both boxes to continue.": "Coche les deux cases pour continuer.",
   "Give your consent on the Debts page before adding a debt.": "Donne ton consentement sur la page Dettes avant d'ajouter une dette.",
+  "Give your consent on the Debts page first.": "Donne d'abord ton consentement sur la page Dettes.",
   "You agreed to Life Hub keeping your debts.": "Tu as accepté que Life Hub conserve tes dettes.",
   "Withdraw my consent": "Retirer mon consentement",
   "your debts stay saved but hidden until you agree again; delete them one by one, or your whole account, to erase them.": "tes dettes restent enregistrées mais cachées jusqu'à ce que tu acceptes de nouveau; pour les effacer, supprime-les une à une, ou supprime ton compte.",

@@ -10,6 +10,7 @@ import type { BillingCycle, Prisma } from "@prisma/client";
 
 import { cache } from "react";
 
+import { DEBT_CONSENTED } from "@/lib/consent";
 import type { HubTx } from "@/lib/hub-context";
 import { withHub } from "@/lib/hub-context";
 import { prisma } from "@/lib/prisma";
@@ -487,7 +488,7 @@ export async function upcomingSummary(tx: HubTx, hubId: string, userId: string) 
       // Own debts only. A debt shared into this hub belongs to someone else —
       // folding it into *your* forecast would make the number meaningless.
       // DEFAULT still counts: it is owed, usually on a negotiated payment.
-      where: { ownerId: userId, hubId, status: { not: "PAID_OFF" } },
+      where: { owner: DEBT_CONSENTED, ownerId: userId, hubId, status: { not: "PAID_OFF" } },
       select: { minimumPaymentCents: true, actualPaymentCents: true, paymentFrequency: true },
     }),
     tx.task.findMany({
@@ -659,7 +660,7 @@ export async function agendaItems(tx: HubTx, hubId: string, userId: string, days
     }),
     tx.debt.findMany({
       // Own debts only — the agenda is your timeline, not the hub's.
-      where: { ownerId: userId, hubId, status: { not: "PAID_OFF" }, dueDate: { gte: from, lte: to } },
+      where: { owner: DEBT_CONSENTED, ownerId: userId, hubId, status: { not: "PAID_OFF" }, dueDate: { gte: from, lte: to } },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { dueDate: "asc" },
     }),
@@ -834,7 +835,7 @@ export async function dashboard(tx: HubTx, hubId: string, userId: string, curren
       // counts — it has a payment due and arguably needs the reminder more.
       // No lower bound: an unpaid debt past its due date is the one that most
       // needs showing, not one that should silently drop off.
-      where: { ownerId: userId, hubId, status: { not: "PAID_OFF" }, dueDate: { lte: soon } },
+      where: { owner: DEBT_CONSENTED, ownerId: userId, hubId, status: { not: "PAID_OFF" }, dueDate: { lte: soon } },
       include: { venture: { select: { name: true, color: true } } },
       orderBy: { dueDate: "asc" },
     }),

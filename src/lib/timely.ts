@@ -1,5 +1,6 @@
 import { differenceInCalendarDays, format, startOfDay } from "date-fns";
 
+import { DEBT_CONSENTED } from "@/lib/consent";
 import { prisma } from "@/lib/prisma";
 import { mapLimit } from "@/lib/async";
 import { sendPushToUser, type PushPayload } from "@/lib/push";
@@ -255,6 +256,7 @@ async function collect(now: Date) {
       ? prisma.debt.findMany({
           // Deliberately narrow, like the digests: name, when, how much.
           where: {
+            owner: DEBT_CONSENTED,
             status: { not: "PAID_OFF" },
             dueDate: { gte: new Date(today.getTime() + 864e5 / 2), lt: new Date(today.getTime() + 2.5 * 864e5) },
           },

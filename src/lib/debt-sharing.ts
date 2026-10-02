@@ -1,3 +1,4 @@
+import { DEBT_CONSENTED } from "@/lib/consent";
 import { prisma } from "@/lib/prisma";
 import { perMonth } from "@/lib/money";
 
@@ -65,7 +66,7 @@ export async function sharedDebtSummaries(
     // Trusted client on purpose: the viewer has no RLS route to these rows,
     // and must not — only these aggregates leave this function.
     const debts = await prisma.debt.findMany({
-      where: { ownerId: s.ownerId, status: { not: "PAID_OFF" } },
+      where: { owner: DEBT_CONSENTED, ownerId: s.ownerId, status: { not: "PAID_OFF" } },
       select: {
         balanceCents: true,
         actualPaymentCents: true,
