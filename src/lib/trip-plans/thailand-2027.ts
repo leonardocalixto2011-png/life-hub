@@ -8,14 +8,14 @@ import type { TripPlan } from "../trip-plan";
  *
  * Third version. v1 was Thailand + Vietnam (Hoi An weekend, home March 22,
  * $6,300); v2 was this week at a comfortable level ($5,800); this one is the
- * budget version ($4,450): 3-star hotels, mostly street food, a smaller
+ * budget version ($4,850): 3-star hotels, mostly street food, a smaller
  * buffer. `previous`, `retired` and `retiredDeadlines` describe the earlier
  * versions, so importing this onto a trip made from it removes the Vietnam
  * rows nobody has ticked and moves the trip's dates and budget, while
  * anything a person changed or ticked is left alone.
  */
 export const thailand2027: TripPlan = {
-  budget: 4450,
+  budget: 4850,
   trip: {
     title: "Thailand, one week",
     destination: "Bangkok · Krabi",
@@ -75,7 +75,7 @@ export const thailand2027: TripPlan = {
     { kind: "ACTIVITY", date: "2027-03-20", title: "Land in Montréal" },
 
     // ---- to book, with when --------------------------------------------------
-    { kind: "BOOK", date: "2026-11-30", cost: 2400, title: "Long-haul flights YUL → Bangkok, home from Krabi (≤ $1,200 each)", note: "Fares for March have been seen from about $850 to $1,600 each; set the alert at $1,200. Search multi-city: YUL → BKK Thu Mar 11, KBV → YUL Fri Mar 19. If one ticket including Krabi costs about the same, take it: a late Krabi flight is then the airline's problem. Book the day an alert hits your target, even before Nov 30." },
+    { kind: "BOOK", date: "2026-11-30", cost: 2800, title: "Long-haul flights YUL → Bangkok, home from Krabi (alert at $1,250 each)", note: "Montréal–Bangkok round trips average about $1,550 each; the best fares seen lately are about $1,200. Budgeted at $1,400 each, alert at $1,250. Search multi-city: YUL → BKK Thu Mar 11, KBV → YUL Fri Mar 19. If one ticket including Krabi costs about the same, take it: a late Krabi flight is then the airline's problem. Book the day an alert hits your target, even before Nov 30." },
     { kind: "BOOK", date: "2026-11-30", cost: 230, title: "Travel insurance (check your credit card first)" },
     { kind: "BOOK", date: "2026-12-15", cost: 210, title: "Bangkok 3-star hotel near a BTS stop, 3 nights (~$70/night)", note: "Free cancellation. Near a SkyTrain stop beats a fancy lobby: it saves a Grab every day." },
     { kind: "BOOK", date: "2026-12-15", cost: 400, title: "Ao Nang hotel with a pool, 4 nights (~$100/night)", note: "Ao Nang is half the price of Railay and Railay is 15 minutes away by longtail. Splurge one night on Railay only if the budget allows." },
@@ -95,20 +95,20 @@ export const thailand2027: TripPlan = {
     { kind: "TODO", date: "2027-03-09", title: "TDAC arrival cards at tdac.immigration.go.th (free)", note: "Opens 72h before landing. Screenshot the confirmation." },
     { kind: "TODO", date: "2027-03-10", title: "About $100 in baht for the first night" },
 
-    // ---- savings schedule, together (half each), $4,450 in all ----------------
-    // Ahead of every payment: $2,650 saved by Nov 30 for $2,630 of flights +
-    // insurance, $3,250 by Dec 15 for $3,240 with the hotels, $3,650 by Jan 31
-    // for $3,540 with the Krabi flights. October stays as it was, since it may
+    // ---- savings schedule, together (half each), $4,850 in all ----------------
+    // Ahead of every payment: $3,050 saved by Nov 30 for $3,030 of flights +
+    // insurance, $3,650 by Dec 15 for $3,640 with the hotels, $4,050 by Jan 31
+    // for $3,940 with the Krabi flights. October stays as it was, since it may
     // already be done.
     { kind: "SAVE", date: "2026-10-01", cost: 1450, title: "October deposit ($725 each)" },
-    { kind: "SAVE", date: "2026-11-01", cost: 1200, title: "November deposit ($600 each)" },
+    { kind: "SAVE", date: "2026-11-01", cost: 1600, title: "November deposit ($800 each)" },
     { kind: "SAVE", date: "2026-12-01", cost: 600, title: "December deposit ($300 each)" },
     { kind: "SAVE", date: "2027-01-01", cost: 400, title: "January deposit ($200 each)" },
     { kind: "SAVE", date: "2027-02-01", cost: 400, title: "February deposit ($200 each)" },
     { kind: "SAVE", date: "2027-03-01", cost: 400, title: "March deposit ($200 each)" },
 
     // ---- where the money goes (estimates for two) ------------------------------
-    { kind: "BUDGET", cost: 2400, title: "Long-haul flights (2 × ~$1,200)" },
+    { kind: "BUDGET", cost: 2800, title: "Long-haul flights (2 × ~$1,400)" },
     { kind: "BUDGET", cost: 610, title: "Hotels, 7 nights (3-star Bangkok, Ao Nang with a pool)" },
     { kind: "BUDGET", cost: 340, title: "Food, mostly street food (~$50 a day for two)" },
     { kind: "BUDGET", cost: 300, title: "Tours: islands boat, cooking class, massages" },
@@ -121,7 +121,7 @@ export const thailand2027: TripPlan = {
     {
       kind: "TIP",
       title: "Entry rules (Canadian passport)",
-      note: "No visa for a holiday this short: the visa-free stay has been 60 days, with talk of cutting it to 30, and either covers a week. Fill in the free TDAC arrival card within 72h before landing. Passports valid at least 6 months after arrival.",
+      note: "No visa needed: since Sept 15, 2026 Canadians get 30 days visa-free (it was 60), plenty for a week. Fill in the free TDAC arrival card within 72h before landing. Passports valid at least 6 months after arrival.",
     },
     {
       kind: "TIP",
@@ -150,8 +150,8 @@ export const thailand2027: TripPlan = {
     },
     {
       kind: "TIP",
-      title: "Where the $4,450 comes from",
-      note: "Flights are more than half of it and barely move. On the ground it's about $290 a day for two, hotel included. Street food is $2–4 a plate, a 1-hour Thai massage about $12, a beer about $3. Extras like a Phi Phi day trip (about $100 each) or the Muay Thai night aren't in the budget.",
+      title: "Where the $4,850 comes from",
+      note: "Flights are more than half of it and barely move: catching a $1,250 fare saves $300. On the ground it's about $290 a day for two, hotel included. Street food is $2–4 a plate, a 1-hour Thai massage about $12, a beer about $3. Extras like a Phi Phi day trip (about $100 each) or the Muay Thai night aren't in the budget.",
     },
 
     // ---- packing ---------------------------------------------------------------
@@ -223,7 +223,7 @@ export const thailand2027: TripPlan = {
   // ---- reminders: the dated steps, as hub deadlines ---------------------------
   deadlines: [
     { title: "Put $1,450 aside for Thailand ($725 each)", due: "2026-10-01", notes: "Then tick it in the trip's booking calendar.", remind: [3, 1] },
-    { title: "Put $1,200 aside for Thailand ($600 each)", due: "2026-11-01", notes: "Then tick it in the trip's booking calendar.", remind: [3, 1] },
+    { title: "Put $1,600 aside for Thailand ($800 each)", due: "2026-11-01", notes: "Then tick it in the trip's booking calendar.", remind: [3, 1] },
     { title: "Put $600 aside for Thailand ($300 each)", due: "2026-12-01", notes: "Then tick it in the trip's booking calendar.", remind: [3, 1] },
     { title: "Put $400 aside for Thailand ($200 each)", due: "2027-01-01", notes: "Then tick it in the trip's booking calendar.", remind: [3, 1] },
     { title: "Put $400 aside for Thailand ($200 each)", due: "2027-02-01", notes: "Then tick it in the trip's booking calendar.", remind: [3, 1] },
@@ -231,7 +231,7 @@ export const thailand2027: TripPlan = {
     {
       title: "Book the Thailand flights (last good date)",
       due: "2026-11-30",
-      notes: "Multi-city: YUL → BKK Thu Mar 11, Krabi (KBV) → YUL Fri Mar 19. Aim for ≤ $1,200 each. Book earlier if an alert hits that.",
+      notes: "Multi-city: YUL → BKK Thu Mar 11, Krabi (KBV) → YUL Fri Mar 19. About $1,400 each is normal; book the day an alert hits $1,250 or less.",
       remind: [21, 14, 7, 3, 1],
     },
     { title: "Book the trip hotels (free cancellation)", due: "2026-12-15", notes: "Bangkok 3-star near a BTS stop, 3 nights (Mar 12–15, ~$70/night). Ao Nang with a pool, 4 nights (Mar 15–19, ~$100/night)." },
