@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { signIn } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { rateLimit } from "@/lib/rate-limit";
+import { hashedKey, rateLimit } from "@/lib/rate-limit";
 import { signupsOpen } from "@/lib/signup";
 
 const schema = z.object({ email: z.string().email() });
@@ -41,8 +41,8 @@ export async function requestMagicLink(
   // the response — see below.
   const ip = await clientIp();
   const limited =
-    !(await rateLimit(`magic-link:${email}`, 3, 3600)).ok ||
-    (ip !== null && !(await rateLimit(`magic-link-ip:${ip}`, 10, 3600)).ok);
+    !(await rateLimit(`magic-link:${hashedKey(email)}`, 3, 3600)).ok ||
+    (ip !== null && !(await rateLimit(`magic-link-ip:${hashedKey(ip)}`, 10, 3600)).ok);
 
   // Whether this address has an account, and whether signups are open,
   // together decide if a link is sent. The response below is identical

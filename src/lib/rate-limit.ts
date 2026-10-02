@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -17,8 +19,25 @@ import { prisma } from "@/lib/prisma";
 export type RateLimitResult = { ok: boolean; retryAfterSeconds: number };
 
 /**
+ * A stable, non-reversible stand-in for a personal identifier (an email
+ * address, an IP) inside a rate-limit key: SHA-256 keyed with AUTH_SECRET.
+ * The counter still groups attempts for the same address, but the table no
+ * longer holds the address itself — it used to, in a place nobody would think
+ * to look when answering an access or deletion request.
+ *
+ * Keyed (HMAC), not a bare hash: email addresses are guessable, so an unsalted
+ * SHA-256 could be reversed by hashing a list of candidates. Without the
+ * secret the stored value cannot be tested against a guess.
+ */
+export function hashedKey(value: string): string {
+  const secret = process.env.AUTH_SECRET ?? "";
+  return createHmac("sha256", secret).update(value.trim().toLowerCase()).digest("hex");
+}
+
+/**
  * @param key    what's being limited — caller namespaces it, e.g.
- *               `magic-link:someone@example.com` or `ai:<userId>`.
+ *               `magic-link:<hashedKey(email)>` or `ai:<userId>`. Never put a
+ *               raw email address or IP in a key — wrap it in `hashedKey`.
  * @param limit  attempts allowed per window.
  * @param windowSeconds  window length.
  */

@@ -47,6 +47,14 @@ export async function switchHub(hubId: string) {
 const emailSchema = z.string().trim().toLowerCase().email();
 
 /**
+ * How the inviter is named in an invite push or email. Their name — never
+ * their address: an invite is sent to someone who is not in the hub yet.
+ */
+function inviterName(user: { name: string | null }): string {
+  return user.name?.trim() || "Someone";
+}
+
+/**
  * Throws unless `userId` is an **active** owner of `hubId`.
  *
  * A single helper rather than the check written out at each call site: the
@@ -110,7 +118,7 @@ export async function inviteMember(hubId: string, formData: FormData) {
     try {
       await sendPushToUser(invited.target.id, {
         title: `Invited to "${hub.name}"`,
-        body: `${user.name ?? user.email} invited you. Tap to join.`,
+        body: `${inviterName(user)} invited you. Tap to join.`,
         url: "/hubs/invites",
         tag: `hub-invite-${hubId}`,
       });
@@ -121,11 +129,11 @@ export async function inviteMember(hubId: string, formData: FormData) {
     // Hub and display names are free text chosen by the inviter; unescaped they
     // could inject markup/links into an email that arrives from our domain.
     const hubNameHtml = escapeHtml(hub.name);
-    const inviterHtml = escapeHtml(user.name ?? user.email ?? "");
+    const inviterHtml = escapeHtml(inviterName(user));
     await sendEmail({
       to: email,
       subject: `You're invited to "${hub.name}" on Life Hub`,
-      text: `${user.name ?? user.email} invited you to join "${hub.name}" on Life Hub. Sign in at ${appUrl}/login with this email address, then open ${appUrl}/hubs/invites to accept.`,
+      text: `${inviterName(user)} invited you to join "${hub.name}" on Life Hub. Sign in at ${appUrl}/login with this email address, then open ${appUrl}/hubs/invites to accept.`,
       html: `
         <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px">
           <h1 style="font-size:18px;margin:0 0 12px">You're invited to "${hubNameHtml}"</h1>
@@ -188,6 +196,15 @@ async function cleanupDepartingMember(hubId: string, subjectUserId: string) {
     await tx.trip.deleteMany({ where: { hubId, createdById: subjectUserId, visibility: "PRIVATE" } });
     // Favourites are always personal — nobody left in the hub could ever see them.
     await tx.quickFavorite.deleteMany({ where: { hubId, createdById: subjectUserId } });
+    // Leaving ends what they agreed to show or send for this hub: the debt
+    // share goes, and both hub-scoped consents are closed in the ledger
+    // (revoked, not deleted). Closing MAIL_AI also stops a mailbox they left
+    // connected here from being analysed into a hub they are no longer in.
+    await tx.debtShare.deleteMany({ where: { hubId, ownerId: subjectUserId } });
+    await tx.consent.updateMany({
+      where: { userId: subjectUserId, hubId, kind: { in: ["DEBT_SHARE", "MAIL_AI"] }, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
     await tx.tripItem.updateMany({
       where: { hubId, assignedToId: subjectUserId },
       data: { assignedToId: null },
@@ -322,7 +339,7 @@ export async function addKnownMember(hubId: string, formData: FormData) {
   try {
     await sendPushToUser(targetId, {
       title: `Invited to "${hub.name}"`,
-      body: `${user.name ?? user.email} invited you. Tap to join.`,
+      body: `${inviterName(user)} invited you. Tap to join.`,
       url: "/hubs/invites",
       tag: `hub-invite-${hubId}`,
     });
@@ -331,6 +348,26 @@ export async function addKnownMember(hubId: string, formData: FormData) {
   }
 
   revalidatePath(`/hubs/${hubId}/members`);
+}
+
+/**
+ * A member's own choice, per hub: let the other members of THIS hub see their
+ * email address. Off by default. Self-row write, so it runs through withHub
+ * under the self-only HubMembership policy; the `userId` pin is the app-level
+ * mirror of that policy.
+ */
+export async function setShowEmail(hubId: string, show: boolean) {
+  const user = await requireUser();
+  z.string().cuid().parse(hubId);
+  await withHub(user.id, async (tx) => {
+    const { count } = await tx.hubMembership.updateMany({
+      where: { hubId, userId: user.id, status: "ACTIVE" },
+      data: { showEmail: Boolean(show) },
+    });
+    if (count === 0) throw new Error("Not a member of that hub.");
+  });
+  // Every page with a people picker renders the roster.
+  revalidatePath("/", "layout");
 }
 
 /** Owner-only: holidays and special days on this hub's calendar, on or off. */

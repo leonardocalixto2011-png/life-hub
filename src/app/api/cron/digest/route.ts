@@ -6,6 +6,7 @@ import { reportError } from "@/lib/observability";
 import { prisma } from "@/lib/prisma";
 import { mapLimit } from "@/lib/async";
 import { pruneRateLimits } from "@/lib/rate-limit";
+import { pruneReviewItems } from "@/lib/retention";
 import { dispatchReminders } from "@/lib/reminders";
 import { sendEmail } from "@/lib/email";
 import { sendPushToUser } from "@/lib/push";
@@ -96,10 +97,22 @@ export async function GET(req: Request) {
   // Piggyback the rate-limit sweep on a job that already runs daily.
   const prunedRateLimits = await pruneRateLimits();
 
+  // Retention (DATA-INVENTORY.md §5): parsed email in the review inbox is kept
+  // 90 days, then deleted. Same reasoning for riding this job. A failure here
+  // must not turn a digest run that already went out into a 500.
+  let prunedReviews: { expired: number; deleted: number } | { error: true };
+  try {
+    prunedReviews = await pruneReviewItems();
+  } catch (err) {
+    prunedReviews = { error: true };
+    await reportError("cron.digest.retention_failed", err, {});
+  }
+
   return NextResponse.json({
     ok: true,
     count: totalCount,
     prunedRateLimits,
+    prunedReviews,
     reminded,
     failed,
     pushed,

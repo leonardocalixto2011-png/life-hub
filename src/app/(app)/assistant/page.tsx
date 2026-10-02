@@ -4,11 +4,12 @@ import { requireUser } from "@/lib/session";
 import { getT } from "@/lib/i18n-server";
 import { aiEnabled, AI_MODEL } from "@/lib/ai";
 import { AssistantPanel } from "./AssistantPanel";
+import { AiNotice } from "@/components/AiNotice";
 
 export const dynamic = "force-dynamic";
 
 export default async function AssistantPage() {
-  await requireUser();
+  const user = await requireUser();
   const t = await getT();
   const enabled = aiEnabled();
 
@@ -21,6 +22,8 @@ export default async function AssistantPage() {
         <h1 className="page-title">{t("Assistant")}</h1>
         <p className="text-xs text-[var(--color-text-dim)]">{t("Powered by Claude ({model}).", { model: AI_MODEL })}</p>
       </div>
+
+      {enabled && !user.aiNoticeAt && <AiNotice />}
 
       {enabled ? (
         <AssistantPanel />

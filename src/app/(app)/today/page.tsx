@@ -33,6 +33,7 @@ import { DayCard } from "@/components/DayCard";
 import { UsualPayments, type UsualItem } from "@/components/UsualPayments";
 import { dueUsualPayments, usualPaymentsFor } from "@/lib/usual";
 import { isInterest, type InterestKey } from "@/lib/onboarding";
+import { personFirstName } from "@/lib/people";
 
 export const dynamic = "force-dynamic";
 
@@ -93,7 +94,7 @@ export default async function DashboardPage() {
   ]);
   const first = user.name?.split(" ")[0];
   const vOpts = ventures.map((v) => ({ id: v.id, name: v.name }));
-  const memberName = new Map(membersRaw.map((m) => [m.id, (m.name ?? m.email ?? "").split(/[\s@]/)[0]]));
+  const memberName = new Map(membersRaw.map((m) => [m.id, personFirstName(m, t("Member"))]));
   const comingUp = plans.slice(0, 6);
   const currency = hub.currency;
   const locale = user.locale ?? "en-CA";

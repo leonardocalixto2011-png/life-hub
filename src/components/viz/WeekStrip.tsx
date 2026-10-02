@@ -55,7 +55,7 @@ export async function WeekStrip({
     hubChrome(userId, hub.id),
   ]);
 
-  const people = peopleOf(members);
+  const people = peopleOf(members, t("Member"));
   const shown = people.filter((p) => shifts.some((s) => s.personId === p.id)).slice(0, 3);
   const days = Array.from({ length: 7 }, (_, i) => addDays(from, i));
   const on = (d: Date | null, day: Date) => Boolean(d && isSameDay(d, day));

@@ -20,10 +20,12 @@ import { applyFavorite, undoFavorite, saveDraftAsFavorite } from "@/app/(app)/fa
 import { downscaleImage } from "@/lib/downscale";
 import { jpegBlobFromBase64, uploadAttachment } from "@/lib/attachments";
 import { readPhoto } from "@/lib/photo-read";
+import { AiNotice } from "@/components/AiNotice";
 import { sameFavorite, type FavoriteChip } from "@/lib/favorites";
 import { dollarsToCents } from "@/lib/money";
 import { haptic } from "@/lib/haptics";
 import { QUICKADD_EVENT, QUICKADD_FILL_EVENT, type QuickAddIntent } from "@/lib/quickadd-bus";
+import { personName } from "@/lib/people";
 
 type Option = { id: string; name: string | null; email?: string | null };
 
@@ -110,6 +112,7 @@ export function QuickAdd({
   favorites = [],
   userId,
   onSaved,
+  aiNoticeSeen = true,
 }: {
   /** Called after anything is actually saved (the welcome's last step). */
   onSaved?: () => void;
@@ -120,6 +123,8 @@ export function QuickAdd({
   userId: string;
   aiEnabled: boolean;
   favorites?: FavoriteChip[];
+  /** False until the person has dismissed the one-time "who processes this" notice. */
+  aiNoticeSeen?: boolean;
 }) {
   const router = useRouter();
   const t = useT();
@@ -152,6 +157,13 @@ export function QuickAdd({
   const longPressed = useRef(false);
   const [pending, startTransition] = useTransition();
   const canSpeak = useSyncExternalStore(noop, readSpeech, () => false);
+  // The first-use AI notice: raised the first time a sentence, a photo or
+  // dictation is used, shown under the composer, never in the way.
+  const [aiNotice, setAiNotice] = useState(false);
+  const [aiNoticeDone, setAiNoticeDone] = useState(aiNoticeSeen);
+  function noteAiUse() {
+    if (!aiNoticeDone) setAiNotice(true);
+  }
 
   /** Photos uploaded for a review that no saved task kept are deleted. */
   function releaseUploads() {
@@ -191,6 +203,7 @@ export function QuickAdd({
 
   /** Sentence → AI drafts, falling back to a plain task if parsing fails. */
   function parseAndReview(title: string, fd: FormData) {
+    noteAiUse();
     startTransition(async () => {
       // A thrown server action (network drop, function timeout) would
       // otherwise bubble out of the transition to error.tsx and lose the
@@ -269,6 +282,7 @@ export function QuickAdd({
   function startVoice() {
     const Ctor = speechCtor();
     if (!Ctor || recRef.current) return;
+    noteAiUse();
     setPrompt(null);
     setMsg(null);
     setFavOffer(null);
@@ -357,6 +371,7 @@ export function QuickAdd({
     const extra = (e.target.files?.length ?? 0) - files.length;
     e.target.value = ""; // so picking the same photo again still fires
     if (!files.length) return;
+    noteAiUse();
     setMsg(files.length > 1 ? t("Reading {n} photos…", { n: files.length }) : t("Reading the photo…"));
     setFavOffer(null);
     setDrafts(null);
@@ -785,7 +800,7 @@ export function QuickAdd({
                 <option value="">{t("Shared / unassigned")}</option>
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name ?? m.email}
+                    {personName(m, t("Member"))}
                   </option>
                 ))}
               </select>
@@ -833,6 +848,17 @@ export function QuickAdd({
           </div>
         )}
       </form>
+
+      {aiNotice && !aiNoticeDone && (
+        <div className="mt-2">
+          <AiNotice
+            onDismissed={() => {
+              setAiNoticeDone(true);
+              setAiNotice(false);
+            }}
+          />
+        </div>
+      )}
 
       {drafts && (
         <div className="mt-3 space-y-2">

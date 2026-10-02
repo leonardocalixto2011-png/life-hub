@@ -10,6 +10,7 @@ import { PrivacyToggle } from "@/components/PrivacyToggle";
 import { SubmitButton } from "@/components/SubmitButton";
 import { useT } from "@/components/I18nProvider";
 import type { T } from "@/lib/i18n";
+import { personName } from "@/lib/people";
 
 type Member = { id: string; name: string | null; email: string | null };
 type Venture = { id: string; name: string };
@@ -139,7 +140,7 @@ function Fields({
             {members.map((m) => (
               <label key={m.id} className="check-row">
                 <input type="checkbox" name="attendeeIds" value={m.id} defaultChecked={attending.has(m.id)} />
-                {m.name ?? m.email}
+                {personName(m, t("Member"))}
               </label>
             ))}
           </div>

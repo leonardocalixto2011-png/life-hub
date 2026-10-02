@@ -2,6 +2,9 @@
 
 import { z } from "zod";
 
+import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/session";
+
 import { withHub } from "@/lib/hub-context";
 import { hubChrome } from "@/lib/data";
 import { requireHub } from "@/lib/session";
@@ -83,6 +86,20 @@ export async function parseImage(input: {
     10,
     langOf(user.locale),
   );
+}
+
+/**
+ * Records that the person has seen (and dismissed) the one-time notice about
+ * who processes AI input — see components/AiNotice.tsx. Only ever sets the
+ * flag; the first date stands.
+ */
+export async function dismissAiNotice(): Promise<void> {
+  const user = await requireUser();
+  if (user.aiNoticeAt) return;
+  await prisma.user.updateMany({
+    where: { id: user.id, aiNoticeAt: null },
+    data: { aiNoticeAt: new Date() },
+  });
 }
 
 export async function commitDrafts(

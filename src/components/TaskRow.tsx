@@ -14,6 +14,7 @@ import { Avatar } from "@/components/Avatar";
 import { VentureChip } from "@/components/VentureChip";
 import { useLang, useT } from "@/components/I18nProvider";
 import { PhotoThumb } from "@/components/PhotoViewer";
+import { personName } from "@/lib/people";
 
 type Venture = { id: string; name: string };
 type Member = { id: string; name: string | null; email: string | null };
@@ -30,7 +31,7 @@ export type TaskRowData = {
   ventureId: string | null;
   assignedToId: string | null;
   venture: { name: string; color: string | null } | null;
-  assignedTo: { name: string | null; email: string | null } | null;
+  assignedTo: { name: string | null } | null;
 };
 
 const SWIPE_THRESHOLD = 72;
@@ -234,7 +235,7 @@ export function TaskRow({
                 </span>
               ) : null}
               {task.assignedTo && (
-                <Avatar name={task.assignedTo.name} email={task.assignedTo.email} size={18} />
+                <Avatar name={task.assignedTo.name} size={18} />
               )}
             </button>
           </div>
@@ -313,7 +314,7 @@ export function TaskRow({
                 <option value="">{t("Shared")}</option>
                 {members!.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name ?? m.email}
+                    {personName(m, t("Member"))}
                   </option>
                 ))}
               </select>

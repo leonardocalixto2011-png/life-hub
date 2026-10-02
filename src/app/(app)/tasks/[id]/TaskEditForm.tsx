@@ -7,6 +7,7 @@ import { DangerZone, FormSection } from "@/components/Form";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
 import { SubmitButton } from "@/components/SubmitButton";
 import { useT } from "@/components/I18nProvider";
+import { personName } from "@/lib/people";
 
 type Option = { id: string; name: string | null; email?: string | null };
 
@@ -92,7 +93,7 @@ export function TaskEditForm({
               <option value="">{t("Shared / unassigned")}</option>
               {members.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name ?? m.email}
+                  {personName(m, t("Member"))}
                 </option>
               ))}
             </select>

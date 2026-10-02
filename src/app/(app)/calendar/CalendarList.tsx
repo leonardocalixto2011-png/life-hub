@@ -10,6 +10,7 @@ import { VentureChip } from "@/components/VentureChip";
 import { useLang, useT } from "@/components/I18nProvider";
 import type { EventWithRefs } from "@/lib/data";
 import { deleteEvents } from "./actions";
+import { personName } from "@/lib/people";
 
 type Member = { id: string; name: string | null; email: string | null };
 
@@ -19,6 +20,7 @@ type PlanChip = { key: string; label: string; href: string | null; planAhead: bo
 type Day = { key: string; label: string; items: EventWithRefs[]; plans: PlanChip[] };
 
 function AttendeeDots({ ids, members }: { ids: string[]; members: Member[] }) {
+  const t = useT();
   if (ids.length === 0) return null;
   const map = new Map(members.map((m) => [m.id, m]));
   return (
@@ -28,7 +30,7 @@ function AttendeeDots({ ids, members }: { ids: string[]; members: Member[] }) {
         return (
           <span
             key={id}
-            title={m?.name ?? m?.email ?? undefined}
+            title={personName(m, t("Member"))}
             className="grid h-5 w-5 place-items-center rounded-full border border-[var(--color-surface)] bg-[var(--color-surface-2)] text-[0.55rem] font-bold text-[var(--color-text-dim)]"
           >
             {initials(m?.name, m?.email)}

@@ -77,20 +77,75 @@ export function listVentures(tx: HubTx, hubId: string) {
  * check below is the boundary that policy would otherwise have been.
  */
 export async function listMembers(viewerId: string, hubId: string) {
+  const rows = await listHubRoster(viewerId, hubId, { includeInvited: false });
+  return rows.map((m) => ({
+    id: m.id,
+    name: m.name,
+    email: m.email,
+    role: m.role,
+    hubRole: m.hubRole,
+    joinedAt: m.joinedAt,
+  }));
+}
+
+/**
+ * The hub's people, with **other members' email addresses removed**.
+ *
+ * Members see each other's name only. An address is returned — and so can
+ * reach a browser at all, whether or not anything renders it — in exactly
+ * three cases:
+ *   - the row is the viewer themself;
+ *   - that member turned on "show my email" for this hub
+ *     (`HubMembership.showEmail`, their own choice, per hub);
+ *   - the viewer is the hub's OWNER and the row is a pending invite — the
+ *     owner typed that address to send the invite and needs it to tell one
+ *     unanswered invite from another.
+ * Everything else gets `email: null`, and the UI falls back to a neutral
+ * "Member" (lib/people.ts).
+ *
+ * Redacted HERE, on the server, rather than at each render site: these rows
+ * are passed whole to client components, so an address selected "just for
+ * the avatar" would still ship in the page payload.
+ *
+ * Trusted client behind the viewer's own ACTIVE membership, for the reason
+ * given on `listMembers` above. An INVITED viewer gets nothing.
+ */
+export async function listHubRoster(
+  viewerId: string,
+  hubId: string,
+  opts: { includeInvited?: boolean } = {},
+) {
   const viewer = await prisma.hubMembership.findFirst({
     where: { hubId, userId: viewerId, status: "ACTIVE" },
-    select: { id: true },
+    select: { role: true },
   });
   if (!viewer) return [];
-  return prisma.hubMembership
-    .findMany({
-      where: { hubId, status: "ACTIVE" },
-      include: { user: { select: { id: true, name: true, email: true, role: true } } },
-      orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
-    })
-    .then((rows) =>
-      rows.map((m) => ({ ...m.user, hubRole: m.role, joinedAt: m.joinedAt })),
-    );
+  const viewerIsOwner = viewer.role === "OWNER";
+
+  const rows = await prisma.hubMembership.findMany({
+    where: { hubId, ...(opts.includeInvited ? {} : { status: "ACTIVE" }) },
+    include: { user: { select: { id: true, name: true, email: true, role: true } } },
+    orderBy: opts.includeInvited
+      ? [{ status: "asc" }, { role: "asc" }, { joinedAt: "asc" }]
+      : [{ role: "asc" }, { joinedAt: "asc" }],
+  });
+
+  return rows.map((m) => {
+    const mayShowEmail =
+      m.userId === viewerId || m.showEmail || (viewerIsOwner && m.status === "INVITED");
+    return {
+      id: m.user.id,
+      name: m.user.name,
+      email: mayShowEmail ? m.user.email : null,
+      role: m.user.role,
+      hubRole: m.role,
+      status: m.status,
+      joinedAt: m.joinedAt,
+      membershipId: m.id,
+      /** Only meaningful on the viewer's own row (drives their toggle). */
+      showEmail: m.showEmail,
+    };
+  });
 }
 
 /**
@@ -139,8 +194,8 @@ function visibilityFilter(userId: string): Prisma.TaskWhereInput {
 
 const taskInclude = {
   venture: { select: { id: true, name: true, slug: true, color: true } },
-  assignedTo: { select: { id: true, name: true, email: true } },
-  createdBy: { select: { id: true, name: true, email: true } },
+  assignedTo: { select: { id: true, name: true } },
+  createdBy: { select: { id: true, name: true } },
 } as const;
 
 export type TaskFilter = {
@@ -256,7 +311,7 @@ export type DeadlineWithRefs = Awaited<ReturnType<typeof listDeadlines>>[number]
 
 const subscriptionInclude = {
   venture: { select: { id: true, name: true, slug: true, color: true } },
-  owner: { select: { id: true, name: true, email: true } },
+  owner: { select: { id: true, name: true } },
 } as const;
 
 export function listSubscriptions(
@@ -284,7 +339,7 @@ export type SubscriptionWithRefs = Awaited<ReturnType<typeof listSubscriptions>>
 
 const debtInclude = {
   venture: { select: { id: true, name: true, slug: true, color: true } },
-  owner: { select: { id: true, name: true, email: true } },
+  owner: { select: { id: true, name: true } },
 } as const;
 
 /**
@@ -374,7 +429,7 @@ export type DebtWithRefs = Awaited<ReturnType<typeof listMyDebts>>[number];
 
 const budgetInclude = {
   venture: { select: { id: true, name: true, slug: true, color: true } },
-  createdBy: { select: { id: true, name: true, email: true } },
+  createdBy: { select: { id: true, name: true } },
 } as const;
 
 /** `month` is any date inside the target month. */
@@ -475,7 +530,7 @@ export async function upcomingSummary(tx: HubTx, hubId: string, userId: string) 
 
 const eventInclude = {
   venture: { select: { id: true, name: true, slug: true, color: true } },
-  createdBy: { select: { id: true, name: true, email: true } },
+  createdBy: { select: { id: true, name: true } },
 } as const;
 
 function eventVisibility(userId: string): Prisma.EventWhereInput {
@@ -584,7 +639,7 @@ export async function agendaItems(tx: HubTx, hubId: string, userId: string, days
   const [tasks, deadlines, events, renewals, debts] = await Promise.all([
     tx.task.findMany({
       where: { hubId, status: "OPEN", dueDate: { not: null, lte: to }, ...visibilityFilter(userId) },
-      include: { venture: { select: { name: true, color: true } }, assignedTo: { select: { name: true, email: true } } },
+      include: { venture: { select: { name: true, color: true } }, assignedTo: { select: { name: true } } },
       orderBy: { dueDate: "asc" },
     }),
     tx.deadline.findMany({
@@ -619,7 +674,7 @@ export async function agendaItems(tx: HubTx, hubId: string, userId: string, days
       href: `/tasks/${t.id}`,
       allDay: true,
       venture: t.venture,
-      meta: t.assignedTo ? (t.assignedTo.name ?? t.assignedTo.email) : null,
+      meta: t.assignedTo ? t.assignedTo.name : null,
     })),
     ...deadlines.map((d): AgendaItem => ({
       kind: "deadline",

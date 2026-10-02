@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { LoginForm } from "./LoginForm";
 import { signupsOpen } from "@/lib/signup";
 import { getT } from "@/lib/i18n-server";
+import { LegalLinks } from "@/components/LegalPage";
 
 export default async function LoginPage() {
   const session = await auth();
@@ -19,6 +20,15 @@ export default async function LoginPage() {
         </p>
       </div>
       <LoginForm open={signupsOpen()} />
+      {/* Bilingual on purpose: nobody is signed in yet, so there is no chosen
+          language — and French comes first in Québec. */}
+      <footer>
+        <LegalLinks
+          privacy="Confidentialité · Privacy"
+          terms="Conditions · Terms"
+          className="text-center text-xs text-[var(--color-text-dim)]"
+        />
+      </footer>
     </main>
   );
 }

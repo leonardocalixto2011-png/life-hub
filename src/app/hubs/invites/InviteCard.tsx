@@ -6,8 +6,9 @@ import { Celebrate } from "@/components/Celebrate";
 import { HubCover } from "@/components/HubCover";
 import { acceptInvite, declineInvite } from "@/app/(app)/hubs/actions";
 import { useT } from "@/components/I18nProvider";
+import { personName } from "@/lib/people";
 
-type Member = { id: string; name: string | null; email: string | null };
+type Member = { id: string; name: string | null };
 
 /**
  * The "arrival" rung of the celebration ladder.
@@ -97,9 +98,9 @@ export function InviteCard({
                     borderColor: "var(--color-surface)",
                     animationDelay: `${60 + i * 70}ms`,
                   }}
-                  title={m.name ?? m.email ?? undefined}
+                  title={personName(m, t("Member"))}
                 >
-                  {(m.name ?? m.email ?? "?").charAt(0).toUpperCase()}
+                  {(m.name?.trim() || "?").charAt(0).toUpperCase()}
                 </span>
               ))}
             </div>

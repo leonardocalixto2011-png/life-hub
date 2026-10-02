@@ -22,15 +22,15 @@ export default async function InvitesPage() {
           name: true,
           color: true,
           coverImageUrl: true,
-          coverBy: { select: { name: true, email: true } },
-          createdBy: { select: { name: true, email: true } },
+          coverBy: { select: { name: true } },
+          createdBy: { select: { name: true } },
           // Who is already inside. Only enough to draw an avatar — no email
           // is rendered, so accepting isn't a precondition for seeing that
           // the hub is real, but declining doesn't hand over a contact list
           // either.
           memberships: {
             where: { status: "ACTIVE" },
-            select: { user: { select: { id: true, name: true, email: true } } },
+            select: { user: { select: { id: true, name: true } } },
             orderBy: { joinedAt: "asc" },
             take: 5,
           },
@@ -68,7 +68,7 @@ export default async function InvitesPage() {
               color={inv.hub.color}
               coverImageUrl={inv.hub.coverImageUrl}
               coverBy={inv.hub.coverBy?.name ?? null}
-              invitedBy={inv.hub.createdBy.name ?? inv.hub.createdBy.email ?? t("Someone")}
+              invitedBy={inv.hub.createdBy.name ?? t("Someone")}
               members={inv.hub.memberships.map((m) => m.user)}
             />
           ))}

@@ -58,17 +58,22 @@ export async function exportUserData(userId: string) {
     pushSubscriptions,
     notificationPref,
     quickFavorites,
+    consents,
   ] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true, name: true, email: true, emailVerified: true, role: true,
         themeId: true, backgroundImageUrl: true, createdAt: true,
+        locale: true, onboardedAt: true, interests: true, aiNoticeAt: true,
       },
     }),
     prisma.hubMembership.findMany({
       where: { userId },
-      select: { role: true, status: true, joinedAt: true, createdAt: true, hub: { select: { name: true } } },
+      select: {
+        role: true, status: true, joinedAt: true, createdAt: true, showEmail: true,
+        hub: { select: { name: true } },
+      },
     }),
     prisma.task.findMany({ where: { createdById: userId } }),
     prisma.task.findMany({ where: { assignedToId: userId }, select: { id: true, title: true, dueDate: true } }),
@@ -97,6 +102,13 @@ export async function exportUserData(userId: string) {
     }),
     prisma.notificationPreference.findUnique({ where: { userId } }),
     prisma.quickFavorite.findMany({ where: { createdById: userId } }),
+    // The whole ledger, revoked rows included — it is the record of what they
+    // agreed to and when.
+    prisma.consent.findMany({
+      where: { userId },
+      select: { kind: true, hubId: true, grantedAt: true, revokedAt: true, policyVersion: true },
+      orderBy: { grantedAt: "asc" },
+    }),
   ]);
 
   return {
@@ -120,6 +132,7 @@ export async function exportUserData(userId: string) {
     pushSubscriptions,
     notificationPref,
     quickFavorites,
+    consents,
   };
 }
 
@@ -202,8 +215,8 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
     paid.count + shifts.count + tripTasks.count + travellers;
 
   // Everything else — memberships, debts, debt shares, mail accounts, push
-  // subscriptions, notification prefs, sessions, auth accounts — is
-  // onDelete: Cascade from User, so this removes them. Subscriptions and
+  // subscriptions, notification prefs, sessions, auth accounts, and the
+  // consent ledger — is onDelete: Cascade from User, so this removes them. Subscriptions and
   // assigned tasks are SetNull, which is what we want: the row survives in
   // the hub without pointing at a person.
   await prisma.user.delete({ where: { id: userId } });

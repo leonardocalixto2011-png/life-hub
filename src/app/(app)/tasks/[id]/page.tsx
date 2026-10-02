@@ -9,6 +9,7 @@ import { centsToInput } from "@/lib/money";
 import { PageHeader } from "@/components/SectionHeader";
 import { TaskEditForm } from "./TaskEditForm";
 import { TaskPhoto } from "./TaskPhoto";
+import { personName } from "@/lib/people";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export default async function TaskDetailPage({
       <PageHeader
         back={{ href: "/tasks", label: t("Tasks") }}
         title={task.title}
-        sub={t("Added by {name}", { name: task.createdBy.name ?? task.createdBy.email ?? "" })}
+        sub={t("Added by {name}", { name: personName(task.createdBy, t("Member")) })}
       />
       <TaskPhoto taskId={task.id} title={task.title} imageUrl={task.imageUrl} userId={user.id} />
       <TaskEditForm
