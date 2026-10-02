@@ -114,6 +114,7 @@ export function QuickAdd({
   userId,
   onSaved,
   aiNoticeSeen = true,
+  currency,
   variant = "inline",
   active = true,
   onActivate,
@@ -138,6 +139,8 @@ export function QuickAdd({
   favorites?: FavoriteChip[];
   /** False until the person has dismissed the one-time "who processes this" notice. */
   aiNoticeSeen?: boolean;
+  /** The hub's currency, for the split preview on an expense draft (CAD when absent). */
+  currency?: string;
 }) {
   const router = useRouter();
   const t = useT();
@@ -609,7 +612,10 @@ export function QuickAdd({
     startTransition(async () => {
       const r = await commitDrafts(drafts);
       if (r.ok) {
-        setMsg(`${t("Added {n}", { n: r.created.length })}: ${r.created.join(" · ")}`);
+        // A split expense also says where the shared balance now stands.
+        setMsg(
+          `${t("Added {n}", { n: r.created.length })}: ${r.created.join(" · ")}${r.balance ? ` — ${r.balance}` : ""}`,
+        );
         setFavOffer(favoriteOffer(drafts, favorites));
         reset();
         router.refresh();
@@ -932,6 +938,9 @@ export function QuickAdd({
               key={i}
               draft={d}
               ventures={ventures}
+              members={members}
+              currentUserId={userId}
+              currency={currency}
               onChange={(patch) => patchDraft(i, patch)}
               onRemove={() => removeDraft(i)}
             />

@@ -61,7 +61,7 @@ export async function acceptReview(id: string, rawDraft: Draft): Promise<AcceptR
   // accepting user currently has selected.
   if (item.hubId) {
     const result = await withHub(user.id, (tx) =>
-      commitDraftsCore(tx, item.hubId!, user.id, [draft], langOf(user.locale)),
+      commitDraftsCore(tx, item.hubId!, user.id, [draft], langOf(user.locale), { activity: true }),
     );
     if (!result.ok) return { ok: false, error: result.error };
   } else {

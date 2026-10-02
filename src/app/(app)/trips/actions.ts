@@ -12,6 +12,7 @@ import { dollarsToCents } from "@/lib/money";
 import { revalidateContent } from "@/lib/revalidate";
 import { assertActiveMember } from "@/lib/membership";
 import { formResult, type ActionResult } from "@/lib/action-result";
+import { logActivity } from "@/lib/activity";
 import {
   deadlineKey,
   deadlineKeys,
@@ -91,9 +92,19 @@ export async function createTrip(fd: FormData): Promise<ActionResult> {
   return formResult(async () => {
     const { user, hub } = await requireHub();
     const data = tripData(parse(z.object(tripFields), fd));
-    const trip = await withHub(user.id, (tx) =>
-      tx.trip.create({ data: { ...data, hubId: hub.id, createdById: user.id } }),
-    );
+    const trip = await withHub(user.id, async (tx) => {
+      const row = await tx.trip.create({ data: { ...data, hubId: hub.id, createdById: user.id } });
+      await logActivity(tx, {
+        hubId: hub.id,
+        actorId: user.id,
+        verb: "TRIP_ADDED",
+        entityType: "trip",
+        entityId: row.id,
+        summary: row.title,
+        visibility: row.visibility,
+      });
+      return row;
+    });
     revalidateContent("/trips");
     redirect(`/trips/${trip.id}`);
   });
@@ -251,10 +262,23 @@ export async function toggleTripItem(fd: FormData) {
   const tripId = await withHub(user.id, async (tx) => {
     const item = await tx.tripItem.findFirst({
       where: { id, trip: visibleTrip(hub.id, user.id) },
-      select: { done: true, tripId: true },
+      select: { done: true, tripId: true, title: true, hubId: true, trip: { select: { visibility: true } } },
     });
     if (!item) throw new Error("Item not found");
     await tx.tripItem.update({ where: { id }, data: { done: !item.done } });
+    // Ticking is news, un-ticking is a correction. The line follows its trip's
+    // visibility, so a private trip's checklist stays out of everyone's feed.
+    if (!item.done) {
+      await logActivity(tx, {
+        hubId: item.hubId,
+        actorId: user.id,
+        verb: "TRIP_ITEM_DONE",
+        entityType: "trip",
+        entityId: item.tripId,
+        summary: item.title,
+        visibility: item.trip.visibility,
+      });
+    }
     return item.tripId;
   });
   revalidateContent(`/trips/${tripId}`, "/trips");

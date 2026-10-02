@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { withHub } from "@/lib/hub-context";
 import { rateLimit } from "@/lib/rate-limit";
 import { CURRENT_HUB_COOKIE } from "@/lib/session";
+import { logActivity } from "@/lib/activity";
 
 /**
  * The parts of "make a hub" / "join a hub" that more than one caller needs —
@@ -63,10 +64,20 @@ export async function setCurrentHub(hubId: string) {
  * RLS like any other self-row write; throws if there is no such invite.
  */
 export async function acceptInviteFor(userId: string, hubId: string) {
-  await withHub(userId, (tx) =>
-    tx.hubMembership.update({
+  await withHub(userId, async (tx) => {
+    await tx.hubMembership.update({
       where: { hubId_userId: { hubId, userId }, status: "INVITED" },
       data: { status: "ACTIVE", joinedAt: new Date() },
-    }),
-  );
+    });
+    // After the update on purpose: the feed's insert policy needs an ACTIVE
+    // membership, which this person only has from the line above.
+    await logActivity(tx, {
+      hubId,
+      actorId: userId,
+      verb: "MEMBER_JOINED",
+      entityType: "member",
+      entityId: userId,
+      summary: "",
+    });
+  });
 }

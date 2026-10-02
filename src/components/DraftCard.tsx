@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import type { Draft, DraftKind } from "@/app/(app)/quick-actions";
 import { useT } from "@/components/I18nProvider";
 import { PhotoThumb } from "@/components/PhotoViewer";
+import { SplitControl, type SplitMember } from "@/components/SplitControl";
 
 const KIND_LABEL: Record<DraftKind, string> = {
   task: "Task",
@@ -26,11 +27,22 @@ const DATE_LABEL: Record<DraftKind, string> = {
 export function DraftCard({
   draft,
   ventures,
+  members,
+  currentUserId,
+  currency,
   onChange,
   onRemove,
 }: {
   draft: Draft;
   ventures: { id: string; name: string }[];
+  /**
+   * The hub's active members and the viewer — when given, and there is someone
+   * to share with, an expense draft offers "Paid by" and a split. Left out by
+   * the mail review inbox, which never splits.
+   */
+  members?: SplitMember[];
+  currentUserId?: string;
+  currency?: string;
   onChange: (patch: Partial<Draft>) => void;
   onRemove: () => void;
 }) {
@@ -207,6 +219,20 @@ export function DraftCard({
         </label>
       </div>
       )}
+
+      {draft.kind === "budget" &&
+        draft.entryType === "EXPENSE" &&
+        currentUserId &&
+        members &&
+        members.length >= 2 && (
+          <SplitControl
+            draft={draft}
+            members={members}
+            currentUserId={currentUserId}
+            currency={currency}
+            onChange={onChange}
+          />
+        )}
 
       {(draft.kind === "task" || draft.kind === "deadline" || draft.kind === "event") && (
         <label className="flex items-center gap-2 text-[0.7rem] font-semibold text-[var(--color-text-dim)]">

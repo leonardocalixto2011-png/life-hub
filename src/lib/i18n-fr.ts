@@ -8,12 +8,16 @@
  * Tu, not vous: this is a household app. Québec conventions throughout —
  * "courriel", "cellulaire", "vidange"… where they differ from France.
  */
+import { FR_SOCIAL } from "@/lib/i18n-fr-social";
 import { FR_VIZ } from "@/lib/i18n-fr-viz";
 import { FR_INTERACT } from "@/lib/i18n-fr-interact";
+import { FR_SHEETS } from "@/lib/i18n-fr-sheets";
 
 export const FR: Record<string, string> = {
+  ...FR_SOCIAL,
   ...FR_VIZ,
   ...FR_INTERACT,
+  ...FR_SHEETS,
   // ---- navigation & chrome ------------------------------------------------
   "Today": "Aujourd'hui",
   "Tasks": "Tâches",

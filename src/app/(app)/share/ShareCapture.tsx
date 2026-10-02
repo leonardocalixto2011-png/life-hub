@@ -14,6 +14,8 @@ import { DraftCard } from "@/components/DraftCard";
 import { FormSection } from "@/components/Form";
 import { useT } from "@/components/I18nProvider";
 import { readPhoto } from "@/lib/photo-read";
+import { showToast } from "@/components/Toast";
+import type { SplitMember } from "@/components/SplitControl";
 
 /** Must match SHARE_CACHE / SHARE_MAX_IMAGES in public/sw.js. */
 const SHARE_CACHE = "lifehub-share-v1";
@@ -50,9 +52,14 @@ export function ShareCapture({
   userId,
   ventures,
   aiEnabled,
+  members,
+  currency,
   sharedImages = false,
   notices = { more: 0, skipped: 0, noFile: false, error: false },
 }: {
+  /** The hub's active members: lets a shared receipt be split on its draft card. */
+  members?: SplitMember[];
+  currency?: string;
   initialText: string;
   /** Whose attachment folder a pinned photo uploads into. */
   userId: string;
@@ -159,6 +166,9 @@ export function ShareCapture({
         const r = await commitDrafts(drafts);
         if (r.ok) {
           releaseUploads();
+          // A split expense: say where the shared balance now stands. A toast,
+          // because this screen is about to be replaced.
+          if (r.balance) showToast({ message: r.balance });
           router.replace("/today");
         }
         else setMsg(t(r.error ?? "Could not save"));
@@ -266,6 +276,9 @@ export function ShareCapture({
               key={i}
               draft={d}
               ventures={ventures}
+              members={members}
+              currentUserId={userId}
+              currency={currency}
               onChange={(patch) =>
                 setDrafts((cur) => cur?.map((x, idx) => (idx === i ? { ...x, ...patch } : x)) ?? null)
               }

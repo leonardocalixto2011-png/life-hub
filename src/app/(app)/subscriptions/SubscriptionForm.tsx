@@ -11,6 +11,7 @@ import {
 } from "./actions";
 import { DangerZone, FormSection } from "@/components/Form";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { useSheetAction } from "@/components/EditSheet";
 import { useT } from "@/components/I18nProvider";
 import type { T } from "@/lib/i18n";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -173,6 +174,7 @@ export function SubscriptionForm({
   existing?: Existing;
 }) {
   const router = useRouter();
+  const inSheet = useSheetAction();
   const t = useT();
   const formRef = useRef<HTMLFormElement>(null);
   const [open, setOpen] = useState(false);
@@ -182,13 +184,13 @@ export function SubscriptionForm({
   if (existing) {
     return (
       <>
-        <form action={updateSubscription} className="space-y-5">
+        <form action={inSheet(updateSubscription)} className="space-y-5">
           <input type="hidden" name="id" value={existing.id} />
           <Fields ventures={ventures} members={members} existing={existing} t={t} grouped />
           <SubmitButton className="btn btn-primary btn-lg w-full">{t("Save")}</SubmitButton>
         </form>
         <DangerZone>
-          <form action={deleteSubscription}>
+          <form action={inSheet(deleteSubscription)}>
             <input type="hidden" name="id" value={existing.id} />
             <ConfirmButton>
               <Trash2 size={16} strokeWidth={2} aria-hidden />

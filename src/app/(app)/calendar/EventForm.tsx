@@ -7,6 +7,7 @@ import { Trash2 } from "lucide-react";
 import { createEvent, deleteEvent, deleteEventSeries, updateEvent } from "./actions";
 import { DangerZone, FormSection } from "@/components/Form";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { useSheetAction } from "@/components/EditSheet";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
 import { SubmitButton } from "@/components/SubmitButton";
 import { useT } from "@/components/I18nProvider";
@@ -175,6 +176,7 @@ export function EventForm({
   beforeDanger?: React.ReactNode;
 }) {
   const router = useRouter();
+  const inSheet = useSheetAction();
   const t = useT();
   const formRef = useRef<HTMLFormElement>(null);
   const [open, setOpen] = useState(Boolean(prefill));
@@ -184,14 +186,14 @@ export function EventForm({
   if (existing) {
     return (
       <>
-        <form action={updateEvent} className="space-y-5">
+        <form action={inSheet(updateEvent)} className="space-y-5">
           <input type="hidden" name="id" value={existing.id} />
           <Fields ventures={ventures} members={members} existing={existing} t={t} grouped />
           <SubmitButton className="btn btn-primary btn-lg w-full">{t("Save")}</SubmitButton>
         </form>
         {beforeDanger}
         <DangerZone>
-          <form action={deleteEvent}>
+          <form action={inSheet(deleteEvent)}>
             <input type="hidden" name="id" value={existing.id} />
             <ConfirmButton>
               <Trash2 size={16} strokeWidth={2} aria-hidden />
@@ -199,7 +201,7 @@ export function EventForm({
             </ConfirmButton>
           </form>
           {existing.recurrenceGroupId && (
-            <form action={deleteEventSeries}>
+            <form action={inSheet(deleteEventSeries)}>
               <input type="hidden" name="recurrenceGroupId" value={existing.recurrenceGroupId} />
               <input type="hidden" name="fromDate" value={existing.startAt} />
               <ConfirmButton confirmLabel={t("Delete this and every later one?")}>

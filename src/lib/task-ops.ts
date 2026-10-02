@@ -3,6 +3,7 @@ import { addWeeks } from "date-fns";
 import type { HubTx } from "@/lib/hub-context";
 import { visibleTo } from "@/lib/visibility";
 import { addMonthsOnDay, anchorOf, sameDay } from "@/lib/recur";
+import { logActivity } from "@/lib/activity";
 
 /**
  * The task writes shared by the server actions (`tasks/actions.ts`) and the
@@ -44,6 +45,18 @@ export async function completeTask(tx: HubTx, id: string, hubId: string, userId:
     data: { status: "DONE", completedAt: new Date() },
   });
   if (flipped.count === 0) return;
+
+  // Here, not in the callers: the checkbox, the swipe and the notification's
+  // "Done" button all finish a task through this one function.
+  await logActivity(tx, {
+    hubId: task.hubId,
+    actorId: userId,
+    verb: "TASK_DONE",
+    entityType: "task",
+    entityId: task.id,
+    summary: task.title,
+    visibility: task.visibility,
+  });
 
   if (task.isRecurring && task.recurrence) {
     const base = task.dueDate ?? new Date();

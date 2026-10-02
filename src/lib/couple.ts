@@ -39,7 +39,7 @@ export async function sharedBalances(
     const others = memberIds.filter((id) => id !== payer);
     if (others.length === 0) continue;
 
-    const owed = Math.round((r.amountCents * (100 - r.payerSharePct!)) / 100);
+    const owed = shareAmounts(r.amountCents, r.payerSharePct!).othersCents;
     net.set(payer, net.get(payer)! + owed);
 
     // Equal parts; leftover cents go to the first members so the sum is exact.
@@ -82,12 +82,24 @@ export const BUDGET_CATEGORIES = [
 
 /** Split options offered in the entry form, as the payer's kept percentage. */
 export const SPLIT_OPTIONS = [
-  { value: "none", label: "Not shared", pct: null },
-  { value: "50", label: "Shared 50/50", pct: 50 },
-  { value: "60", label: "Shared — I keep 60%", pct: 60 },
-  { value: "40", label: "Shared — I keep 40%", pct: 40 },
-  { value: "0", label: "Paid entirely for the other(s)", pct: 0 },
+  { value: "none", label: "Not shared", short: "Not shared", pct: null },
+  { value: "50", label: "Shared 50/50", short: "50/50", pct: 50 },
+  { value: "60", label: "Shared — I keep 60%", short: "60/40", pct: 60 },
+  { value: "40", label: "Shared — I keep 40%", short: "40/60", pct: 40 },
+  { value: "0", label: "Paid entirely for the other(s)", short: "The other pays it all", pct: 0 },
 ] as const;
+
+/**
+ * What a shared expense moves, in cents — the same arithmetic as
+ * `sharedBalances` above, so a preview shown before saving is exactly what
+ * the balance will do after. `payerSharePct` is an integer percent (that is
+ * what the row stores), so the amounts are derived from it, not from whatever
+ * finer split produced it.
+ */
+export function shareAmounts(amountCents: number, payerSharePct: number) {
+  const othersCents = Math.round((amountCents * (100 - payerSharePct)) / 100);
+  return { payerCents: amountCents - othersCents, othersCents };
+}
 
 export function splitLabel(pct: number | null): string | null {
   if (pct == null) return null;
