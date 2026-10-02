@@ -8,6 +8,7 @@ import { assertVentureInHub } from "@/lib/membership";
 import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { revalidateContent } from "@/lib/revalidate";
+import { rescopeActivity } from "@/lib/activity-rescope";
 import { visibleTo } from "@/lib/visibility";
 import { logActivity } from "@/lib/activity";
 
@@ -94,6 +95,7 @@ export async function updateDeadline(fd: FormData) {
     });
     if (count === 0) throw new Error("Not found.");
   });
+  await rescopeActivity(hub.id, "deadline", d.id, { visibility: d.visibility, title: d.title });
   revalidateContent(`/deadlines/${d.id}`);
   // In the edit sheet the form closes itself and stays on the list it opened over.
   if (!fd.get("inSheet")) redirect("/deadlines");

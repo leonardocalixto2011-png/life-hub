@@ -10,6 +10,7 @@ import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
 import { notifyAssignment } from "@/lib/notify";
 import { revalidateContent } from "@/lib/revalidate";
+import { rescopeActivity } from "@/lib/activity-rescope";
 import { assertActiveMember, assertVentureInHub } from "@/lib/membership";
 import { completeTask, dueFields, findScopedTask, scopedTask } from "@/lib/task-ops";
 import { blobUrlSchema } from "@/lib/blob-url";
@@ -139,6 +140,7 @@ export async function updateTask(formData: FormData) {
     await notifyAssignment(after.id, after.title, data.assignedToId, user.name);
   }
 
+  await rescopeActivity(hub.id, "task", data.id, { visibility: data.visibility, title: data.title });
   revalidateContent(`/tasks/${data.id}`);
   // In the edit sheet the form closes itself and stays on the list it opened over.
   if (!formData.get("inSheet")) redirect("/tasks");

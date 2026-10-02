@@ -10,6 +10,7 @@ import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
 import { revalidateContent } from "@/lib/revalidate";
+import { rescopeActivity } from "@/lib/activity-rescope";
 import { assertActiveMember } from "@/lib/membership";
 import { formResult, type ActionResult } from "@/lib/action-result";
 import { logActivity } from "@/lib/activity";
@@ -130,6 +131,7 @@ export async function updateTrip(fd: FormData): Promise<ActionResult> {
         data: { ...tripData(d), ...(travelerIds ? { travelerIds } : {}) },
       });
     });
+    await rescopeActivity(hub.id, "trip", d.id, { visibility: d.visibility, title: d.title });
     revalidateContent("/trips", `/trips/${d.id}`);
   });
 }

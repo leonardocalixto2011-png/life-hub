@@ -163,7 +163,10 @@ export async function searchHub(tx: HubTx, scope: SearchScope, query: string): P
       take: CAP,
     }),
     tx.budgetEntry.findMany({
-      where: { hubId },
+      // Debt payments carry the creditor as category; keep them out of a
+      // search every hub member can run (Law 25: debts are sensitive).
+      // Explicit null branch: SQL NOT(description = …) would drop every entry with no description.
+      where: { hubId, OR: [{ description: null }, { description: { not: "Debt payment" } }] },
       select: { id: true, category: true, description: true, amountCents: true, type: true, date: true },
       orderBy: { date: "desc" },
       take: CAP,

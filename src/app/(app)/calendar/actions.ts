@@ -9,6 +9,7 @@ import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput, fromDateTimeInput } from "@/lib/format";
 import { revalidateContent } from "@/lib/revalidate";
+import { rescopeActivity } from "@/lib/activity-rescope";
 import { assertActiveMember, assertVentureInHub } from "@/lib/membership";
 import { visibleTo } from "@/lib/visibility";
 import { logActivity } from "@/lib/activity";
@@ -155,6 +156,7 @@ export async function updateEvent(fd: FormData) {
     const { count } = await tx.event.updateMany({ where: { id: d.id, ...scoped(hub.id, user.id) }, data });
     if (count === 0) throw new Error("Not found.");
   });
+  await rescopeActivity(hub.id, "event", d.id, { visibility: d.visibility, title: d.title });
   revalidateContent();
   // In the edit sheet the form closes itself and stays on the list it opened over.
   if (!fd.get("inSheet")) redirect("/calendar");
