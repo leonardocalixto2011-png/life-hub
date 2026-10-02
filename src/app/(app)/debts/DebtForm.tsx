@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 
 import { DangerZone } from "@/components/Form";
+import { ConfirmButton } from "@/components/ConfirmButton";
 
 import { createDebt, deleteDebt, updateDebt } from "./actions";
 import { useT } from "@/components/I18nProvider";
@@ -176,10 +177,10 @@ export function DebtForm({
         <DangerZone>
           <form action={deleteDebt}>
             <input type="hidden" name="id" value={existing.id} />
-            <SubmitButton className="btn btn-quiet-danger w-full" pendingLabel={t("Deleting…")}>
+            <ConfirmButton>
               <Trash2 size={16} strokeWidth={2} aria-hidden />
               {t("Delete debt")}
-            </SubmitButton>
+            </ConfirmButton>
           </form>
         </DangerZone>
       </>

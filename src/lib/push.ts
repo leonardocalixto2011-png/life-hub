@@ -1,6 +1,7 @@
 import webpush from "web-push";
 
 import { prisma } from "@/lib/prisma";
+import { translate, type Lang } from "@/lib/i18n";
 
 let configured = false;
 
@@ -20,12 +21,37 @@ export function ensureWebPush(): boolean {
   return true;
 }
 
+/** A button on the notification itself. `action` is what public/sw.js switches on. */
+export type PushAction = { action: "done" | "tomorrow" | "view"; title: string };
+
 export type PushPayload = {
   title: string;
   body: string;
   url?: string;
   tag?: string;
+  /**
+   * Notification buttons — Android and desktop show them (two at most on
+   * Android); iOS ignores the field and the notification is otherwise the
+   * same. Kept short: a push payload is capped around 4 KB and these ride
+   * inside it.
+   */
+  actions?: PushAction[];
+  /** The one task a "Done" / "Tomorrow" button acts on (see /api/push/action). */
+  taskId?: string;
 };
+
+/** "Done" + "Tomorrow" for a push that is about exactly one task. */
+export function taskActions(lang: Lang): PushAction[] {
+  return [
+    { action: "done", title: translate(lang, "Done ✓") },
+    { action: "tomorrow", title: translate(lang, "Tomorrow") },
+  ];
+}
+
+/** A single "View" button, for a push that summarises rather than asks. */
+export function viewAction(lang: Lang): PushAction[] {
+  return [{ action: "view", title: translate(lang, "View") }];
+}
 
 export type PushResult = { sent: number; failed: number; pruned: number };
 

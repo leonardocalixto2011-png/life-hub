@@ -84,16 +84,19 @@ export function TaskRow({
     });
   }
 
-  function toggle() {
-    setDone(!done);
-  }
-
-  function completeBySwipe() {
+  /** Completing, by tap or by swipe: the same toast, the same way back. */
+  function complete() {
     setDone(true);
     showToast({
       message: t("Marked done"),
       onAction: () => setDone(false),
     });
+  }
+
+  function toggle() {
+    // Un-ticking is already the correction, so it gets no toast of its own.
+    if (done) setDone(false);
+    else complete();
   }
 
   function snoozeBySwipe() {
@@ -128,7 +131,7 @@ export function TaskRow({
   }
   function onTouchEnd() {
     if (drag.current.active) {
-      if (dx >= SWIPE_THRESHOLD) completeBySwipe();
+      if (dx >= SWIPE_THRESHOLD) complete();
       else if (dx <= -SWIPE_THRESHOLD) snoozeBySwipe();
     }
     drag.current.active = false;

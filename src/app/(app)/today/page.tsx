@@ -24,7 +24,7 @@ import { hasConsentIn } from "@/lib/consent";
 import { requireHub } from "@/lib/session";
 import { getLang, getT } from "@/lib/i18n-server";
 import { fmt, fmtTime } from "@/lib/i18n";
-import { countdownLabel, eventTimeRange, money } from "@/lib/format";
+import { cancelByLabel, countdownLabel, eventTimeRange, money, renewsLabel } from "@/lib/format";
 import { TaskListCard } from "@/components/TaskListCard";
 import { VentureChip } from "@/components/VentureChip";
 import { EmptyState, quickAddExamples } from "@/components/EmptyState";
@@ -293,7 +293,7 @@ export default async function DashboardPage() {
               <Link key={`c${s.id}`} href={`/subscriptions/${s.id}`} className="row justify-between">
                 <span className="row-title">{s.name}</span>
                 <span className="row-end text-[var(--color-danger)]">
-                  {t("cancel by")} {countdownLabel(s.cancelByDate!, lang)}
+                  {cancelByLabel(s.cancelByDate!, lang)}
                 </span>
               </Link>
             ))}
@@ -301,7 +301,7 @@ export default async function DashboardPage() {
               <Link key={`r${s.id}`} href={`/subscriptions/${s.id}`} className="row justify-between">
                 <span className="row-title">{s.name}</span>
                 <span className="row-end font-medium">
-                  {t("renews")} {countdownLabel(s.renewalDate, lang)}
+                  {renewsLabel(s.renewalDate, lang)}
                 </span>
               </Link>
             ))}

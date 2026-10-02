@@ -26,6 +26,7 @@ import { dollarsToCents } from "@/lib/money";
 import { haptic } from "@/lib/haptics";
 import { QUICKADD_EVENT, QUICKADD_FILL_EVENT, type QuickAddIntent } from "@/lib/quickadd-bus";
 import { personName } from "@/lib/people";
+import "./interact.css";
 
 type Option = { id: string; name: string | null; email?: string | null };
 
@@ -113,7 +114,19 @@ export function QuickAdd({
   userId,
   onSaved,
   aiNoticeSeen = true,
+  variant = "inline",
+  active = true,
+  onActivate,
+  onClose,
 }: {
+  /** "sheet" when it lives in the bottom sheet (every route but /today). */
+  variant?: "inline" | "sheet";
+  /** False while its sheet is closed: the mic stands down. */
+  active?: boolean;
+  /** Something asked for the composer (a shortcut, an empty state): show it. */
+  onActivate?: () => void;
+  /** A plain add landed; the sheet can go. */
+  onClose?: () => void;
   /** Called after anything is actually saved (the welcome's last step). */
   onSaved?: () => void;
   ventures: { id: string; name: string }[];
@@ -163,6 +176,29 @@ export function QuickAdd({
   const [aiNoticeDone, setAiNoticeDone] = useState(aiNoticeSeen);
   function noteAiUse() {
     if (!aiNoticeDone) setAiNotice(true);
+  }
+
+  // The sheet closed around us: a mic left open would keep listening (and then
+  // parse what it heard) with nothing on screen to show for it. (The photo
+  // menu needs no such care: its click-away layer covers the sheet's own
+  // backdrop and handle, so the menu always closes first.)
+  useEffect(() => {
+    if (!active) recRef.current?.abort();
+  }, [active]);
+
+  /**
+   * An undated task shows up on no dated list, so from most screens nothing
+   * visibly changes when it is added. A short toast says it landed and offers
+   * the way to it. From the sheet every plain add gets one, since the sheet
+   * closes and takes the composer's own status line with it.
+   */
+  function confirmAdded(id: string | undefined, dated: boolean) {
+    if (!id || (dated && variant !== "sheet")) return;
+    showToast({
+      message: t("Added"),
+      actionLabel: t("View"),
+      onAction: () => router.push(`/tasks/${id}`),
+    });
   }
 
   /** Photos uploaded for a review that no saved task kept are deleted. */
@@ -219,7 +255,8 @@ export function QuickAdd({
         showParsed(r);
       } else {
         setMsg(`${t(r.error)} — ${t("added as a plain task.")}`);
-        await createTask(fd);
+        const made = await createTask(fd);
+        confirmAdded(made?.id, Boolean(fd.get("dueDate")));
         reset();
         router.refresh();
         ready();
@@ -243,11 +280,13 @@ export function QuickAdd({
             setMsg(t("The photo couldn't be pinned — the item was added without it."));
           }
         }
-        await createTask(fd);
+        const made = await createTask(fd);
+        confirmAdded(made?.id, Boolean(fd.get("dueDate")));
         reset();
         router.refresh();
         ready();
         onSaved?.();
+        onClose?.();
       } catch (err) {
         setMsg(err instanceof Error ? t(err.message) : t("Could not add"));
       }
@@ -411,16 +450,28 @@ export function QuickAdd({
   // ?voice=1, ?snap=1. Read once from window.location rather than
   // useSearchParams: this component lives in the app layout, and the param
   // is consumed and removed on arrival, not something to re-render on.
+  // Held in a ref, not a local: the param is stripped the moment it is read,
+  // so if this effect is torn down and re-run before its timer fires (React
+  // does exactly that in development) the second pass still knows what was
+  // asked for.
+  const shortcutRef = useRef<"snap" | "voice" | "add" | null>(null);
   useEffect(() => {
     const url = new URL(window.location.href);
     const params = url.searchParams;
-    const wants = params.get("snap") ? "snap" : params.get("voice") ? "voice" : params.get("add") ? "add" : null;
+    const asked = params.get("snap") ? "snap" : params.get("voice") ? "voice" : params.get("add") ? "add" : null;
+    if (asked) {
+      shortcutRef.current = asked;
+      for (const k of ["add", "voice", "snap"]) params.delete(k);
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    }
+    const wants = shortcutRef.current;
     if (!wants) return;
-    for (const k of ["add", "voice", "snap"]) params.delete(k);
-    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
 
     // Deferred a tick so state set here lands after hydration, not inside it.
     const id = window.setTimeout(() => {
+      shortcutRef.current = null;
+      // In a sheet (a shortcut that landed off /today), come up first.
+      onActivate?.();
       if (wants === "add") inputRef.current?.focus();
       // A file picker needs a real tap in every browser; the mic sometimes does.
       else if (wants === "snap") setPrompt("snap");
@@ -439,12 +490,15 @@ export function QuickAdd({
   // An empty screen offers "Speak it" / "Type it"; they land here. Synchronous
   // with the click, so the mic still counts as user-initiated.
   const startVoiceRef = useRef<() => void>(() => {});
+  const activateRef = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
     startVoiceRef.current = startVoice;
+    activateRef.current = onActivate;
   });
   useEffect(() => {
     const onIntent = (e: Event) => {
       const intent = (e as CustomEvent<QuickAddIntent>).detail;
+      activateRef.current?.();
       inputRef.current?.scrollIntoView({ block: "nearest" });
       if (intent === "voice" && speechCtor() && !recRef.current) startVoiceRef.current();
       else inputRef.current?.focus();
@@ -456,6 +510,7 @@ export function QuickAdd({
     const onFill = (e: Event) => {
       const text = (e as CustomEvent<string>).detail;
       if (!inputRef.current || typeof text !== "string") return;
+      activateRef.current?.();
       inputRef.current.value = text;
       inputRef.current.focus();
     };
@@ -566,10 +621,12 @@ export function QuickAdd({
     });
   }
 
-  /** Escape backs out one level: the mic, then the review, then the text. */
+  /** Escape backs out one level: the photo menu, the mic, the review, then the text. */
   function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     if (e.key !== "Escape") return;
-    if (recRef.current) {
+    if (photoMenu) {
+      setPhotoMenu(false);
+    } else if (recRef.current) {
       recRef.current.abort();
     } else if (drafts) {
       reset();
@@ -585,7 +642,11 @@ export function QuickAdd({
 
   return (
     <div
-      className="opaque border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 pb-2.5 pt-3"
+      className={
+        variant === "sheet"
+          ? "px-3 pb-2.5 pt-1"
+          : "opaque border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 pb-2.5 pt-3"
+      }
       onKeyDown={onKeyDown}
     >
       <form ref={formRef} onSubmit={onSubmit}>
@@ -593,6 +654,7 @@ export function QuickAdd({
           <input
             ref={inputRef}
             name="title"
+            data-autofocus
             placeholder={
               listening
                 ? t("Listening…")
@@ -874,7 +936,8 @@ export function QuickAdd({
               onRemove={() => removeDraft(i)}
             />
           ))}
-          <div className="flex gap-2">
+          {/* Sticky: with several drafts, Save used to be below the fold. */}
+          <div className="draft-actions" data-inline={variant === "inline" ? "" : undefined}>
             <button onClick={saveDrafts} disabled={pending} className="btn btn-primary flex-1">
               {pending
                 ? t("Saving…")

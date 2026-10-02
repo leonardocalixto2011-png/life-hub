@@ -138,6 +138,8 @@ async function main() {
         dueDate: noon(d.due),
         remindDaysBefore: d.remind ?? [7, 3, 1],
         createdById: user.id,
+        // So deleting the trip takes its reminders with it.
+        tripId: trip.id,
       })),
     });
   });

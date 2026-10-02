@@ -116,7 +116,7 @@ export default async function FavoritesPage() {
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className={label}>
-              {t("Kind")}
+              {t("What it adds")}
               <select name="kind" defaultValue="BUDGET" className="field mt-1">
                 <option value="BUDGET">{t("Budget entry")}</option>
                 <option value="TASK">{t("Task")}</option>
@@ -128,7 +128,7 @@ export default async function FavoritesPage() {
               <input name="amount" inputMode="decimal" className="field mt-1" placeholder="60" />
             </label>
             <label className={label}>
-              {t("Type")}
+              {t("Expense or income")}
               <select name="entryType" defaultValue="EXPENSE" className="field mt-1">
                 <option value="EXPENSE">{t("Expense")}</option>
                 <option value="INCOME">{t("Income")}</option>
@@ -151,7 +151,7 @@ export default async function FavoritesPage() {
             <input name="category" maxLength={60} className="field mt-1" placeholder={t("Defaults to the name")} />
           </label>
           <p className="text-[0.68rem] text-[var(--color-text-dim)]">
-            {t("Budget favourites need an amount. Type only matters for budget entries.")}
+            {t("Budget favourites need an amount. “Expense or income” only matters for budget entries.")}
           </p>
           <SubmitButton className="btn btn-primary w-full">{t("Add favourite")}</SubmitButton>
         </ActionForm>

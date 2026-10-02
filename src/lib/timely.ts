@@ -3,7 +3,7 @@ import { differenceInCalendarDays, format, startOfDay } from "date-fns";
 import { DEBT_CONSENTED } from "@/lib/consent";
 import { prisma } from "@/lib/prisma";
 import { mapLimit } from "@/lib/async";
-import { sendPushToUser, type PushPayload } from "@/lib/push";
+import { sendPushToUser, viewAction, type PushPayload } from "@/lib/push";
 import { money } from "@/lib/format";
 import { fmt, fmtDay, langOf, translate, type Lang } from "@/lib/i18n";
 import { logInfo, reportError } from "@/lib/observability";
@@ -182,6 +182,9 @@ export function messageFor(c: Candidate, now: Date, lang: Lang, locale: string |
   const t = (k: string, v?: Record<string, string | number>) => translate(lang, k, v);
   const loc = locale ?? undefined;
   const tag = `${ENTITY_OF[c.kind]}-${c.entityId}-${c.daysBefore}`;
+  // None of these is a task (see the header), so there is nothing to tick
+  // from the notification — just a labelled way in.
+  const actions = viewAction(lang);
 
   if (c.kind === "event") {
     const mins = Math.max(1, Math.round((c.row.startAt.getTime() - now.getTime()) / 60_000));
@@ -191,6 +194,7 @@ export function messageFor(c: Candidate, now: Date, lang: Lang, locale: string |
       body: [c.row.location, c.row.hubName].filter(Boolean).join(" · "),
       url: `/calendar/${c.row.id}`,
       tag,
+      actions,
     };
   }
 
@@ -205,6 +209,7 @@ export function messageFor(c: Candidate, now: Date, lang: Lang, locale: string |
       }),
       url: `/subscriptions/${c.row.id}`,
       tag,
+      actions,
     };
   }
 
@@ -216,6 +221,7 @@ export function messageFor(c: Candidate, now: Date, lang: Lang, locale: string |
         : t("Due {date}", { date: fmtDay(c.row.dueDate, lang) }),
     url: `/debts/${c.row.id}`,
     tag,
+    actions,
   };
 }
 

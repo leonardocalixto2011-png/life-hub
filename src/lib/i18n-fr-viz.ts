@@ -11,7 +11,7 @@ export const FR_VIZ: Record<string, string> = {
   "{n} events": "{n} événement(s)",
   "{n} due": "{n} échéance(s)",
   "work, 6am – midnight": "travail, 6 h à minuit",
-  "In and out, last 6 months": "Entrées et sorties, 6 derniers mois",
+  "In and out, last 6 months": "Revenus et dépenses, 6 derniers mois",
   "See the numbers": "Voir les chiffres",
   "Month": "Mois",
 };

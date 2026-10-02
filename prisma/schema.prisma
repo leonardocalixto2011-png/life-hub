@@ -334,9 +334,16 @@ model Deadline {
   createdById      String
   createdBy        User       @relation(fields: [createdById], references: [id], onDelete: Restrict)
   doneAt           DateTime?
+  /// Set when a trip's plan created this deadline ("book the flights by…"),
+  /// so deleting the trip can take its reminders with it. Never set from a
+  /// form. SetNull, not Cascade: deleteTrip removes the open ones itself and a
+  /// deadline someone already ticked stays as a record, just unlinked.
+  tripId           String?
+  trip             Trip?      @relation(fields: [tripId], references: [id], onDelete: SetNull)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
+  @@index([tripId])
   // Every read filters doneAt: null and sorts by (doneAt, dueDate) — see
   // listDeadlines / dashboard / digest in lib/data.ts + lib/digest.ts.
   @@index([hubId, doneAt, dueDate])
@@ -794,7 +801,9 @@ model Trip {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  items TripItem[]
+  items     TripItem[]
+  /// Reminders its imported plan created — see Deadline.tripId.
+  deadlines Deadline[]
 
   @@index([hubId, startDate])
 }

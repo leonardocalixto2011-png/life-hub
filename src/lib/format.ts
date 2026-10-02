@@ -74,6 +74,32 @@ export function countdownLabel(date: Date, lang: Lang = "en"): string {
   return translate(lang, "in {n} days", { n: d });
 }
 
+/**
+ * "renews in 5 days" / "se renouvelle dans 5 jours". Whole phrases rather
+ * than a verb glued to countdownLabel(): French needs a different verb form
+ * once the date has passed ("renouvelé hier"), and the glued version produced
+ * "renouvelé dans 5 jours". Tomorrow and yesterday cover the singular, so the
+ * {n} forms are always plural.
+ */
+export function renewsLabel(date: Date, lang: Lang = "en"): string {
+  const d = daysUntil(date);
+  if (d === 0) return translate(lang, "renews today");
+  if (d === 1) return translate(lang, "renews tomorrow");
+  if (d === -1) return translate(lang, "renewed yesterday");
+  if (d < 0) return translate(lang, "renewed {n} days ago", { n: Math.abs(d) });
+  return translate(lang, "renews in {n} days", { n: d });
+}
+
+/** "cancel within 5 days" / "à annuler d'ici 5 jours" — same reasoning as renewsLabel. */
+export function cancelByLabel(date: Date, lang: Lang = "en"): string {
+  const d = daysUntil(date);
+  if (d === 0) return translate(lang, "cancel today");
+  if (d === 1) return translate(lang, "cancel by tomorrow");
+  if (d === -1) return translate(lang, "cancel-by date passed yesterday");
+  if (d < 0) return translate(lang, "cancel-by date passed {n} days ago", { n: Math.abs(d) });
+  return translate(lang, "cancel within {n} days", { n: d });
+}
+
 /** `<input type="date">` value (local calendar day). */
 export function toDateInput(date: Date | null | undefined): string {
   if (!date) return "";

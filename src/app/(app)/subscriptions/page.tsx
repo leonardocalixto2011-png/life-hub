@@ -7,7 +7,7 @@ import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { getLang, getT } from "@/lib/i18n-server";
 import type { Lang, T } from "@/lib/i18n";
-import { countdownLabel, daysUntil, money } from "@/lib/format";
+import { cancelByLabel, daysUntil, money, renewsLabel } from "@/lib/format";
 import { BILLING_LABEL, monthlyCents, yearlyCents } from "@/lib/money";
 import { VentureChip } from "@/components/VentureChip";
 import { Avatar } from "@/components/Avatar";
@@ -41,7 +41,7 @@ function Row({ s, t, lang, locale }: { s: SubscriptionWithRefs; t: T; lang: Lang
           {s.owner && <Avatar name={s.owner.name} size={18} />}
           {!cancelled && (
             <span className="text-[0.68rem] text-[var(--color-text-dim)]">
-              {t("renews")} {countdownLabel(s.renewalDate, lang)}
+              {renewsLabel(s.renewalDate, lang)}
             </span>
           )}
           {s.cancelByDate && !cancelled && (
@@ -53,7 +53,7 @@ function Row({ s, t, lang, locale }: { s: SubscriptionWithRefs; t: T; lang: Lang
                   : undefined
               }
             >
-              {t("cancel by")} {countdownLabel(s.cancelByDate, lang)}
+              {cancelByLabel(s.cancelByDate, lang)}
             </span>
           )}
         </div>

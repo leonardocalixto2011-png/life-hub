@@ -1,4 +1,6 @@
 import type { TripPlan } from "../trip-plan";
+import { withFrench } from "./localise";
+import { thailand2027Fr } from "./thailand-2027.fr";
 
 /**
  * One week in Thailand, March 11–20 2027, for two, from Montréal:
@@ -15,8 +17,14 @@ import type { TripPlan } from "../trip-plan";
  * and moves the trip's dates and budget, while anything a person changed or
  * ticked is left alone. Activities kept from v3 keep their title and date,
  * because import matches on title and never moves an existing row.
+ *
+ * The French lives in thailand-2027.fr.ts, keyed by the English titles below:
+ * rename one here and its key there has to follow (scripts/check-trip-plan.ts
+ * fails otherwise). Text that names a day ("for Tue Mar 16") is written for
+ * these dates; importing into a trip on other dates moves the rows but can't
+ * rewrite the sentence.
  */
-export const thailand2027: TripPlan = {
+const english: TripPlan = {
   budget: 4750,
   trip: {
     title: "Thailand, one week",
@@ -303,3 +311,5 @@ export const thailand2027: TripPlan = {
     { title: "Apply for the Vietnam e-visas", due: "2027-02-10" },
   ],
 };
+
+export const thailand2027: TripPlan = withFrench(english, thailand2027Fr);

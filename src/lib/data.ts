@@ -627,7 +627,15 @@ export type AgendaItem = {
   meta: string | null;
 };
 
-export async function agendaItems(tx: HubTx, hubId: string, userId: string, days = 30) {
+export async function agendaItems(
+  tx: HubTx,
+  hubId: string,
+  userId: string,
+  days = 30,
+  // How to write the amounts on renewal and payment rows. Without these a
+  // French reader got "$22.99" in the middle of a French page.
+  fmt: { currency?: string; locale?: string } = {},
+) {
   const now = new Date();
   const from = startOfDay(now);
   const to = endOfDay(new Date(now.getTime() + days * 864e5));
@@ -705,7 +713,7 @@ export async function agendaItems(tx: HubTx, hubId: string, userId: string, days
       href: `/subscriptions/${s.id}`,
       allDay: true,
       venture: s.venture,
-      meta: money(s.costCents, s.currency),
+      meta: money(s.costCents, s.currency, fmt.locale),
     })),
     ...debts.map((d): AgendaItem => ({
       kind: "debt",
@@ -717,7 +725,7 @@ export async function agendaItems(tx: HubTx, hubId: string, userId: string, days
       venture: d.venture,
       meta:
         d.actualPaymentCents ?? d.minimumPaymentCents
-          ? money(d.actualPaymentCents ?? d.minimumPaymentCents!)
+          ? money(d.actualPaymentCents ?? d.minimumPaymentCents!, fmt.currency, fmt.locale)
           : null,
     })),
   ];

@@ -4,7 +4,8 @@ import { headers } from "next/headers";
 import { AuthError } from "next-auth";
 import { z } from "zod";
 
-import { signIn } from "@/auth";
+import { signIn, signOut } from "@/auth";
+import { getUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { hashedKey, rateLimit } from "@/lib/rate-limit";
 import { signupsOpen } from "@/lib/signup";
@@ -64,4 +65,18 @@ export async function requestMagicLink(
   }
 
   return { sent: true };
+}
+
+/**
+ * Drops a session cookie that no longer maps to an account (the user was
+ * deleted, or the database was reseeded under a still-valid JWT). The proxy
+ * only checks that a JWT exists while every page needs the database row, so
+ * such a cookie used to bounce /today → /login → /today forever.
+ *
+ * Does nothing for a session that *does* resolve to a user: this action is
+ * callable by anyone, and must never be a way to sign a real person out.
+ */
+export async function clearStaleSession(): Promise<void> {
+  if (await getUser()) return;
+  await signOut({ redirect: false });
 }

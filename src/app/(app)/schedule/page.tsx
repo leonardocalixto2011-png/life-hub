@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { addDays, format, isSameDay, isValid, parse as parseDate } from "date-fns";
+import { addDays, format, isSameDay, isValid, parse as parseDate, startOfDay } from "date-fns";
 
 import { hubChrome } from "@/lib/data";
 import { freeWindows, listShifts, mondayOf, type ShiftRow } from "@/lib/plans";
@@ -45,6 +45,14 @@ export default async function SchedulePage({
 
   const hm = (d: Date) => fmtTime(d, lang);
   const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+  // This week opens on today, not on Monday: by Thursday the first three
+  // cards are days that are over, and the one you came for was a scroll away.
+  // The days already gone follow, under their own heading. Any other week
+  // (past or future) reads Monday to Sunday as before.
+  const today = startOfDay(now);
+  const isThisWeek = days.some((d) => isSameDay(d, today));
+  const ahead = isThisWeek ? days.filter((d) => d >= today) : days;
+  const behind = isThisWeek ? days.filter((d) => d < today) : [];
   const overlaps = (s: ShiftRow, day: Date) =>
     s.startAt < addDays(day, 1) && s.endAt > day;
 
@@ -57,15 +65,19 @@ export default async function SchedulePage({
 
   return (
     <div className="page">
-      <div className="flex items-baseline justify-between">
-        <h1 className="page-title">{t("Schedules")}</h1>
-        <Link href="/calendar" className="text-[0.7rem] font-semibold text-[var(--color-primary)]">
-          {t("Calendar")} →
-        </Link>
-      </div>
-      <p className="-mt-3 text-[0.68rem] text-[var(--color-text-dim)]">
-        {t("Everyone's work schedule side by side, and when you're free at the same time.")}
-      </p>
+      {/* One header block. The subtitle used to be a sibling pulled up with a
+          negative margin, which landed it on top of the title row. */}
+      <header className="page-header">
+        <div className="flex items-baseline justify-between gap-3">
+          <h1 className="page-title">{t("Schedules")}</h1>
+          <Link href="/calendar" className="section-link shrink-0">
+            {t("Calendar")} →
+          </Link>
+        </div>
+        <p className="page-sub">
+          {t("Everyone's work schedule side by side, and when you're free at the same time.")}
+        </p>
+      </header>
 
       <div className="flex items-center justify-between">
         <Link href={weekHref(addDays(monday, -7))} className="btn btn-ghost px-2" aria-label={t("Previous week")}>
@@ -88,11 +100,16 @@ export default async function SchedulePage({
         defaultFrom={format(monday, "yyyy-MM-dd")}
       />
 
-      {days.map((day) => {
+      {[...ahead, ...behind].map((day) => {
         const dayShifts = shifts.filter((s) => overlaps(s, day));
         const free = freeByDay.find((f) => isSameDay(f.date, day))?.free ?? [];
         return (
-          <section key={day.toISOString()}>
+          <section key={day.toISOString()} style={day < today && isThisWeek ? { opacity: 0.72 } : undefined}>
+            {behind.length > 0 && isSameDay(day, behind[0]) && (
+              <p className="mb-3 border-t border-[var(--color-border)] pt-4 text-xs font-semibold text-[var(--color-text-dim)]">
+                {t("Earlier this week")}
+              </p>
+            )}
             <h2 className="section-title">
               {isSameDay(day, now) ? t("Today") : fmtDay(day, lang)}
             </h2>
