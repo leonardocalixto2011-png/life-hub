@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Pencil, Trash2 } from "lucide-react";
 
 import { money } from "@/lib/format";
 import { fmtShort } from "@/lib/i18n";
 import { splitLabel } from "@/lib/couple";
 import { VentureChip } from "@/components/VentureChip";
 import { useLang, useT } from "@/components/I18nProvider";
-import { deleteEntry } from "./actions";
+import { deleteEntry, restoreEntry } from "./actions";
 import { EntryForm } from "./EntryForm";
 import type { BudgetEntryWithRefs } from "@/lib/data";
-import { SubmitButton } from "@/components/SubmitButton";
+import { showToast } from "@/components/Toast";
 import { personFirstName } from "@/lib/people";
 
 type Member = { id: string; name: string | null; email: string | null };
@@ -42,8 +44,44 @@ export function EntryRow({
 }) {
   const t = useT();
   const lang = useLang();
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
+  // Hidden the moment it's deleted; the server refresh then removes the row
+  // for real. Comes back if the delete fails.
+  const [gone, setGone] = useState(false);
+  const [, startTransition] = useTransition();
   const income = e.type === "INCOME";
+
+  /**
+   * Undo rather than "are you sure?": deleting a mistyped entry is the common
+   * case and shouldn't cost two taps, while a slip is one tap on the toast
+   * away from being put back exactly as it was (split and payer included).
+   */
+  function remove() {
+    setGone(true);
+    startTransition(async () => {
+      const r = await deleteEntry(e.id).catch(() => ({ ok: false as const, error: "Could not delete" }));
+      if (!r.ok) {
+        setGone(false);
+        showToast({ message: t(r.error) });
+        return;
+      }
+      showToast({
+        message: t("Entry deleted"),
+        actionLabel: t("Undo"),
+        onAction: () => {
+          void restoreEntry(r.snapshot)
+            .catch(() => ({ ok: false as const, error: "Could not undo" }))
+            .then((u) => {
+              if (!u.ok) showToast({ message: t(u.error) });
+              router.refresh();
+            });
+        },
+      });
+    });
+  }
+
+  if (gone) return null;
 
   if (editing) {
     return (
@@ -95,22 +133,29 @@ export function EntryRow({
           {income ? "+" : "−"}
           {money(e.amountCents, e.currency, locale)}
         </div>
-        <div className="mt-1 flex justify-end gap-3">
+        {/* Real buttons with a thumb-sized target; the negative margin keeps
+            the icons optically aligned with the amount above. */}
+        <div className="-mb-2 -mr-2 mt-0.5 flex justify-end">
           {!e.isSettlement && (
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline"
+              aria-label={t("Edit")}
+              title={t("Edit")}
+              className="grid h-9 w-9 place-items-center rounded-full text-[var(--color-text-dim)]"
             >
-              {t("edit")}
+              <Pencil size={15} strokeWidth={2} aria-hidden />
             </button>
           )}
-          <form action={deleteEntry}>
-            <input type="hidden" name="id" value={e.id} />
-            <SubmitButton className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline" pendingLabel="…">
-              {t("delete")}
-            </SubmitButton>
-          </form>
+          <button
+            type="button"
+            onClick={remove}
+            aria-label={t("Delete")}
+            title={t("Delete")}
+            className="grid h-9 w-9 place-items-center rounded-full text-[var(--color-text-dim)]"
+          >
+            <Trash2 size={15} strokeWidth={2} aria-hidden />
+          </button>
         </div>
       </div>
     </div>

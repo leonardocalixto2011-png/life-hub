@@ -7,6 +7,7 @@ import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { commitDrafts } from "@/app/(app)/quick-actions";
 import { commitDraftsCore } from "@/lib/commit-drafts";
+import { langOf } from "@/lib/i18n";
 import { muteSender, shouldOfferTrust, trustSender } from "@/lib/mail/trust";
 import type { ActionableCategory } from "@/lib/mail/classify";
 import type { Draft } from "@/lib/parse";
@@ -60,7 +61,7 @@ export async function acceptReview(id: string, rawDraft: Draft): Promise<AcceptR
   // accepting user currently has selected.
   if (item.hubId) {
     const result = await withHub(user.id, (tx) =>
-      commitDraftsCore(tx, item.hubId!, user.id, [draft]),
+      commitDraftsCore(tx, item.hubId!, user.id, [draft], langOf(user.locale)),
     );
     if (!result.ok) return { ok: false, error: result.error };
   } else {

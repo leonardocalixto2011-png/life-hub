@@ -1,7 +1,6 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { addWeeks } from "date-fns";
 import { z } from "zod";
 
 import type { HubTx } from "@/lib/hub-context";
@@ -12,67 +11,14 @@ import { dollarsToCents } from "@/lib/money";
 import { notifyAssignment } from "@/lib/notify";
 import { revalidateContent } from "@/lib/revalidate";
 import { assertActiveMember, assertVentureInHub } from "@/lib/membership";
-import { visibleTo } from "@/lib/visibility";
-import { addMonthsOnDay, anchorOf, sameDay } from "@/lib/recur";
+import { completeTask, dueFields, findScopedTask, scopedTask } from "@/lib/task-ops";
 import { blobUrlSchema } from "@/lib/blob-url";
 import { deleteBlobIfUnreferenced } from "@/lib/blob-delete";
 import { attachmentPrefix } from "@/lib/attachments";
 
-/**
- * Every write below goes by a client-supplied id. RLS already limits that to
- * the viewer's hubs and visible rows, but — as everywhere in this app — the
- * same rule is mirrored in app code so a missing/misconfigured app role can't
- * turn a bare id into access to another hub's (or someone's private) task.
- */
-function scoped(id: string, hubId: string, userId: string) {
-  return { id, hubId, ...visibleTo(userId) };
-}
-
-async function findScopedTask(tx: HubTx, id: string, hubId: string, userId: string) {
-  const task = await tx.task.findFirst({ where: scoped(id, hubId, userId) });
-  if (!task) throw new Error("Not found.");
-  return task;
-}
-
-/** A new due date, resetting the monthly anchor only if the day really changed. */
-function dueFields(before: Date | null, dueDate: Date | null) {
-  return sameDay(before, dueDate) ? { dueDate } : { dueDate, dueDay: null };
-}
-
-/**
- * Marking a recurring task done spawns its next occurrence: same fields, due date
- * advanced by the recurrence interval (from the old due date, or today).
- */
-async function completeTask(tx: HubTx, id: string, hubId: string, userId: string) {
-  const task = await findScopedTask(tx, id, hubId, userId);
-
-  await tx.task.update({
-    where: { id },
-    data: { status: "DONE", completedAt: new Date() },
-  });
-
-  if (task.isRecurring && task.recurrence) {
-    const base = task.dueDate ?? new Date();
-    const dueDay = task.recurrence === "weekly" ? null : anchorOf(base, task.dueDay);
-    const nextDue = dueDay == null ? addWeeks(base, 1) : addMonthsOnDay(base, 1, dueDay);
-    await tx.task.create({
-      data: {
-        title: task.title,
-        notes: task.notes,
-        hubId: task.hubId,
-        ventureId: task.ventureId,
-        assignedToId: task.assignedToId,
-        priority: task.priority,
-        isRecurring: true,
-        recurrence: task.recurrence,
-        dueDate: nextDue,
-        dueDay,
-        createdById: task.createdById,
-        visibility: task.visibility,
-      },
-    });
-  }
-}
+// The scoping + completion logic lives in lib/task-ops.ts, shared with the
+// notification-button route (/api/push/action).
+const scoped = scopedTask;
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -138,6 +84,8 @@ export async function createTask(formData: FormData) {
   }
 
   revalidateContent();
+  // The id lets quick-add offer "View" on the task it just made.
+  return { id: task.id };
 }
 
 export async function updateTask(formData: FormData) {

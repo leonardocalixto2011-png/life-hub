@@ -16,8 +16,20 @@ export function monthlyCents(costCents: number, cycle: BillingCycle): number {
   }
 }
 
+/** From the raw cycle, not the rounded monthly figure: $99.99/yr is $99.99, not $99.96. */
 export function yearlyCents(costCents: number, cycle: BillingCycle): number {
-  return monthlyCents(costCents, cycle) * 12;
+  switch (cycle) {
+    case "WEEKLY":
+      return costCents * 52;
+    case "QUARTERLY":
+      return costCents * 4;
+    case "YEARLY":
+      return costCents;
+    case "MONTHLY":
+    case "CUSTOM":
+    default:
+      return costCents * 12;
+  }
 }
 
 export const BILLING_LABEL: Record<BillingCycle, string> = {
@@ -79,6 +91,9 @@ export function percentToBasisPoints(value: string | null | undefined): number |
   if (value == null || value === "") return null;
   const n = parseDecimal(String(value));
   if (!Number.isFinite(n)) return null;
+  // A typo like "2599" would overflow Postgres Int and surface as a database
+  // error; no real rate is outside 0–1000%.
+  if (n < 0 || n > 1000) throw new Error("Enter an interest rate between 0 and 1000%");
   return Math.round(n * 100);
 }
 

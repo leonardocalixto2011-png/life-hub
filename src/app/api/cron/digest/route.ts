@@ -9,7 +9,7 @@ import { pruneRateLimits } from "@/lib/rate-limit";
 import { pruneReviewItems } from "@/lib/retention";
 import { dispatchReminders } from "@/lib/reminders";
 import { sendEmail } from "@/lib/email";
-import { sendPushToUser } from "@/lib/push";
+import { sendPushToUser, viewAction } from "@/lib/push";
 import {
   collectDigestForUser,
   digestHtml,
@@ -79,6 +79,7 @@ export async function GET(req: Request) {
         body,
         url: "/today",
         tag: "digest",
+        actions: viewAction(reader.lang),
       });
       if (r.sent > 0) pushed++;
     }

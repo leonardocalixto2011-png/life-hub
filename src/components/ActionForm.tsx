@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import type { ActionResult } from "@/lib/action-result";
 import { useT } from "@/components/I18nProvider";
 import { FormPending } from "@/components/SubmitButton";
+import { showToast } from "@/components/Toast";
 
 /**
  * A form for a server action that returns `{ error }` (see `formResult`).
@@ -41,6 +42,10 @@ export function ActionForm({
       } else {
         setError(null);
         form.reset();
+        // A toast, not a line under the form: a successful submit often
+        // re-renders the page around the form (or collapses the section it
+        // sits in), and a note in there would vanish with it.
+        if (res?.notice) showToast({ message: t(res.notice, res.noticeVars) });
       }
     });
   }

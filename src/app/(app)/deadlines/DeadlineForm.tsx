@@ -6,6 +6,7 @@ import { Trash2 } from "lucide-react";
 
 import { createDeadline, deleteDeadline, updateDeadline } from "./actions";
 import { DangerZone, FormSection } from "@/components/Form";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
 import { useT } from "@/components/I18nProvider";
 import type { T } from "@/lib/i18n";
@@ -119,10 +120,10 @@ export function DeadlineForm({
         <DangerZone>
           <form action={deleteDeadline}>
             <input type="hidden" name="id" value={existing.id} />
-            <SubmitButton className="btn btn-quiet-danger w-full" pendingLabel={t("Deleting…")}>
+            <ConfirmButton>
               <Trash2 size={16} strokeWidth={2} aria-hidden />
               {t("Delete deadline")}
-            </SubmitButton>
+            </ConfirmButton>
           </form>
         </DangerZone>
       </>

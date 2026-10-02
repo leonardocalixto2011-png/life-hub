@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { sendPushToUser } from "@/lib/push";
+import { sendPushToUser, taskActions } from "@/lib/push";
 import { langOf, translate } from "@/lib/i18n";
 
 /**
@@ -31,5 +31,8 @@ export async function notifyAssignment(
     }),
     url: `/tasks/${taskId}`,
     tag: `assign-${taskId}`,
+    // One task, so it can be answered from the notification itself.
+    taskId,
+    actions: taskActions(lang),
   });
 }

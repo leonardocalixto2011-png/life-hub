@@ -110,7 +110,7 @@ export async function commitDrafts(
   if (!list.success) return { ok: false, created: [], error: "Invalid draft data." };
 
   const result = await withHub(user.id, (tx) =>
-    commitDraftsCore(tx, hub.id, user.id, list.data),
+    commitDraftsCore(tx, hub.id, user.id, list.data, langOf(user.locale)),
   );
 
   if (!result.ok) return result;

@@ -6,7 +6,7 @@
  * guarantees the bytes differ, and skipWaiting + clients.claim below make the
  * new worker take over immediately instead of after every tab closes.
  */
-const SW_VERSION = "2026-09-29.1-share-expiry";
+const SW_VERSION = "2026-10-01.1-push-actions";
 
 /** Shared photos wait here between the POST and the /share page reading them. */
 const SHARE_CACHE = "lifehub-share-v1";
@@ -100,26 +100,69 @@ self.addEventListener("push", (event) => {
     badge: "/icons/icon-192.png",
     tag: data.tag || "life-hub",
     renotify: Boolean(data.tag),
-    data: { url: data.url || "/today" },
+    data: { url: data.url || "/today", taskId: data.taskId || null },
     vibrate: [80, 40, 80],
   };
+
+  // Buttons where the platform has them (Android, desktop). iOS has no
+  // `actions` at all — maxActions is undefined there — and simply gets the
+  // same notification without them. Never more than the platform will show.
+  const max = typeof Notification !== "undefined" && Notification.maxActions ? Notification.maxActions : 0;
+  if (max > 0 && Array.isArray(data.actions) && data.actions.length) {
+    options.actions = data.actions
+      .filter((a) => a && typeof a.action === "string" && typeof a.title === "string")
+      .slice(0, max)
+      .map((a) => ({ action: a.action, title: a.title }));
+  }
 
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+/** Bring the app to `target`: reuse an open window if there is one. */
+async function openApp(target) {
+  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const client of clients) {
+    if ("focus" in client) {
+      client.navigate(target).catch(() => {});
+      return client.focus();
+    }
+  }
+  return self.clients.openWindow(target);
+}
+
+/**
+ * "Done" / "Tomorrow" pressed on a task notification: do it without opening
+ * the app. The session cookie authenticates the request (same origin), so the
+ * push itself carries no secret. Anything other than a clean success — signed
+ * out, offline, task gone — opens the task instead, so the press is never
+ * silently lost.
+ */
+async function taskAction(action, taskId, fallbackUrl) {
+  try {
+    const res = await fetch("/api/push/action", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskId, action }),
+    });
+    if (!res.ok) return openApp(fallbackUrl);
+    // Any open window is now showing a stale list; ask it to refresh.
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const client of clients) client.postMessage({ type: "lh:refresh" });
+  } catch {
+    return openApp(fallbackUrl);
+  }
+}
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = (event.notification.data && event.notification.data.url) || "/today";
+  const data = event.notification.data || {};
+  const target = data.url || "/today";
 
-  event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if ("focus" in client) {
-          client.navigate(target).catch(() => {});
-          return client.focus();
-        }
-      }
-      return self.clients.openWindow(target);
-    }),
-  );
+  if ((event.action === "done" || event.action === "tomorrow") && data.taskId) {
+    event.waitUntil(taskAction(event.action, data.taskId, target));
+    return;
+  }
+  // The body, or the "view" button: both just open the thing.
+  event.waitUntil(openApp(target));
 });

@@ -41,7 +41,10 @@ export function DraftCard({
 
   return (
     <div className="card space-y-2 p-3">
-      <div className="flex items-center gap-2">
+      {/* Kind and discard share the top row; the title gets a row to itself.
+          Side by side on a 375px screen the title was left with about ten
+          characters, and it's the one thing here people need to read. */}
+      <div className="flex items-center justify-between gap-2">
         <select
           value={draft.kind}
           onChange={(e) => onChange({ kind: e.target.value as DraftKind })}
@@ -56,22 +59,22 @@ export function DraftCard({
             </option>
           ))}
         </select>
-        <input
-          value={draft.title}
-          onChange={(e) => onChange({ title: e.target.value })}
-          className="field flex-1"
-          aria-label={t("Title")}
-          disabled={isNeedsReply}
-        />
         <button
           type="button"
           onClick={onRemove}
           aria-label={t("Discard")}
-          className="btn btn-ghost btn-icon text-[var(--color-text-dim)]"
+          className="btn btn-ghost btn-icon -my-1 -mr-1 text-[var(--color-text-dim)]"
         >
           <X size={18} strokeWidth={2.25} aria-hidden />
         </button>
       </div>
+      <input
+        value={draft.title}
+        onChange={(e) => onChange({ title: e.target.value })}
+        className="field w-full"
+        aria-label={t("Title")}
+        disabled={isNeedsReply}
+      />
 
       {draft.imageUrl && draft.kind === "task" && (
         <div className="flex items-center gap-2">
@@ -103,7 +106,9 @@ export function DraftCard({
       ) : (
       <div className="grid grid-cols-2 gap-2">
         {draft.kind === "event" ? (
-          <label className="text-[0.7rem] font-semibold text-[var(--color-text-dim)]">
+          // Full width: half a 375px card is too narrow for a date *and* a
+          // time, and the control clipped the time off.
+          <label className="col-span-2 text-[0.7rem] font-semibold text-[var(--color-text-dim)]">
             {t(DATE_LABEL.event)}
             <input
               type="datetime-local"

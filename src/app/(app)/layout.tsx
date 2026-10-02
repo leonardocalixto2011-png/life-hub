@@ -7,7 +7,8 @@ import { requireHub, requireUser, listMyHubs, listPendingInvites } from "@/lib/s
 import { getT } from "@/lib/i18n-server";
 import { hubChrome } from "@/lib/data";
 import { money } from "@/lib/format";
-import { QuickAdd } from "@/components/QuickAdd";
+import { ComposerHost } from "@/components/ComposerHost";
+import { LiveRefresh } from "@/components/LiveRefresh";
 import { BottomNav } from "@/components/BottomNav";
 import { AccountMenu } from "@/components/AccountMenu";
 import { HubSwitcher } from "@/components/HubSwitcher";
@@ -79,6 +80,9 @@ export default async function AppLayout({
       )}
 
       <ServiceWorkerRegister />
+      {/* The reload an installed app doesn't have: refresh on return to the
+          foreground, and pull-to-refresh. */}
+      <LiveRefresh />
       {/* A hairline of the hub's colour across the top of the app. Small on
           purpose — enough to register when you switch hubs, not enough to
           fight the user's own theme. The header itself is deliberately NOT
@@ -109,7 +113,8 @@ export default async function AppLayout({
 
       {/* Everything from here sits above the scrim, not on the photo. */}
       <div className="relative z-10 flex flex-1 flex-col">
-        <QuickAdd
+        {/* In the page on /today; a "+" and a bottom sheet everywhere else. */}
+        <ComposerHost
           ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}
           members={members}
           defaultAssigneeId={user.id}

@@ -75,7 +75,7 @@ export default async function AgendaPage() {
   const [t, lang] = await Promise.all([getT(), getLang()]);
   const [{ now, items }, plans] = await withHub(user.id, (tx) =>
     Promise.all([
-      agendaItems(tx, hub.id, user.id, 30),
+      agendaItems(tx, hub.id, user.id, 30, { currency: hub.currency, locale: user.locale ?? undefined }),
       planItemsBetween(tx, hub, user.id, new Date(), addDays(startOfDay(new Date()), 30), lang),
     ]),
   );

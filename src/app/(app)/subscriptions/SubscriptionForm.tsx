@@ -10,6 +10,7 @@ import {
   updateSubscription,
 } from "./actions";
 import { DangerZone, FormSection } from "@/components/Form";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { useT } from "@/components/I18nProvider";
 import type { T } from "@/lib/i18n";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -189,10 +190,10 @@ export function SubscriptionForm({
         <DangerZone>
           <form action={deleteSubscription}>
             <input type="hidden" name="id" value={existing.id} />
-            <SubmitButton className="btn btn-quiet-danger w-full" pendingLabel={t("Deleting…")}>
+            <ConfirmButton>
               <Trash2 size={16} strokeWidth={2} aria-hidden />
               {t("Delete subscription")}
-            </SubmitButton>
+            </ConfirmButton>
           </form>
         </DangerZone>
       </>

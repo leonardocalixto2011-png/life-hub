@@ -1,6 +1,8 @@
 import "./viz.css";
+import "../interact.css";
 
-import { endOfMonth, isSameMonth, startOfMonth, subMonths } from "date-fns";
+import Link from "next/link";
+import { endOfMonth, format, isSameMonth, startOfMonth, subMonths } from "date-fns";
 
 import { withHub } from "@/lib/hub-context";
 import { fmt, translate, type Lang } from "@/lib/i18n";
@@ -17,10 +19,16 @@ function niceCeil(v: number): number {
 }
 
 /**
- * In vs out for the six months ending at the month being viewed — grouped
+ * In vs out for six months — grouped
  * columns on one axis (same unit, so no second scale), in the two leading
  * categorical slots. Totals follow `budgetMonth`'s rules exactly: same hub,
  * same venture filter, settle-ups excluded. Every value is in the table view.
+ *
+ * Each month is a link to that month, with the one being viewed highlighted.
+ * For that to read as "pick a month" the window has to hold still while you
+ * tap around in it, so it ends at the current month whenever the viewed month
+ * falls inside those six, and only follows the viewed month when it doesn't
+ * (further back, or in the future).
  */
 export async function BudgetTrend({
   userId,
@@ -40,8 +48,17 @@ export async function BudgetTrend({
   lang: Lang;
 }) {
   const t = (k: string, v?: Record<string, string | number>) => translate(lang, k, v);
-  const first = startOfMonth(subMonths(month, MONTHS - 1));
-  const last = endOfMonth(month);
+  const thisMonth = startOfMonth(new Date());
+  const viewed = startOfMonth(month);
+  const inWindow = viewed <= thisMonth && viewed >= subMonths(thisMonth, MONTHS - 1);
+  const end = inWindow ? thisMonth : viewed;
+  const first = startOfMonth(subMonths(end, MONTHS - 1));
+  const last = endOfMonth(end);
+  const monthHref = (m: Date) => {
+    const p = new URLSearchParams({ m: format(m, "yyyy-MM") });
+    if (ventureSlug) p.set("venture", ventureSlug);
+    return `/budget?${p.toString()}`;
+  };
 
   const rows = await withHub(userId, (tx) =>
     tx.budgetEntry.findMany({
@@ -56,7 +73,7 @@ export async function BudgetTrend({
   );
 
   const months = Array.from({ length: MONTHS }, (_, i) => {
-    const m = startOfMonth(subMonths(month, MONTHS - 1 - i));
+    const m = startOfMonth(subMonths(end, MONTHS - 1 - i));
     const inMonth = rows.filter((r) => isSameMonth(r.date, m));
     const income = inMonth.filter((r) => r.type === "INCOME").reduce((n, r) => n + r.amountCents, 0);
     const expense = inMonth.filter((r) => r.type === "EXPENSE").reduce((n, r) => n + r.amountCents, 0);
@@ -103,32 +120,51 @@ export async function BudgetTrend({
           {$short(top)}
         </span>
         <div className="absolute inset-0 grid grid-cols-6 items-end gap-2 border-b border-[var(--viz-axis)]">
-          {months.map((x) => (
-            <div key={x.m.toISOString()} className="flex h-full items-end justify-center gap-[2px]">
-              {series.map((s) => {
-                const v = x[s.key];
-                const tip = `${fmt(x.m, "MMM yyyy", lang)} · ${s.label} ${$(v)}`;
-                return (
+          {months.map((x) => {
+            const current = isSameMonth(x.m, month);
+            // One label per month — the link is the mark now, so the two
+            // columns inside it are decoration and the sentence carries both.
+            const tip = `${fmt(x.m, "MMMM yyyy", lang)} · ${t("in")} ${$(x.income)} · ${t("out")} ${$(x.expense)}`;
+            return (
+              <Link
+                key={x.m.toISOString()}
+                href={monthHref(x.m)}
+                // Stay where you are: the chart is the control, and a jump to
+                // the top after every tap would take it out from under the thumb.
+                scroll={false}
+                aria-label={tip}
+                aria-current={current ? "true" : undefined}
+                title={tip}
+                className="trend-col flex h-full items-end justify-center gap-[2px] px-0.5"
+              >
+                {series.map((s) => (
                   <span
                     key={s.key}
-                    tabIndex={0}
-                    role="img"
-                    aria-label={tip}
-                    data-tip={tip}
-                    className="viz-hit !relative block w-full max-w-3 rounded-t-[4px]"
-                    style={{ height: pct(v), background: s.color }}
+                    aria-hidden
+                    className="block w-full max-w-3 rounded-t-[4px]"
+                    style={{ height: pct(x[s.key]), background: s.color }}
                   />
-                );
-              })}
-            </div>
-          ))}
+                ))}
+              </Link>
+            );
+          })}
         </div>
       </div>
       <div className="mt-1 grid grid-cols-6 gap-2 text-center text-[0.6rem] text-[var(--viz-muted)]">
         {months.map((x) => (
-          <span key={x.m.toISOString()} className={isSameMonth(x.m, month) ? "font-bold text-[var(--color-text)]" : undefined}>
+          <Link
+            key={x.m.toISOString()}
+            href={monthHref(x.m)}
+            scroll={false}
+            // The column above is the labelled link; this is the same target,
+            // made taller, so it stays out of the tab order and the a11y tree.
+            tabIndex={-1}
+            aria-hidden
+            data-current={isSameMonth(x.m, month) ? "" : undefined}
+            className="trend-label -my-1 py-2"
+          >
             {fmt(x.m, "MMM", lang)}
-          </span>
+          </Link>
         ))}
       </div>
 

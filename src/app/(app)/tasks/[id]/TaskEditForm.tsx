@@ -4,6 +4,7 @@ import { Trash2 } from "lucide-react";
 
 import { deleteTask, updateTask } from "@/app/(app)/tasks/actions";
 import { DangerZone, FormSection } from "@/components/Form";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
 import { SubmitButton } from "@/components/SubmitButton";
 import { useT } from "@/components/I18nProvider";
@@ -128,10 +129,10 @@ export function TaskEditForm({
       <DangerZone>
         <form action={deleteTask}>
           <input type="hidden" name="id" value={task.id} />
-          <SubmitButton className="btn btn-quiet-danger w-full" pendingLabel={t("Deleting…")}>
+          <ConfirmButton>
             <Trash2 size={16} strokeWidth={2} aria-hidden />
             {t("Delete task")}
-          </SubmitButton>
+          </ConfirmButton>
         </form>
       </DangerZone>
     </>

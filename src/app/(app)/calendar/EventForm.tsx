@@ -6,6 +6,7 @@ import { Trash2 } from "lucide-react";
 
 import { createEvent, deleteEvent, deleteEventSeries, updateEvent } from "./actions";
 import { DangerZone, FormSection } from "@/components/Form";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
 import { SubmitButton } from "@/components/SubmitButton";
 import { useT } from "@/components/I18nProvider";
@@ -74,7 +75,9 @@ function Fields({
           />
         </label>
 
-        <div className="form-grid">
+        {/* One per row, not side by side: a datetime-local in half of a 375px
+            screen clips its own time, so you could not see what you'd picked. */}
+        <div className="form-stack">
           <label className="field-label">
             {t("Starts")}
             <input
@@ -190,19 +193,19 @@ export function EventForm({
         <DangerZone>
           <form action={deleteEvent}>
             <input type="hidden" name="id" value={existing.id} />
-            <SubmitButton className="btn btn-quiet-danger w-full" pendingLabel={t("Deleting…")}>
+            <ConfirmButton>
               <Trash2 size={16} strokeWidth={2} aria-hidden />
               {existing.recurrenceGroupId ? t("Delete just this one") : t("Delete event")}
-            </SubmitButton>
+            </ConfirmButton>
           </form>
           {existing.recurrenceGroupId && (
             <form action={deleteEventSeries}>
               <input type="hidden" name="recurrenceGroupId" value={existing.recurrenceGroupId} />
               <input type="hidden" name="fromDate" value={existing.startAt} />
-              <SubmitButton className="btn btn-quiet-danger w-full" pendingLabel={t("Deleting…")}>
+              <ConfirmButton confirmLabel={t("Delete this and every later one?")}>
                 <Trash2 size={16} strokeWidth={2} aria-hidden />
                 {t("Delete this and future")}
-              </SubmitButton>
+              </ConfirmButton>
             </form>
           )}
         </DangerZone>

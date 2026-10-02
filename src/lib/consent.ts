@@ -83,6 +83,10 @@ export async function grantConsentIn(
   opts: { fresh?: boolean } = {},
 ): Promise<void> {
   const h = scope(kind, hubId);
+  // A double tap runs two of these at once: both would see no active row and
+  // both insert. Serialise per (user, kind, hub) for the rest of the
+  // transaction; every caller passes a withHub transaction.
+  await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`consent:${userId}:${kind}:${h ?? ""}`}))`;
   if (opts.fresh) {
     await db.consent.updateMany({
       where: { userId, kind, hubId: h, revokedAt: null },

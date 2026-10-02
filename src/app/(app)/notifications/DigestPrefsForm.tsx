@@ -48,34 +48,22 @@ export function DigestPrefsForm({
         {t("Email me the daily digest")}
       </label>
 
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <label className="text-xs font-semibold text-[var(--color-text-dim)]">
-          {t("Preferred hour")}
-          <select
-            name="digestHour"
-            defaultValue={String(digestHour)}
-            className="field mt-1"
-          >
-            {Array.from({ length: 24 }, (_, h) => (
-              <option key={h} value={h}>
-                {String(h).padStart(2, "0")}:00
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="text-xs font-semibold text-[var(--color-text-dim)]">
-          {t("Time zone")}
-          <input
-            name="timezone"
-            value={tz}
-            onChange={(e) => setTz(e.target.value)}
-            className="field mt-1"
-          />
-        </label>
-      </div>
+      {/* No hour picker: the digest runs from one daily cron, so a "preferred
+          hour" control did nothing however it was set. The stored value rides
+          along unchanged for the day per-person timing exists. */}
+      <input type="hidden" name="digestHour" value={digestHour} />
+      <label className="mt-3 block text-xs font-semibold text-[var(--color-text-dim)]">
+        {t("Time zone")}
+        <input
+          name="timezone"
+          value={tz}
+          onChange={(e) => setTz(e.target.value)}
+          className="field mt-1"
+        />
+      </label>
 
       <p className="mt-2 text-[0.7rem] text-[var(--color-text-dim)]">
-        {t("Note: on the current hosting plan the digest is sent once daily at a fixed time for everyone — your preferred hour is saved for when per-user timing is enabled.")}
+        {t("The digest goes out once a day, in the morning, at the same time for everyone — the hour can't be chosen yet.")}
       </p>
 
       <SaveButton />

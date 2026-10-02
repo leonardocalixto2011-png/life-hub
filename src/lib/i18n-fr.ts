@@ -9,9 +9,11 @@
  * "courriel", "cellulaire", "vidange"… where they differ from France.
  */
 import { FR_VIZ } from "@/lib/i18n-fr-viz";
+import { FR_INTERACT } from "@/lib/i18n-fr-interact";
 
 export const FR: Record<string, string> = {
   ...FR_VIZ,
+  ...FR_INTERACT,
   // ---- navigation & chrome ------------------------------------------------
   "Today": "Aujourd'hui",
   "Tasks": "Tâches",
@@ -50,6 +52,11 @@ export const FR: Record<string, string> = {
   "Cancel": "Annuler",
   "Delete": "Supprimer",
   "delete": "supprimer",
+  "Edit": "Modifier",
+  "Confirm delete?": "Confirmer la suppression ?",
+  "Delete this and every later one?": "Supprimer celui-ci et tous les suivants ?",
+  "Delete the trip and its 1 item?": "Supprimer le voyage et son élément ?",
+  "Delete the trip and its {n} items?": "Supprimer le voyage et ses {n} éléments ?",
   "edit": "modifier",
   "remove": "retirer",
   "Done": "Terminé",
@@ -117,8 +124,10 @@ export const FR: Record<string, string> = {
   "Fri": "Ven",
   "Sat": "Sam",
   "Sun": "Dim",
-  "in": "entrées",
-  "out": "sorties",
+  // "revenus", not "entrées": on the budget page "Entrées" was also the
+  // heading of the list of entries, so one word meant two things.
+  "in": "revenus",
+  "out": "dépenses",
   "net": "net",
   "/mo": "/mois",
   "/wk": "/sem",
@@ -183,8 +192,19 @@ export const FR: Record<string, string> = {
   "Tasks this week": "Tâches de la semaine",
   "Upcoming deadlines": "Échéances à venir",
   "Subscriptions": "Abonnements",
-  "cancel by": "annuler avant",
-  "renews": "renouvelé",
+  // Whole phrases (see renewsLabel / cancelByLabel in lib/format.ts). The old
+  // "renews" + countdown pair came out as "renouvelé dans 5 jours". Tomorrow
+  // and yesterday are the singular; the {n} forms are always 2 or more.
+  "renews today": "se renouvelle aujourd'hui",
+  "renews tomorrow": "se renouvelle demain",
+  "renews in {n} days": "se renouvelle dans {n} jours",
+  "renewed yesterday": "renouvelé hier",
+  "renewed {n} days ago": "renouvelé il y a {n} jours",
+  "cancel today": "à annuler aujourd'hui",
+  "cancel by tomorrow": "à annuler d'ici demain",
+  "cancel within {n} days": "à annuler d'ici {n} jours",
+  "cancel-by date passed yesterday": "date limite d'annulation dépassée hier",
+  "cancel-by date passed {n} days ago": "date limite d'annulation dépassée il y a {n} jours",
   "Payments due": "Paiements à faire",
   "All debts": "Toutes les dettes",
 
@@ -398,7 +418,10 @@ export const FR: Record<string, string> = {
     "Fixe une limite mensuelle par catégorie — épicerie, sorties, cadeaux — et suis le mois.",
   "Remove {category} budget": "Retirer le budget {category}",
   "Where it went": "Où c'est allé",
-  "Entries": "Entrées",
+  "Entries": "Transactions",
+  "Entry deleted": "Transaction supprimée",
+  "Could not delete": "Impossible de supprimer",
+  "Could not undo": "Impossible d'annuler",
   "Nothing logged for {month}.": "Rien d'inscrit en {month}.",
   "Groceries": "Épicerie",
   "Restaurants": "Restaurants",
@@ -698,6 +721,32 @@ export const FR: Record<string, string> = {
   "Microsoft didn't return a refresh token — try connecting again.": "Microsoft n'a pas renvoyé de jeton d'actualisation — essaie de te reconnecter.",
   "Could not connect that mailbox.": "Impossible de connecter cette boîte courriel.",
   "Not found.": "Introuvable.",
+  // What quick-add reports back after creating things (lib/commit-drafts.ts).
+  "Task: {title}": "Tâche : {title}",
+  "Deadline: {title}": "Échéance : {title}",
+  "Event: {title}": "Événement : {title}",
+  "Subscription: {title}": "Abonnement : {title}",
+  "Updated subscription: {title}": "Abonnement mis à jour : {title}",
+  "Marked handled: {title}": "Marqué comme traité : {title}",
+  "Income: {title}": "Revenu : {title}",
+  "Expense: {title}": "Dépense : {title}",
+  "“{title}” needs an amount.": "« {title} » a besoin d'un montant.",
+  // ---- trips: labels that used to borrow another word's key ----------------
+  // "Travel" is the budget category (Voyages); a day between two stops is a
+  // different thing. Same for "Save" (the form button) vs a savings deposit.
+  "Travel day": "Déplacement",
+  "Deposit": "Dépôt",
+  "This plan is written for a trip starting {planStart}. Importing moves all its dates to match yours ({tripStart}).":
+    "Ce plan est écrit pour un voyage qui commence le {planStart}. L'importer déplace toutes ses dates pour suivre les tiennes ({tripStart}).",
+  "Plan imported. Its dates were moved to start on {date}, like your trip.":
+    "Plan importé. Ses dates ont été déplacées pour commencer le {date}, comme ton voyage.",
+  "Earlier this week": "Plus tôt cette semaine",
+  "What it adds": "Ce que ça ajoute",
+  "Expense or income": "Dépense ou revenu",
+  "Budget favourites need an amount. “Expense or income” only matters for budget entries.":
+    "Les favoris de budget ont besoin d'un montant. « Dépense ou revenu » compte seulement pour ceux du budget.",
+  "The digest goes out once a day, in the morning, at the same time for everyone — the hour can't be chosen yet.":
+    "Le résumé part une fois par jour, le matin, à la même heure pour tout le monde — l'heure ne peut pas encore être choisie.",
   "Forward mail to this hub": "Transférer des courriels vers ce hub",
   "Forward a bill or confirmation to this address and it lands in this hub's review inbox. Treat it like a password — anyone who has it can put items in here.":
     "Transfère une facture ou une confirmation à cette adresse et elle arrive dans la boîte de révision de ce hub. Traite-la comme un mot de passe — n'importe qui qui l'a peut ajouter des éléments ici.",

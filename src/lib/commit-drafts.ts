@@ -3,6 +3,7 @@ import { dollarsToCents } from "@/lib/money";
 import { fromDateInput, fromDateTimeInput } from "@/lib/format";
 import type { Draft } from "@/lib/parse";
 import { assertVentureInHub } from "@/lib/membership";
+import { translate, type Lang } from "@/lib/i18n";
 
 /** Draft amounts are typed by people ("4,50", "1 234,56"), so they go
  * through the same locale-aware parser as every form. */
@@ -22,14 +23,20 @@ export type CommitResult =
  * scheduler hitting /api/mail/poll, not a signed-in user clicking something.
  * Both that poller and the quick-add/review-inbox commitDrafts server action
  * call this with an explicit (tx, hubId, userId) instead.
+ *
+ * `lang` is for the `created` lines ("Task: …"), which quick-add shows to
+ * the person as they are. They are built here, so they are translated here;
+ * the poller has nobody to show them to and leaves the default.
  */
 export async function commitDraftsCore(
   tx: HubTx,
   hubId: string,
   userId: string,
   drafts: Draft[],
+  lang: Lang = "en",
 ): Promise<CommitResult> {
   const created: string[] = [];
+  const say = (key: string, title: string) => translate(lang, key, { title });
 
   // A draft's ventureId comes from the client (quick-add, review inbox) or a
   // classifier; either way it must name a venture of *this* hub before
@@ -46,7 +53,7 @@ export async function commitDraftsCore(
     if (d.kind === "needs_reply") {
       // Nothing to create — accepting one just marks its ReviewItem handled;
       // see acceptReview in inbox/actions.ts.
-      created.push(`Marked handled: ${d.title}`);
+      created.push(say("Marked handled: {title}", d.title));
     } else if (d.kind === "task") {
       await tx.task.create({
         data: {
@@ -62,7 +69,7 @@ export async function commitDraftsCore(
           visibility: d.visibility,
         },
       });
-      created.push(`Task: ${d.title}`);
+      created.push(say("Task: {title}", d.title));
     } else if (d.kind === "deadline") {
       await tx.deadline.create({
         data: {
@@ -75,7 +82,7 @@ export async function commitDraftsCore(
           visibility: d.visibility,
         },
       });
-      created.push(`Deadline: ${d.title}`);
+      created.push(say("Deadline: {title}", d.title));
     } else if (d.kind === "event") {
       const startAt = fromDateTimeInput(d.time) ?? fromDateInput(d.date) ?? new Date();
       await tx.event.create({
@@ -90,7 +97,7 @@ export async function commitDraftsCore(
           visibility: d.visibility,
         },
       });
-      created.push(`Event: ${d.title}`);
+      created.push(say("Event: {title}", d.title));
     } else if (d.kind === "subscription") {
       const existing = await tx.subscription.findFirst({
         where: { hubId, status: "ACTIVE", name: { equals: d.title, mode: "insensitive" } },
@@ -105,7 +112,7 @@ export async function commitDraftsCore(
             costCents: toCents(d.amount) ?? existing.costCents,
           },
         });
-        created.push(`Updated subscription: ${existing.name}`);
+        created.push(say("Updated subscription: {title}", existing.name));
       } else {
         await tx.subscription.create({
           data: {
@@ -119,12 +126,12 @@ export async function commitDraftsCore(
             notes: d.note,
           },
         });
-        created.push(`Subscription: ${d.title}`);
+        created.push(say("Subscription: {title}", d.title));
       }
     } else if (d.kind === "budget") {
       const cents = toCents(d.amount);
       if (cents == null || cents <= 0) {
-        return { ok: false, created, error: `"${d.title}" needs an amount.` };
+        return { ok: false, created, error: say("“{title}” needs an amount.", d.title) };
       }
       await tx.budgetEntry.create({
         data: {
@@ -138,7 +145,7 @@ export async function commitDraftsCore(
           createdById: userId,
         },
       });
-      created.push(`${d.entryType === "INCOME" ? "Income" : "Expense"}: ${d.title}`);
+      created.push(say(d.entryType === "INCOME" ? "Income: {title}" : "Expense: {title}", d.title));
     }
   }
 

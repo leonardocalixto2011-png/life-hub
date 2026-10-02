@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Figure } from "@/components/Figure";
-import { addMonths, endOfMonth, format, isValid, parse as parseDate, startOfMonth, subMonths } from "date-fns";
+import { addMonths, endOfMonth, format, isSameMonth, isValid, parse as parseDate, startOfMonth, subMonths } from "date-fns";
 
 import { budgetMonth, hubChrome, upcomingSummary } from "@/lib/data";
 import { BUDGET_CATEGORIES, sharedBalances } from "@/lib/couple";
@@ -86,6 +86,31 @@ export default async function BudgetPage({
     spentBy.set(key, (spentBy.get(key) ?? 0) + c.cents);
   }
 
+  // ---- the two answers people open this page for ---------------------------
+  // "What's left?" — every monthly limit, minus what was spent in those same
+  // categories. Hidden under a venture filter: limits are hub-wide, and
+  // subtracting one venture's spending from them would overstate what's left.
+  const targetTotal = targets.reduce((n, tg) => n + tg.monthlyCents, 0);
+  const targetSpent = targets.reduce((n, tg) => n + (spentBy.get(tg.category.toLowerCase()) ?? 0), 0);
+  const showLeft = targets.length > 0 && targetTotal > 0 && !sp.venture;
+  const leftCents = targetTotal - targetSpent;
+
+  // "Are we square?" — from the viewer's side, since that is how anyone
+  // actually asks it. Two people: a sentence with the other's name. More:
+  // just the viewer's own position (who-owes-whom isn't one sentence then).
+  const mine = balances.find((b) => b.userId === user.id);
+  const other = members.length === 2 ? members.find((m) => m.id !== user.id) : undefined;
+  const balanceLine =
+    !mine || mine.netCents === 0
+      ? null
+      : other
+        ? mine.netCents > 0
+          ? t("{name} owes you {amount}", { name: firstName(other), amount: $(mine.netCents) })
+          : t("You owe {name} {amount}", { name: firstName(other), amount: $(-mine.netCents) })
+        : mine.netCents > 0
+          ? t("You're owed {amount}", { amount: $(mine.netCents) })
+          : t("You owe {amount}", { amount: $(-mine.netCents) });
+
   return (
     <div className="page">
       <div className="flex items-end justify-between gap-3 px-1">
@@ -120,6 +145,58 @@ export default async function BudgetPage({
         </Link>
       </div>
 
+      {showLeft && (
+        <div className="card flex items-end justify-between gap-3 p-4">
+          <Figure
+            cents={leftCents}
+            currency={currency}
+            locale={locale}
+            size="lg"
+            align="left"
+            tone={leftCents < 0 ? "danger" : "neutral"}
+            label={
+              isSameMonth(month, new Date())
+                ? t("Left this month")
+                : t("Left for {month}", { month: fmt(month, "MMMM", lang) })
+            }
+          />
+          <div className="min-w-0 flex-1 pb-0.5 text-right">
+            <div className="ml-auto h-1.5 max-w-[9rem] rounded-full bg-[var(--color-surface-2)]">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${Math.max(3, Math.min(100, (targetSpent / targetTotal) * 100))}%`,
+                  background:
+                    leftCents < 0
+                      ? "var(--color-danger)"
+                      : targetSpent / targetTotal > 0.85
+                        ? "var(--color-warn)"
+                        : "var(--color-ok)",
+                }}
+              />
+            </div>
+            <div className="mt-1.5 text-[0.6875rem] tabular-nums text-[var(--color-text-dim)]">
+              {t("{spent} spent of {total} budgeted", { spent: $(targetSpent), total: $(targetTotal) })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {balanceLine && mine && (
+        <div className="card flex min-h-[52px] items-center justify-between gap-3 py-2 pl-4 pr-2">
+          <span
+            className="min-w-0 text-sm font-semibold"
+            style={{ color: mine.netCents < 0 ? "var(--color-danger)" : undefined }}
+          >
+            {balanceLine}
+          </span>
+          {/* The settle-up form already exists further down; this is the way to it. */}
+          <a href="#settle" className="btn btn-secondary shrink-0 text-xs">
+            {other ? t("Settle") : t("Details")}
+          </a>
+        </div>
+      )}
+
       {/* Net is the answer to the question this page exists to ask, so it is
           the one figure at `lg`; in and out are its working. */}
       <div className="card grid grid-cols-3 divide-x divide-[var(--color-border)] p-0">
@@ -145,7 +222,7 @@ export default async function BudgetPage({
       />
 
       {members.length > 1 && (
-        <section>
+        <section id="settle" className="scroll-mt-20">
           <h2 className="section-title">
             {t("Shared expenses")}
           </h2>

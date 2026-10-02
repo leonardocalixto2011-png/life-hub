@@ -116,14 +116,114 @@ export async function updateEntry(fd: FormData) {
   revalidateContent();
 }
 
-export async function deleteEntry(fd: FormData) {
+/**
+ * Everything needed to put a deleted entry back, read from the database at the
+ * moment it is deleted. The row's Undo hands it back to `restoreEntry`.
+ */
+const snapshotSchema = z.object({
+  hubId: z.string().cuid(),
+  type: z.enum(["INCOME", "EXPENSE"]),
+  amountCents: z.number().int().positive().max(100_000_000),
+  currency: z.string().length(3),
+  category: z.string().trim().min(1).max(60),
+  ventureId: z.string().cuid().nullable(),
+  description: z.string().max(500).nullable(),
+  date: z.coerce.date(),
+  paidById: z.string().cuid().nullable(),
+  payerSharePct: z.number().int().min(0).max(100).nullable(),
+  isSettlement: z.boolean(),
+});
+export type EntrySnapshot = z.infer<typeof snapshotSchema>;
+
+/**
+ * Deletes an entry and returns what it held, so the toast can offer Undo
+ * instead of the row asking "are you sure?" every time. The hub is part of
+ * every match: an id from another hub must not be deletable from here.
+ */
+export async function deleteEntry(
+  id: string,
+): Promise<{ ok: true; snapshot: EntrySnapshot } | { ok: false; error: string }> {
   const { user, hub } = await requireHub();
-  const id = z.string().cuid().parse(fd.get("id"));
-  const { count } = await withHub(user.id, (tx) =>
-    tx.budgetEntry.deleteMany({ where: { id, hubId: hub.id } }),
-  );
-  if (count === 0) throw new Error("Not found.");
+  const parsed = z.string().cuid().safeParse(id);
+  if (!parsed.success) return { ok: false, error: "Not found." };
+  const snapshot = await withHub(user.id, async (tx) => {
+    const row = await tx.budgetEntry.findFirst({
+      where: { id: parsed.data, hubId: hub.id },
+      select: {
+        hubId: true,
+        type: true,
+        amountCents: true,
+        currency: true,
+        category: true,
+        ventureId: true,
+        description: true,
+        date: true,
+        paidById: true,
+        payerSharePct: true,
+        isSettlement: true,
+      },
+    });
+    if (!row) return null;
+    await tx.budgetEntry.deleteMany({ where: { id: parsed.data, hubId: hub.id } });
+    return row;
+  });
+  if (!snapshot) return { ok: false, error: "Not found." };
   revalidateContent();
+  return { ok: true, snapshot };
+}
+
+/**
+ * Undo for `deleteEntry`: writes the entry back with the same fields,
+ * shared-expense split included. The snapshot comes back from the browser, so
+ * it is treated like any other input — validated, written into the *current*
+ * hub only, with the venture and payer re-checked against that hub. The
+ * restored row gets a new id and the restorer as its author.
+ */
+export async function restoreEntry(
+  input: z.input<typeof snapshotSchema>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { user, hub } = await requireHub();
+  const p = snapshotSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: "Could not undo" };
+  const d = p.data;
+  // Switched hub in another tab since the delete: put it back where it was
+  // or not at all, never into whichever hub is open now.
+  if (d.hubId !== hub.id) return { ok: false, error: "Could not undo" };
+  // A venture deleted in the meantime shouldn't block getting the entry back.
+  let ventureId = d.ventureId;
+  try {
+    await assertVentureInHub(hub.id, ventureId);
+  } catch {
+    ventureId = null;
+  }
+  try {
+    if (d.paidById && d.paidById !== user.id) await assertMember(hub.id, d.paidById);
+  } catch {
+    return { ok: false, error: "Could not undo" };
+  }
+  // A split or a settle-up only means something on an expense someone paid.
+  const shared = d.type === "EXPENSE" && d.paidById != null;
+
+  await withHub(user.id, (tx) =>
+    tx.budgetEntry.create({
+      data: {
+        hubId: hub.id,
+        type: d.type,
+        amountCents: d.amountCents,
+        currency: d.currency.toUpperCase(),
+        category: d.category,
+        ventureId,
+        description: d.description,
+        date: d.date,
+        createdById: user.id,
+        paidById: d.paidById,
+        payerSharePct: shared ? d.payerSharePct : null,
+        isSettlement: shared ? d.isSettlement : false,
+      },
+    }),
+  );
+  revalidateContent();
+  return { ok: true };
 }
 
 /**

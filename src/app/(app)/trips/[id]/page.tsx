@@ -11,13 +11,14 @@ import { fmt } from "@/lib/i18n";
 import type { T } from "@/lib/i18n";
 import { countdownLabel, initials, money, toDateInput } from "@/lib/format";
 import { centsToInput } from "@/lib/money";
-import { TRIP_TEMPLATES } from "@/lib/trip-plan";
+import { noon, planShiftDays, planStartDay, planTripPatch, TRIP_TEMPLATES } from "@/lib/trip-plan";
 import { Figure } from "@/components/Figure";
 import { TripForm } from "../TripForm";
 import { addTripItem, addTripSavings, deleteTrip, deleteTripItem, importTripPlan, toggleTripItem } from "../actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ActionForm } from "@/components/ActionForm";
 import { DangerZone, FormSection } from "@/components/Form";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { personName } from "@/lib/people";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,9 @@ const CHECKLISTS = [
 const TAG: Record<string, { label: string; color: string }> = {
   BOOK: { label: "Book", color: "#D9821A" },
   TODO: { label: "To do", color: "#0E7C7B" },
-  SAVE: { label: "Save", color: "var(--color-ok)" },
+  // "Deposit", not "Save": "Save" is already the button that saves a form,
+  // and in French the two are different words (Enregistrer / Dépôt).
+  SAVE: { label: "Deposit", color: "var(--color-ok)" },
 };
 
 type Item = {
@@ -163,6 +166,18 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
   const add = addTripItem.bind(null, trip.id);
   const save = addTripSavings.bind(null, trip.id);
   const importPlan = importTripPlan.bind(null, trip.id);
+  // Templates whose dates would be moved on import — the same sum the action does.
+  const shifted = Object.entries(TRIP_TEMPLATES).flatMap(([key, tpl]) => {
+    const patch = planTripPatch(tpl.plan, trip);
+    const days = planShiftDays(tpl.plan, {
+      startDate: patch.startDate ?? trip.startDate,
+      endDate: patch.endDate ?? trip.endDate,
+    });
+    const planStart = planStartDay(tpl.plan);
+    return days !== 0 && planStart
+      ? [{ key, label: lang === "fr" ? (tpl.labelFr ?? tpl.label) : tpl.label, planStart }]
+      : [];
+  });
 
   const Row = ({ i, showDate }: { i: Item; showDate?: boolean }) => {
     const who = i.assignedToId ? memberName.get(i.assignedToId) : null;
@@ -339,7 +354,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                     style={{
                       background: s ? colorOf.get(s.id) : "var(--color-surface-2)",
                     }}
-                    title={s?.title ?? t("Travel")}
+                    title={s?.title ?? t("Travel day")}
                   />
                   <span className="text-[0.55rem] leading-tight text-[var(--color-text-dim)]">{format(d, "d")}</span>
                 </div>
@@ -394,7 +409,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                         color: s ? colorOf.get(s.id) : "var(--color-text-dim)",
                       }}
                     >
-                      {s?.title ?? t("Travel")}
+                      {s?.title ?? t("Travel day")}
                     </span>
                   </div>
                   {list.length === 0 ? (
@@ -695,11 +710,22 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                 <option value="">{t("Ready-made plan…")}</option>
                 {Object.entries(TRIP_TEMPLATES).map(([key, tpl]) => (
                   <option key={key} value={key}>
-                    {tpl.label}
+                    {lang === "fr" ? (tpl.labelFr ?? tpl.label) : tpl.label}
                   </option>
                 ))}
               </select>
             </label>
+            {/* Said before importing, not only after: a plan written for other
+                dates is moved onto this trip's, and that should be no surprise. */}
+            {shifted.map((s) => (
+              <p key={s.key} className="field-hint mt-0">
+                {Object.keys(TRIP_TEMPLATES).length > 1 ? `${s.label} — ` : ""}
+                {t("This plan is written for a trip starting {planStart}. Importing moves all its dates to match yours ({tripStart}).", {
+                  planStart: fmt(noon(s.planStart), dayFmt, lang),
+                  tripStart: fmt(trip.startDate, dayFmt, lang),
+                })}
+              </p>
+            ))}
             <SubmitButton className="btn btn-secondary w-full">{t("Import")}</SubmitButton>
           </ActionForm>
           <ActionForm action={importPlan} className="form-card">
@@ -740,10 +766,20 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       <DangerZone>
         <form action={deleteTrip}>
           <input type="hidden" name="id" value={trip.id} />
-          <SubmitButton className="btn btn-quiet-danger w-full" pendingLabel={t("Deleting…")}>
+          {/* Names what goes with it: a trip is the one delete here that takes
+              dozens of rows (and its reminders) along. */}
+          <ConfirmButton
+            confirmLabel={
+              items.length === 0
+                ? undefined
+                : items.length === 1
+                  ? t("Delete the trip and its 1 item?")
+                  : t("Delete the trip and its {n} items?", { n: items.length })
+            }
+          >
             <Trash2 size={16} strokeWidth={2} aria-hidden />
             {t("Delete trip")}
-          </SubmitButton>
+          </ConfirmButton>
         </form>
       </DangerZone>
     </div>
