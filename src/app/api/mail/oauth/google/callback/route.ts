@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { hasConsent } from "@/lib/consent";
 import { encrypt } from "@/lib/mail/crypto";
 import { exchangeCode, getUserEmail } from "@/lib/mail/google";
 import { OAUTH_STATE_COOKIE } from "@/lib/mail/constants";
@@ -34,6 +35,12 @@ export async function GET(req: Request) {
   }
 
   const { user, hub } = await requireHub();
+
+  // The connect buttons are already gated on this; checked again here because
+  // this route is reachable directly and is what actually stores the tokens.
+  if (!(await hasConsent(user.id, "MAIL_AI", hub.id))) {
+    return redirectToMail(req, { error: "Turn on AI analysis for this hub first." });
+  }
 
   try {
     const tokens = await exchangeCode(code);

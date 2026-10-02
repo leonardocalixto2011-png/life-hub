@@ -1,4 +1,4 @@
-import { LogOut, Send, UserMinus, UserPlus } from "lucide-react";
+import { Eye, EyeOff, LogOut, Send, UserMinus, UserPlus } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { requireHub } from "@/lib/session";
@@ -13,8 +13,11 @@ import {
   inviteMember,
   leaveHub,
   removeMember,
+  setShowEmail,
   setShowOccasions,
 } from "../../actions";
+import { listHubRoster } from "@/lib/data";
+import { personName } from "@/lib/people";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PageHeader, SectionHeader } from "@/components/SectionHeader";
 import { DangerZone, FormSection } from "@/components/Form";
@@ -47,13 +50,12 @@ export default async function HubMembersPage({
   const [hub, members, known] = await Promise.all([
     prisma.hub.findUniqueOrThrow({
       where: { id: hubId },
-      include: { coverBy: { select: { name: true, email: true } } },
+      include: { coverBy: { select: { name: true } } },
     }),
-    prisma.hubMembership.findMany({
-      where: { hubId },
-      include: { user: { select: { id: true, name: true, email: true } } },
-      orderBy: [{ status: "asc" }, { role: "asc" }, { joinedAt: "asc" }],
-    }),
+    // Other members' email addresses are stripped in here: a member sees
+    // names only, plus an address for themself, for anyone who chose to show
+    // theirs in this hub, and — owner only — for pending invites.
+    listHubRoster(user.id, hubId, { includeInvited: true }),
     // People the owner may add without an email round-trip: everyone, for an
     // app ADMIN (they admitted every account); otherwise people they already
     // share another hub with. Same rule addKnownMember enforces server-side —
@@ -76,7 +78,24 @@ export default async function HubMembersPage({
               none: { hubId, status: "ACTIVE" },
             },
           },
-          select: { id: true, name: true, email: true },
+          // An address only where the owner could not otherwise tell people
+          // apart: the app ADMIN, who admitted every account by its address,
+          // sees it; anyone else sees it only for a person who chose to show
+          // their email in a hub the two of them share.
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            hubMemberships: {
+              where: {
+                status: "ACTIVE",
+                showEmail: true,
+                hub: { memberships: { some: { userId: user.id, status: "ACTIVE" } } },
+              },
+              select: { id: true },
+              take: 1,
+            },
+          },
           orderBy: { name: "asc" },
         })
       : Promise.resolve([]),
@@ -85,6 +104,11 @@ export default async function HubMembersPage({
   // First name only — the credit is a friendly touch, not a directory entry.
   const coverBy = hub.coverBy?.name?.split(" ")[0] ?? null;
   const activeCount = members.filter((m) => m.status === "ACTIVE").length;
+  const me = members.find((m) => m.id === user.id);
+  const knownPeople = known.map((k) => {
+    const email = user.role === "ADMIN" || k.hubMemberships.length > 0 ? k.email : null;
+    return { id: k.id, label: k.name ? (email ? `${k.name} (${email})` : k.name) : (email ?? t("Member")) };
+  });
 
   return (
     <div className="page">
@@ -108,21 +132,25 @@ export default async function HubMembersPage({
         <SectionHeader title={t("Members")} />
         <div className="list">
           {members.map((m) => (
-            <div key={m.id} className="row pr-2">
-              <Avatar name={m.user.name} email={m.user.email} size={32} />
+            <div key={m.membershipId} className="row pr-2">
+              <Avatar name={m.name} email={m.email} size={32} />
               <div className="row-main">
-                <span className="row-title">{m.user.name ?? m.user.email}</span>
+                <span className="row-title">{personName(m, t("Member"))}</span>
                 <span className="row-sub">
-                  {m.role === "OWNER" ? t("Owner") : t("Member")}
+                  {m.hubRole === "OWNER" ? t("Owner") : t("Member")}
                   {m.status === "INVITED" ? ` · ${t("invited")}` : ""}
+                  {m.id === user.id ? ` · ${t("you")}` : ""}
                 </span>
+                {/* Shown only when the roster handed one over — and never as a
+                    second copy of a name that is already the address. */}
+                {m.email && m.name && <span className="row-sub break-all">{m.email}</span>}
               </div>
-              {isOwner && m.user.id !== user.id && (
-                <form action={removeMember.bind(null, hubId, m.user.id)}>
+              {isOwner && m.id !== user.id && (
+                <form action={removeMember.bind(null, hubId, m.id)}>
                   <SubmitButton
                     className="btn btn-ghost btn-sm text-[var(--color-text-dim)]"
                     pendingLabel="…"
-                    aria-label={t("Remove {name}", { name: m.user.name ?? m.user.email ?? "" })}
+                    aria-label={t("Remove {name}", { name: personName(m, t("Member")) })}
                   >
                     <UserMinus size={14} strokeWidth={2} aria-hidden />
                     {t("remove")}
@@ -134,9 +162,41 @@ export default async function HubMembersPage({
         </div>
       </section>
 
+      {me && (
+        <FormSection title={t("Your email in this hub")}>
+          <form
+            action={setShowEmail.bind(null, hubId, !me.showEmail)}
+            className="flex items-center justify-between gap-3"
+          >
+            <div className="min-w-0">
+              <div className="text-sm font-semibold">{t("Show my email to the members of this hub")}</div>
+              <div className="field-hint mt-0.5">
+                {me.showEmail
+                  ? t("On: the members of {hub} can see {email}.", { hub: hub.name, email: user.email })
+                  : t("Off: the other members see your name only. Your choice applies to this hub alone.")}
+              </div>
+            </div>
+            <SubmitButton
+              className={`btn btn-sm shrink-0 ${me.showEmail ? "btn-primary" : "btn-secondary"}`}
+              pendingLabel="…"
+              aria-pressed={me.showEmail}
+              aria-label={t("Show my email to the members of this hub")}
+            >
+              {me.showEmail ? <Eye size={14} strokeWidth={2} aria-hidden /> : <EyeOff size={14} strokeWidth={2} aria-hidden />}
+              {me.showEmail ? t("On") : t("Off")}
+            </SubmitButton>
+          </form>
+          {!user.name && (
+            <p className="field-hint mt-0">
+              {t("You have no name on file, so the others see you as “Member”. Add one under Your account.")}
+            </p>
+          )}
+        </FormSection>
+      )}
+
       {isOwner && (
         <FormSection title={t("Invite")}>
-          {known.length > 0 && (
+          {knownPeople.length > 0 && (
             <form action={addKnownMember.bind(null, hubId)} className="form-stack border-b border-[var(--color-border)] pb-4">
               <label className="field-label">
                 {t("Invite someone already on Life Hub")}
@@ -144,9 +204,9 @@ export default async function HubMembersPage({
                   <option value="" disabled>
                     {t("Pick a person…")}
                   </option>
-                  {known.map((k) => (
+                  {knownPeople.map((k) => (
                     <option key={k.id} value={k.id}>
-                      {k.name ? `${k.name} (${k.email})` : k.email}
+                      {k.label}
                     </option>
                   ))}
                 </select>

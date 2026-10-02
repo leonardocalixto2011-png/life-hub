@@ -12,7 +12,8 @@ export async function notifyAssignment(
   taskId: string,
   title: string,
   assigneeId: string,
-  actorName: string,
+  /** The assigner's display name. Null = no name on file; never pass an email. */
+  actorName: string | null,
 ) {
   const [pref, assignee] = await Promise.all([
     prisma.notificationPreference.findUnique({ where: { userId: assigneeId } }),
@@ -23,7 +24,11 @@ export async function notifyAssignment(
   const lang = langOf(assignee?.locale);
   await sendPushToUser(assigneeId, {
     title: translate(lang, "Assigned to you"),
-    body: translate(lang, "{actor} assigned you \"{title}\"", { actor: actorName, title }),
+    body: translate(lang, "{actor} assigned you \"{title}\"", {
+      // A notification lands on a lock screen: the assigner's address stays out of it.
+      actor: actorName?.trim() || translate(lang, "Someone"),
+      title,
+    }),
     url: `/tasks/${taskId}`,
     tag: `assign-${taskId}`,
   });

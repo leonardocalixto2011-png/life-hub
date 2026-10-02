@@ -47,7 +47,7 @@ export async function createShifts(fd: FormData) {
   // HubMembership policy is self-only), so this check uses the trusted client.
   const member = await prisma.hubMembership.findFirst({
     where: { hubId: hub.id, userId: d.personId, status: "ACTIVE" },
-    select: { user: { select: { name: true, email: true } } },
+    select: { user: { select: { name: true } } },
   });
   if (!member) throw new Error("That person isn't a member of this hub.");
 
@@ -66,7 +66,8 @@ export async function createShifts(fd: FormData) {
   if (days.length === 0) throw new Error("No matching days in that range.");
   if (days.length > MAX_SHIFTS) throw new Error("That's too many shifts at once.");
 
-  const firstName = (member.user.name ?? member.user.email ?? "").split(/[\s@]/)[0];
+  // Name only: a shift's title is visible to the whole hub.
+  const firstName = (member.user.name ?? "").trim().split(/\s+/)[0];
   const title = d.label ?? (firstName ? `Work — ${firstName}` : "Work");
   const recurrenceGroupId = days.length > 1 ? randomBytes(12).toString("hex") : null;
 

@@ -13,6 +13,7 @@ import { DangerZone, FormSection } from "@/components/Form";
 import { useT } from "@/components/I18nProvider";
 import type { T } from "@/lib/i18n";
 import { SubmitButton } from "@/components/SubmitButton";
+import { personName } from "@/lib/people";
 
 type Opt = { id: string; name: string | null; email?: string | null };
 
@@ -64,7 +65,7 @@ function MoreFields({
             <option value="">{t("— (no owner)")}</option>
             {members.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.name ?? m.email}
+                {personName(m, t("Member"))}
               </option>
             ))}
           </select>

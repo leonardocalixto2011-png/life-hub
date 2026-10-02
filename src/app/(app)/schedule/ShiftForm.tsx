@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createShifts } from "./actions";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
 import { useT } from "@/components/I18nProvider";
+import { personName } from "@/lib/people";
 
 type Member = { id: string; name: string | null; email: string | null };
 
@@ -69,7 +70,7 @@ export function ShiftForm({
           <select name="personId" defaultValue={currentUserId} className="field mt-1">
             {members.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.name ?? m.email}
+                {personName(m, t("Member"))}
               </option>
             ))}
           </select>

@@ -14,6 +14,7 @@ import { peopleOf } from "@/components/viz/people";
 import { ShiftForm } from "./ShiftForm";
 import { deleteShift, deleteShiftSeries } from "./actions";
 import { SubmitButton } from "@/components/SubmitButton";
+import { personName } from "@/lib/people";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ export default async function SchedulePage({
     s.startAt < addDays(day, 1) && s.endAt > day;
 
   const weekHref = (d: Date) => `/schedule?w=${format(d, "yyyy-MM-dd")}`;
-  const people = peopleOf(members);
+  const people = peopleOf(members, t("Member"));
   const freeByDay = days.map((day) => {
     const free = members.length > 1 ? freeWindows(day, shifts.filter((s) => overlaps(s, day))) : [];
     return { date: day, free, freeMinutes: free.reduce((n, w) => n + (w.end.getTime() - w.start.getTime()) / 60000, 0) };
@@ -105,7 +106,7 @@ export default async function SchedulePage({
                   <div key={m.id} className="flex items-start gap-2.5 px-3 py-2">
                     <Avatar name={m.name} email={m.email} size={22} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-semibold">{m.name ?? m.email}</div>
+                      <div className="truncate text-xs font-semibold">{personName(m, t("Member"))}</div>
                       {mine.length === 0 ? (
                         <div className="text-[0.72rem] text-[var(--color-ok)]">{t("Free")}</div>
                       ) : (

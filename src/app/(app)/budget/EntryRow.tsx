@@ -11,6 +11,7 @@ import { deleteEntry } from "./actions";
 import { EntryForm } from "./EntryForm";
 import type { BudgetEntryWithRefs } from "@/lib/data";
 import { SubmitButton } from "@/components/SubmitButton";
+import { personFirstName } from "@/lib/people";
 
 type Member = { id: string; name: string | null; email: string | null };
 
@@ -59,7 +60,7 @@ export function EntryRow({
   }
 
   const payer = e.paidById ? members.find((m) => m.id === e.paidById) : null;
-  const payerName = payer ? (payer.name ?? payer.email ?? "").split(/[\s@]/)[0] : null;
+  const payerName = payer ? personFirstName(payer, t("Member")) : null;
   const split = splitLabel(e.payerSharePct);
 
   return (

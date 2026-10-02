@@ -21,7 +21,10 @@ import { DebtForm } from "./DebtForm";
 import { DebtStatusChip } from "./DebtStatusChip";
 import { LogPaymentButton } from "./LogPaymentButton";
 import { ShareControls } from "./ShareControls";
-import { moveMyDebtsHere } from "./actions";
+import { DebtConsentCard } from "./DebtConsentCard";
+import { moveMyDebtsHere, withdrawDebtConsent } from "./actions";
+import { consentIn } from "@/lib/consent";
+import { personName } from "@/lib/people";
 import { perMonth } from "@/lib/money";
 import { SubmitButton } from "@/components/SubmitButton";
 
@@ -94,8 +97,8 @@ function Row({
             {d.venture && <VentureChip name={d.venture.name} color={d.venture.color} />}
             {!own && d.owner && (
               <span className="flex items-center gap-1 text-[0.68rem] text-[var(--color-text-dim)]">
-                <Avatar name={d.owner.name} email={d.owner.email} size={16} />
-                {d.owner.name ?? d.owner.email}
+                <Avatar name={d.owner.name} size={16} />
+                {personName(d.owner, t("Member"))}
               </span>
             )}
             {own ? (
@@ -157,7 +160,7 @@ export default async function DebtsPage() {
   const { user, hub } = await requireHub();
   const [t, lang] = await Promise.all([getT(), getLang()]);
 
-  const [{ ventures, members }, [mine, shared, needsReview, elsewhere], shares, summaries] = await Promise.all([
+  const [{ ventures, members }, [mine, shared, needsReview, elsewhere, consents], shares, summaries] = await Promise.all([
     hubChrome(user.id, hub.id),
     withHub(user.id, (tx) =>
       Promise.all([
@@ -165,6 +168,11 @@ export default async function DebtsPage() {
         listSharedDebts(tx, hub.id, user.id),
         listDebtsNeedingOwnerReview(tx, user.id),
         countMyDebtsElsewhere(tx, user.id, hub.id),
+        // Same transaction as the debts themselves — no extra round trip.
+        tx.consent.findMany({
+          where: { userId: user.id, revokedAt: null },
+          select: { kind: true, hubId: true },
+        }),
       ]),
     ),
     myShares(user.id),
@@ -173,6 +181,11 @@ export default async function DebtsPage() {
 
   const currency = hub.currency;
   const locale = user.locale ?? "en-CA";
+
+  // Law 25: nothing of the person's own tracker is rendered — and no debt can
+  // be added (createDebt re-checks) — until they have expressly agreed.
+  const adult = consentIn(consents, "AGE_18");
+  const consented = consentIn(consents, "DEBTS_SENSITIVE") && adult;
 
   const current = mine.filter((d) => d.status !== "PAID_OFF");
   const paidOff = mine.filter((d) => d.status === "PAID_OFF");
@@ -192,7 +205,11 @@ export default async function DebtsPage() {
         </p>
       </div>
 
-      {elsewhere > 0 && (
+      {!consented && (
+        <DebtConsentCard t={t} existingCount={mine.length + elsewhere} alreadyAdult={adult} />
+      )}
+
+      {consented && elsewhere > 0 && (
         <form action={moveMyDebtsHere} className="card flex items-center justify-between gap-3 p-4 text-xs">
           <span className="text-[var(--color-text-dim)]">
             {t("{n} of your debts live in another hub, so they aren't shown here.", { n: elsewhere })}
@@ -203,7 +220,7 @@ export default async function DebtsPage() {
         </form>
       )}
 
-      {needsReview.length > 0 && (
+      {consented && needsReview.length > 0 && (
         <div className="card border-[var(--color-danger)] bg-[var(--danger-wash)] p-4 text-xs">
           <div className="font-semibold text-[var(--color-danger)]">
             {t("{n} debts assigned to you automatically", { n: needsReview.length })}
@@ -215,6 +232,8 @@ export default async function DebtsPage() {
         </div>
       )}
 
+      {consented && (
+      <>
       {/* The balance is what this page is about — the only `lg` figure on it. */}
       <div className="card grid grid-cols-2 divide-x divide-[var(--color-border)] p-0">
         <div className="px-2 py-4">
@@ -258,6 +277,8 @@ export default async function DebtsPage() {
       )}
 
       <ShareControls shares={shares} />
+      </>
+      )}
 
       {(shared.length > 0 || summaries.length > 0) && (
         <section>
@@ -270,7 +291,7 @@ export default async function DebtsPage() {
               {summaries.map((s) => (
                 <div key={s.ownerId} className="flex items-start justify-between gap-3 px-4 py-3.5">
                   <div className="min-w-0">
-                    <div className="truncate font-medium">{s.ownerName}</div>
+                    <div className="truncate font-medium">{s.ownerName ?? t("Member")}</div>
                     <div className="text-[0.68rem] text-[var(--color-text-dim)]">
                       {t("{n} debts", { n: s.debtCount })}
                       {s.inDefaultCount > 0 ? ` · ${t("{n} in default", { n: s.inDefaultCount })}` : ""} · {t("summary only")}
@@ -295,6 +316,17 @@ export default async function DebtsPage() {
             </div>
           )}
         </section>
+      )}
+
+      {consented && (
+        <form action={withdrawDebtConsent} className="px-1 text-xs text-[var(--color-text-dim)]">
+          {t("You agreed to Life Hub keeping your debts.")}{" "}
+          <button type="submit" className="font-semibold underline">
+            {t("Withdraw my consent")}
+          </button>
+          {" — "}
+          {t("your debts stay saved but hidden until you agree again; delete them one by one, or your whole account, to erase them.")}
+        </form>
       )}
     </div>
   );

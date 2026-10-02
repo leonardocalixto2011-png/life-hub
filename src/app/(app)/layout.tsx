@@ -115,6 +115,7 @@ export default async function AppLayout({
           defaultAssigneeId={user.id}
           userId={user.id}
           aiEnabled={Boolean(process.env.ANTHROPIC_API_KEY)}
+          aiNoticeSeen={Boolean(user.aiNoticeAt)}
           favorites={favorites.map((f) => ({
             id: f.id,
             label: f.label,

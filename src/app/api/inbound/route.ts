@@ -6,6 +6,7 @@ import { parseText, type Draft } from "@/lib/parse";
 import { rateLimit } from "@/lib/rate-limit";
 import { secretMatches } from "@/lib/bearer";
 import { resolveHubFromRecipient } from "@/lib/inbound-address";
+import { hubHasMailAiConsent } from "@/lib/consent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -139,6 +140,9 @@ async function extract(req: Request, raw: string): Promise<Extracted | NextRespo
   };
 }
 
+/** Note on a review item stored without any AI call (see the consent check below). */
+const NOT_ANALYSED = "Not analysed — AI analysis is off for this hub. Turn it on under Connected mailboxes.";
+
 export async function POST(req: Request) {
   const raw = await req.text();
   const extracted = await extract(req, raw);
@@ -174,9 +178,19 @@ export async function POST(req: Request) {
   }
 
   const text = `${subject}\n\n${body}`.slice(0, 6000);
+
+  // AI analysis of mail is opt-in (Law 25). If no active member of this hub
+  // has switched it on, the message is NOT sent to the model. It is still
+  // recorded as a bare review item — the person forwarded it here on purpose,
+  // and silently dropping a bill would be worse — with a note saying why it
+  // was not read. Covers every address handed out before the consent existed.
+  const aiAllowed = await hubHasMailAiConsent(hubId);
+
   // Charged to the hub, not a user: forwarded mail arrives with no session.
   // `hubId` is resolved above and is non-null by this point.
-  const result = await parseText(text, undefined, 25, hubId);
+  const result = aiAllowed
+    ? await parseText(text, undefined, 25, hubId)
+    : ({ ok: false, error: NOT_ANALYSED } as const);
 
   if (!result.ok) {
     // Still record it so the user can see something arrived and triage manually.
@@ -187,7 +201,7 @@ export async function POST(req: Request) {
         sourceRef,
         fromAddress: from,
         sourceSnippet: text.slice(0, 500),
-        note: `Couldn't auto-parse: ${result.error}`,
+        note: aiAllowed ? `Couldn't auto-parse: ${result.error}` : NOT_ANALYSED,
         draft: {
           kind: "task",
           title: subject || "Forwarded email",
@@ -204,7 +218,7 @@ export async function POST(req: Request) {
         } satisfies Draft,
       },
     });
-    return NextResponse.json({ ok: true, parsed: 0 });
+    return NextResponse.json({ ok: true, parsed: 0, ...(aiAllowed ? {} : { analysed: false }) });
   }
 
   let created = 0;

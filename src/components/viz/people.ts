@@ -1,3 +1,5 @@
+import { personFirstName } from "@/lib/people";
+
 /**
  * One colour per person, fixed by their position in the hub's member list
  * (join order), so a person keeps their colour on every page and a filter
@@ -13,10 +15,14 @@ export function personColor(index: number): string {
 
 export type Person = { id: string; name: string; color: string };
 
-export function peopleOf(members: { id: string; name: string | null; email: string | null }[]): Person[] {
+/** `fallback` is the translated neutral label for someone with no name on file. */
+export function peopleOf(
+  members: { id: string; name: string | null; email?: string | null }[],
+  fallback = "Member",
+): Person[] {
   return members.map((m, i) => ({
     id: m.id,
-    name: (m.name ?? m.email ?? "?").split(/[\s@]/)[0],
+    name: personFirstName(m, fallback),
     color: personColor(i),
   }));
 }

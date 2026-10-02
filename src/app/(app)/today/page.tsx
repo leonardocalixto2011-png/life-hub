@@ -20,6 +20,7 @@ import { GreetingBand } from "@/components/GreetingBand";
 import { WeekRecap } from "@/components/WeekRecap";
 import { listShifts, planHref, planItemsBetween } from "@/lib/plans";
 import { withHub } from "@/lib/hub-context";
+import { hasConsentIn } from "@/lib/consent";
 import { requireHub } from "@/lib/session";
 import { getLang, getT } from "@/lib/i18n-server";
 import { fmt, fmtTime } from "@/lib/i18n";
@@ -33,6 +34,7 @@ import { DayCard } from "@/components/DayCard";
 import { UsualPayments, type UsualItem } from "@/components/UsualPayments";
 import { dueUsualPayments, usualPaymentsFor } from "@/lib/usual";
 import { isInterest, type InterestKey } from "@/lib/onboarding";
+import { personFirstName } from "@/lib/people";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +81,7 @@ export default async function DashboardPage() {
   const now = new Date();
   const todayStart = startOfDay(now);
 
-  const [[d, plans, shifts, recap, usual], { ventures, members: membersRaw }] = await Promise.all([
+  const [[d, plans, shifts, recap, usual, myMailboxes, mailAi], { ventures, members: membersRaw }] = await Promise.all([
     withHub(user.id, (tx) =>
       Promise.all([
         dashboard(tx, hub.id, user.id, hub.currency),
@@ -87,13 +89,15 @@ export default async function DashboardPage() {
         listShifts(tx, hub.id, user.id, todayStart, addDays(todayStart, 1)),
         weekRecap(tx, hub.id, user.id, hub.currency),
         usualPaymentsFor(tx, hub.id, user.id, now),
+        tx.mailAccount.count({ where: { userId: user.id, hubId: hub.id, status: "ACTIVE" } }),
+        hasConsentIn(tx, user.id, "MAIL_AI", hub.id),
       ]),
     ),
     hubChrome(user.id, hub.id),
   ]);
   const first = user.name?.split(" ")[0];
   const vOpts = ventures.map((v) => ({ id: v.id, name: v.name }));
-  const memberName = new Map(membersRaw.map((m) => [m.id, (m.name ?? m.email ?? "").split(/[\s@]/)[0]]));
+  const memberName = new Map(membersRaw.map((m) => [m.id, personFirstName(m, t("Member"))]));
   const comingUp = plans.slice(0, 6);
   const currency = hub.currency;
   const locale = user.locale ?? "en-CA";
@@ -131,6 +135,17 @@ export default async function DashboardPage() {
           .card, so it stays opaque and legible over a background photo
           without any [data-photo] special-casing. */}
       <DayCard day={d.day} currency={currency} locale={locale} t={t} />
+
+      {/* A connected mailbox the poller skips because AI analysis is off for
+          this hub. Without this, mail silently stops turning into tasks. */}
+      {myMailboxes > 0 && !mailAi && (
+        <Link href="/mail" className="card block p-4 text-sm">
+          <span className="font-semibold">{t("Mail analysis is paused")}</span>
+          <span className="mt-1 block text-[var(--color-text-dim)]">
+            {t("Your connected mailbox isn't being read. Turn on AI analysis on the Mail page to resume.")}
+          </span>
+        </Link>
+      )}
 
       {/* Usual payments due about now: confirm in one tap, or skip the month. */}
       {usualItems.length > 0 && <UsualPayments items={usualItems} month={fmt(now, "yyyy-MM", "en")} />}

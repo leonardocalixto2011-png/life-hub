@@ -18,6 +18,45 @@ import { encrypt } from "@/lib/mail/crypto";
 import { testImapLogin } from "@/lib/mail/imap";
 import { ensureInboundAddress, rotateInboundAddress } from "@/lib/inbound-address";
 import { unmuteSender } from "@/lib/mail/trust";
+import { grantConsentIn, hasConsent, hasConsentIn, revokeConsent } from "@/lib/consent";
+
+/**
+ * AI analysis of email is OFF by default (Law 25). Nothing below connects a
+ * mailbox or hands out a forwarding address until the person has switched it
+ * on for this hub — a separate, express consent, recorded as MAIL_AI in the
+ * ledger. The poller and /api/inbound check the same consent before any
+ * message is sent to the model, so turning it off stops analysis at once
+ * while leaving the mailbox connected.
+ */
+const NEEDS_MAIL_AI = "Turn on AI analysis for this hub first.";
+
+/**
+ * Switches AI analysis on for the current hub. The two boxes on /mail start
+ * unchecked and are validated again here, so a crafted request records
+ * nothing.
+ */
+export async function enableMailAi(formData: FormData) {
+  const { user, hub } = await requireHub();
+  const ticked = (name: string) => formData.get(name) === "on";
+
+  const ok = await withHub(user.id, async (tx) => {
+    const adult = (await hasConsentIn(tx, user.id, "AGE_18")) || ticked("age18");
+    if (!ticked("consent") || !adult) return false;
+    await grantConsentIn(tx, user.id, "AGE_18");
+    await grantConsentIn(tx, user.id, "MAIL_AI", hub.id);
+    return true;
+  });
+  if (!ok) redirect("/mail?error=" + encodeURIComponent("Tick both boxes to continue."));
+
+  revalidatePath("/mail");
+}
+
+/** Withdraws the consent: analysis stops, connected mailboxes stay connected. */
+export async function disableMailAi() {
+  const { user, hub } = await requireHub();
+  await revokeConsent(user.id, "MAIL_AI", hub.id);
+  revalidatePath("/mail");
+}
 
 /**
  * Starts the Gmail connect flow. The state value is stashed in a short-lived
@@ -26,7 +65,10 @@ import { unmuteSender } from "@/lib/mail/trust";
  * CSRF protection since there's no session to tie the callback to otherwise.
  */
 export async function startGoogleConnect() {
-  await requireHub();
+  const { user, hub } = await requireHub();
+  if (!(await hasConsent(user.id, "MAIL_AI", hub.id))) {
+    redirect("/mail?error=" + encodeURIComponent(NEEDS_MAIL_AI));
+  }
   if (!googleOAuthConfigured()) {
     throw new Error("Google OAuth isn't configured yet (GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET).");
   }
@@ -48,7 +90,10 @@ export async function startGoogleConnect() {
  * duplicated since only one connect flow is ever in flight per browser.
  */
 export async function startMicrosoftConnect() {
-  await requireHub();
+  const { user, hub } = await requireHub();
+  if (!(await hasConsent(user.id, "MAIL_AI", hub.id))) {
+    redirect("/mail?error=" + encodeURIComponent(NEEDS_MAIL_AI));
+  }
   if (!microsoftOAuthConfigured()) {
     throw new Error("Microsoft OAuth isn't configured yet (MICROSOFT_CLIENT_ID/MICROSOFT_CLIENT_SECRET).");
   }
@@ -84,6 +129,9 @@ const ImapConnectSchema = z.object({
  */
 export async function connectImapAccount(formData: FormData) {
   const { user, hub } = await requireHub();
+  if (!(await hasConsent(user.id, "MAIL_AI", hub.id))) {
+    redirect("/mail?error=" + encodeURIComponent(NEEDS_MAIL_AI));
+  }
 
   const parsed = ImapConnectSchema.safeParse({
     provider: formData.get("provider"),
@@ -166,7 +214,10 @@ export async function removeTrustedSender(id: string) {
  * anyone who can read the hub's review inbox can already see what arrives.
  */
 export async function revealInboundAddress(): Promise<string | null> {
-  const { hub } = await requireHub();
+  const { user, hub } = await requireHub();
+  // Mail sent to this address is analysed by AI, so the address is only handed
+  // to someone who has agreed to that for this hub.
+  if (!(await hasConsent(user.id, "MAIL_AI", hub.id))) throw new Error(NEEDS_MAIL_AI);
   return ensureInboundAddress(hub.id);
 }
 
@@ -176,7 +227,8 @@ export async function revealInboundAddress(): Promise<string | null> {
  * leaked address needs a way to be cut off.
  */
 export async function rotateInbound(): Promise<string | null> {
-  const { hub } = await requireHub();
+  const { user, hub } = await requireHub();
+  if (!(await hasConsent(user.id, "MAIL_AI", hub.id))) throw new Error(NEEDS_MAIL_AI);
   const next = await rotateInboundAddress(hub.id);
   revalidatePath("/mail");
   return next;

@@ -102,7 +102,8 @@ export function ReviewCard({
       {item.note && (
         <p className="flex items-start gap-1.5 px-1 text-xs font-semibold text-[var(--color-warn)]">
           <AlertTriangle size={14} strokeWidth={2} aria-hidden className="mt-px shrink-0" />
-          {item.note}
+          {/* Notes are stored in English; the ones that are fixed phrases have a translation. */}
+          {t(item.note)}
         </p>
       )}
 

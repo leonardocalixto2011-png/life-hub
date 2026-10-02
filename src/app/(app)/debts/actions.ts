@@ -12,6 +12,7 @@ import { fromDateInput } from "@/lib/format";
 import { dollarsToCents, percentToBasisPoints } from "@/lib/money";
 import { revalidateContent } from "@/lib/revalidate";
 import { addMonthsOnDay, anchorOf, sameDay } from "@/lib/recur";
+import { grantConsentIn, hasConsentIn, revokeConsentIn } from "@/lib/consent";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -74,13 +75,75 @@ async function assertOwns(tx: Parameters<Parameters<typeof withHub>[1]>[0], id: 
   return row;
 }
 
+/**
+ * The server-side gate for every debt write after the first: the UI hides the
+ * controls without consent, but a crafted request must not get through either.
+ * Deleting stays allowed — removing your data never needs consent.
+ */
+async function assertDebtConsent(tx: Parameters<Parameters<typeof withHub>[1]>[0], userId: string) {
+  if (!(await hasConsentIn(tx, userId, "DEBTS_SENSITIVE"))) {
+    throw new Error("Give your consent on the Debts page first.");
+  }
+}
+
+/**
+ * Express consent to keep debts at all (Law 25: debts and default status are
+ * sensitive information), plus the 18+ attestation that goes with it. Given
+ * once, on the consent card at /debts, by ticking boxes that start unchecked.
+ * The boxes are re-validated here — a crafted request without them records
+ * nothing.
+ */
+export async function acceptDebtConsent(fd: FormData) {
+  const { user } = await requireHub();
+  const ticked = (name: string) => fd.get(name) === "on";
+  await withHub(user.id, async (tx) => {
+    const adult = (await hasConsentIn(tx, user.id, "AGE_18")) || ticked("age18");
+    if (!ticked("consent") || !adult) {
+      throw new Error("Tick both boxes to continue.");
+    }
+    await grantConsentIn(tx, user.id, "AGE_18");
+    await grantConsentIn(tx, user.id, "DEBTS_SENSITIVE");
+  });
+  revalidateContent();
+}
+
+/**
+ * Withdraws the consent. Existing debts stay stored (deleting them is the
+ * owner's call) but stop being processed: every share is removed with its
+ * DEBT_SHARE consent, so no hub-mate sees them any more, and the aggregates
+ * (Today, Budget, Agenda, digests, reminders) skip owners without consent.
+ */
+export async function withdrawDebtConsent() {
+  const { user } = await requireHub();
+  // DebtShare's policy is owner-only by design for writes; the trusted client
+  // is scoped to this user's own rows.
+  await prisma.debtShare.deleteMany({ where: { ownerId: user.id } });
+  await withHub(user.id, async (tx) => {
+    await revokeConsentIn(tx, user.id, "DEBTS_SENSITIVE");
+    await tx.consent.updateMany({
+      where: { userId: user.id, kind: "DEBT_SHARE", revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  });
+  revalidateContent();
+}
+
 export async function createDebt(fd: FormData) {
   const { user, hub } = await requireHub();
   const d = data(parse(createSchema, fd));
   await assertVentureInHub(hub.id, d.ventureId);
-  await withHub(user.id, (tx) =>
-    tx.debt.create({ data: { ...d, hubId: hub.id, ownerId: user.id } }),
-  );
+  await withHub(user.id, async (tx) => {
+    // The server-side half of the consent card: no debt is ever stored for
+    // someone who has not expressly agreed to it and attested to being 18+.
+    const [consented, adult] = await Promise.all([
+      hasConsentIn(tx, user.id, "DEBTS_SENSITIVE"),
+      hasConsentIn(tx, user.id, "AGE_18"),
+    ]);
+    if (!consented || !adult) {
+      throw new Error("Give your consent on the Debts page before adding a debt.");
+    }
+    await tx.debt.create({ data: { ...d, hubId: hub.id, ownerId: user.id } });
+  });
   revalidateContent();
 }
 
@@ -88,6 +151,7 @@ export async function updateDebt(fd: FormData) {
   const { user } = await requireHub();
   const d = parse(updateSchema, fd);
   await withHub(user.id, async (tx) => {
+    await assertDebtConsent(tx, user.id);
     const { hubId, dueDate } = await assertOwns(tx, d.id, user.id);
     await assertVentureInHub(hubId, d.ventureId);
     // The form re-submits the stored date on every save; only a changed day
@@ -109,6 +173,7 @@ export async function setDebtStatus(fd: FormData) {
   });
   const { id, status } = schema.parse({ id: fd.get("id"), status: fd.get("status") });
   await withHub(user.id, async (tx) => {
+    await assertDebtConsent(tx, user.id);
     await assertOwns(tx, id, user.id);
     await tx.debt.update({ where: { id }, data: { status } });
   });
@@ -141,12 +206,13 @@ function nextDue(d: Date, frequency: "WEEKLY" | "BIWEEKLY" | "MONTHLY", day: num
  */
 export async function moveMyDebtsHere() {
   const { user, hub } = await requireHub();
-  await withHub(user.id, (tx) =>
-    tx.debt.updateMany({
+  await withHub(user.id, async (tx) => {
+    await assertDebtConsent(tx, user.id);
+    await tx.debt.updateMany({
       where: { ownerId: user.id, hubId: { not: hub.id } },
       data: { hubId: hub.id, ventureId: null },
-    }),
-  );
+    });
+  });
   revalidateContent();
 }
 
@@ -176,6 +242,7 @@ export async function logDebtPayment(fd: FormData) {
   }
 
   await withHub(user.id, async (tx) => {
+    await assertDebtConsent(tx, user.id);
     const debt = await tx.debt.findUnique({
       where: { id },
       select: {
@@ -234,8 +301,17 @@ export async function logDebtPayment(fd: FormData) {
  * Opt this person's whole tracker into (or out of) one hub. `visibility: null`
  * revokes. Only ever writes a share owned by the acting user, so nobody can
  * publish someone else's tracker — or un-publish it.
+ *
+ * Showing more than before — a new share, or SUMMARY → FULL — needs a fresh
+ * DEBT_SHARE consent for that hub: `consent` must be true (the unchecked box
+ * in the share control), and a new ledger row is written each time. Showing
+ * less (FULL → SUMMARY) needs none. Hiding revokes the consent row.
  */
-export async function setDebtShare(hubId: string, visibility: "SUMMARY" | "FULL" | null) {
+export async function setDebtShare(
+  hubId: string,
+  visibility: "SUMMARY" | "FULL" | null,
+  consent: boolean = false,
+) {
   const { user } = await requireHub();
   const parsed = z
     .object({
@@ -253,7 +329,22 @@ export async function setDebtShare(hubId: string, visibility: "SUMMARY" | "FULL"
 
   if (parsed.visibility === null) {
     await prisma.debtShare.deleteMany({ where: { ownerId: user.id, hubId: parsed.hubId } });
+    await withHub(user.id, (tx) => revokeConsentIn(tx, user.id, "DEBT_SHARE", parsed.hubId));
   } else {
+    const existing = await prisma.debtShare.findUnique({
+      where: { ownerId_hubId: { ownerId: user.id, hubId: parsed.hubId } },
+      select: { visibility: true },
+    });
+    const widening = !existing || (existing.visibility === "SUMMARY" && parsed.visibility === "FULL");
+    if (widening) {
+      if (consent !== true) throw new Error("Tick the box to confirm you want to share your debts.");
+      // Consent first: if the ledger write fails, nothing is exposed. Sharing
+      // also needs the base consent to keep debts at all.
+      await withHub(user.id, async (tx) => {
+        await assertDebtConsent(tx, user.id);
+        await grantConsentIn(tx, user.id, "DEBT_SHARE", parsed.hubId, { fresh: true });
+      });
+    }
     await prisma.debtShare.upsert({
       where: { ownerId_hubId: { ownerId: user.id, hubId: parsed.hubId } },
       update: { visibility: parsed.visibility },

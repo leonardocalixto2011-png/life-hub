@@ -134,7 +134,7 @@ export async function createTask(formData: FormData) {
   );
 
   if (data.assignedToId && data.assignedToId !== user.id) {
-    await notifyAssignment(task.id, task.title, data.assignedToId, user.name ?? user.email);
+    await notifyAssignment(task.id, task.title, data.assignedToId, user.name);
   }
 
   revalidateContent();
@@ -173,7 +173,7 @@ export async function updateTask(formData: FormData) {
     data.assignedToId !== user.id &&
     data.assignedToId !== before?.assignedToId
   ) {
-    await notifyAssignment(after.id, after.title, data.assignedToId, user.name ?? user.email);
+    await notifyAssignment(after.id, after.title, data.assignedToId, user.name);
   }
 
   revalidateContent(`/tasks/${data.id}`);
@@ -335,7 +335,7 @@ export async function setTaskFields(input: z.infer<typeof patchSchema>) {
     p.assignedToId !== user.id &&
     p.assignedToId !== before?.assignedToId
   ) {
-    await notifyAssignment(after.id, after.title, p.assignedToId, user.name ?? user.email);
+    await notifyAssignment(after.id, after.title, p.assignedToId, user.name);
   }
 
   refreshTaskPaths();

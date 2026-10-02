@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { Download, Sparkles, Trash2 } from "lucide-react";
+import { Download, Save, Sparkles, Trash2 } from "lucide-react";
 
 import { requireUser } from "@/lib/session";
 import { getT } from "@/lib/i18n-server";
-import { deleteMyAccount } from "./actions";
+import { deleteMyAccount, setDisplayName } from "./actions";
+import { LegalLinks } from "@/components/LegalPage";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PageHeader } from "@/components/SectionHeader";
 import { DangerZone, FormSection } from "@/components/Form";
@@ -33,13 +34,36 @@ export default async function AccountPage({
 
       {sp.error && (
         <div role="alert" className="card border-[var(--color-danger)] bg-[var(--color-danger-wash)] p-4 text-sm text-[var(--color-danger)]">
-          {sp.error}
+          {t(sp.error)}
         </div>
       )}
 
+      <form action={setDisplayName}>
+        <FormSection title={t("Your name")}>
+          <label className="field-label">
+            {t("Name shown to hub members")}
+            <input
+              name="name"
+              defaultValue={user.name ?? ""}
+              maxLength={80}
+              autoComplete="name"
+              className="field"
+              placeholder={t("First name, or how people call you")}
+            />
+            <span className="field-hint">
+              {t("The people in your hubs see this name — not your email address, unless you choose to show it on a hub's members page.")}
+            </span>
+          </label>
+          <SubmitButton className="btn btn-secondary w-full" pendingLabel={t("Saving…")}>
+            <Save size={16} strokeWidth={2} aria-hidden />
+            {t("Save")}
+          </SubmitButton>
+        </FormSection>
+      </form>
+
       <FormSection title={t("Download your data")}>
         <p className="field-hint mt-0">
-          {t("A JSON file with everything Life Hub holds about you — tasks, events, budget entries, subscriptions, debts, hub memberships and settings. Mailbox passwords and push endpoints are left out on purpose.")}
+          {t("A JSON file with everything Life Hub holds about you — tasks, events, budget entries, subscriptions, debts, hub memberships, settings and the record of what you consented to. Mailbox passwords and push endpoints are left out on purpose.")}
         </p>
         <a href="/api/account/export" className="btn btn-primary w-full" download>
           <Download size={17} strokeWidth={2} aria-hidden />
@@ -55,6 +79,17 @@ export default async function AccountPage({
           <Sparkles size={17} strokeWidth={2} aria-hidden />
           {t("Replay the welcome")}
         </Link>
+      </FormSection>
+
+      <FormSection title={t("Privacy")}>
+        <p className="field-hint mt-0">
+          {t("What Life Hub collects, why, and your rights. Consents you gave are withdrawn where you gave them: debts on the Debts page, email analysis under Connected mailboxes.")}
+        </p>
+        <LegalLinks
+          privacy={t("Privacy policy")}
+          terms={t("Terms of use")}
+          className="text-sm font-semibold text-[var(--color-primary)]"
+        />
       </FormSection>
 
       <DangerZone>

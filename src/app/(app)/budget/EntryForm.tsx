@@ -9,6 +9,7 @@ import { centsToInput } from "@/lib/money";
 import { BUDGET_CATEGORIES, SPLIT_OPTIONS } from "@/lib/couple";
 import { useT } from "@/components/I18nProvider";
 import type { BudgetEntryWithRefs } from "@/lib/data";
+import { personName } from "@/lib/people";
 
 type Member = { id: string; name: string | null; email: string | null };
 
@@ -137,7 +138,7 @@ export function EntryForm({
             <select name="paidById" defaultValue={entry?.paidById ?? currentUserId} className="field mt-1">
               {members.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name ?? m.email}
+                  {personName(m, t("Member"))}
                 </option>
               ))}
             </select>

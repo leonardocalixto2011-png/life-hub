@@ -43,6 +43,11 @@ model User {
   /// What they said they want to track at /welcome (tasks, budget, subscriptions,
   /// debts, trips, schedules, dates). Only reorders Today's shortcut chips.
   interests          String[]  @default([])
+  /// Set when the person dismisses the one-time notice shown the first time
+  /// they use AI parsing (sentence, photo, voice) — it names Anthropic (US)
+  /// and that dictation is done by the browser/phone vendor. Informational,
+  /// never blocking.
+  aiNoticeAt         DateTime?
   role               UserRole  @default(MEMBER)
   createdAt          DateTime  @default(now())
 
@@ -66,6 +71,45 @@ model User {
   specialDates       SpecialDate[]
   trips              Trip[]
   quickFavorites     QuickFavorite[]
+  consents           Consent[]
+}
+
+// ---------------------------------------------------------------------------
+// Consent ledger (Québec Law 25). One row per consent given; revoking stamps
+// revokedAt rather than deleting, so the history of what was agreed to, when
+// and under which policy version survives. A consent is "active" while
+// revokedAt is null. RLS: a person reads and writes only their own rows
+// (consent_self_only) — helpers in src/lib/consent.ts.
+// ---------------------------------------------------------------------------
+
+enum ConsentKind {
+  /// Storing debts, including default status — sensitive financial information.
+  DEBTS_SENSITIVE
+  /// Showing one's debt tracker to the members of one hub (hubId set).
+  DEBT_SHARE
+  /// Sending the content of one's email to the AI provider for one hub's
+  /// review inbox (hubId set). Off by default.
+  MAIL_AI
+  AGE_14
+  AGE_18
+}
+
+model Consent {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind          ConsentKind
+  /// The hub a hub-scoped consent applies to (DEBT_SHARE, MAIL_AI); null for
+  /// account-wide ones. A plain id with no FK on purpose: the ledger entry
+  /// must outlive the hub it was given for.
+  hubId         String?
+  grantedAt     DateTime    @default(now())
+  revokedAt     DateTime?
+  /// Version of the privacy policy in force when it was given
+  /// (src/content/legal/version.ts).
+  policyVersion String
+
+  @@index([userId, kind, hubId])
 }
 
 // ---------------------------------------------------------------------------
@@ -153,6 +197,9 @@ model HubMembership {
   status    MembershipStatus @default(INVITED)
   joinedAt  DateTime?
   createdAt DateTime         @default(now())
+  /// Other members of this hub see this person's NAME only, unless they turn
+  /// this on for this hub. Enforced in listMembers / listHubRoster (lib/data.ts).
+  showEmail Boolean          @default(false)
 
   @@unique([hubId, userId])
   @@index([userId, status])

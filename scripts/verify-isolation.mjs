@@ -302,6 +302,89 @@ async function main() {
       b1CrossHubBlocked = true;
     }
     check("B1 cannot insert a favourite into Hub A", b1CrossHubBlocked);
+
+    // --- consent ledger: strictly self-only, even inside a shared hub --------
+    // Torn down with the users below (Consent cascades from User).
+    const consentA1 = await db.consent.create({
+      data: { userId: userA1.id, kind: "DEBT_SHARE", hubId: hubA.id, policyVersion: "verify" },
+    });
+
+    const a1Consents = await asAppUser(userA1.id, (tx) => tx.consent.findMany());
+    check("A1 sees their own consent row", a1Consents.some((c) => c.id === consentA1.id));
+    check(
+      "A1 sees ONLY their own consent rows",
+      a1Consents.every((c) => c.userId === userA1.id),
+    );
+
+    const a2Consents = await asAppUser(userA2.id, (tx) => tx.consent.findMany());
+    check("A2 (same hub) cannot see A1's consent", !a2Consents.some((c) => c.id === consentA1.id));
+    const a2ConsentById = await asAppUser(userA2.id, (tx) =>
+      tx.consent.findUnique({ where: { id: consentA1.id } }),
+    );
+    check("A2 gets null reading A1's consent by id", a2ConsentById === null);
+
+    const b1Consents = await asAppUser(userB1.id, (tx) => tx.consent.findMany());
+    check("B1 (other hub) cannot see A1's consent", !b1Consents.some((c) => c.id === consentA1.id));
+
+    // Revoking is an UPDATE: nobody but the person themself may close a consent.
+    let a2Revoked = 0;
+    try {
+      a2Revoked = (
+        await asAppUser(userA2.id, (tx) =>
+          tx.consent.updateMany({ where: { id: consentA1.id }, data: { revokedAt: new Date() } }),
+        )
+      ).count;
+    } catch {
+      a2Revoked = 0;
+    }
+    const consentIntact = await db.consent.findUnique({ where: { id: consentA1.id } });
+    check(
+      "A2 cannot revoke A1's consent (0 rows, still active)",
+      a2Revoked === 0 && consentIntact !== null && consentIntact.revokedAt === null,
+    );
+
+    // Forging a consent is the dangerous direction: it would switch on mail
+    // analysis or debt sharing in someone else's name.
+    let a2ForgeBlocked = false;
+    try {
+      await asAppUser(userA2.id, (tx) =>
+        tx.consent.create({
+          data: { userId: userA1.id, kind: "MAIL_AI", hubId: hubA.id, policyVersion: "forged" },
+        }),
+      );
+    } catch {
+      a2ForgeBlocked = true;
+    }
+    check("A2 cannot record a consent in A1's name", a2ForgeBlocked);
+
+    let a1OwnWrite = false;
+    try {
+      const own = await asAppUser(userA1.id, (tx) =>
+        tx.consent.create({ data: { userId: userA1.id, kind: "AGE_18", policyVersion: "verify" } }),
+      );
+      const closed = await asAppUser(userA1.id, (tx) =>
+        tx.consent.updateMany({ where: { id: own.id }, data: { revokedAt: new Date() } }),
+      );
+      a1OwnWrite = closed.count === 1;
+    } catch {
+      a1OwnWrite = false;
+    }
+    check("A1 can give and revoke their OWN consent as app_user", a1OwnWrite);
+
+    // The ledger is append-and-revoke: the app role has no DELETE at all, so
+    // history can't be erased from a request path — not even one's own.
+    let ledgerDeleteBlocked = false;
+    try {
+      const r = await asAppUser(userA1.id, (tx) => tx.consent.deleteMany({ where: { id: consentA1.id } }));
+      ledgerDeleteBlocked = r.count === 0;
+    } catch {
+      ledgerDeleteBlocked = true;
+    }
+    const consentStillThere = await db.consent.findUnique({ where: { id: consentA1.id } });
+    check(
+      "app_user cannot delete a consent row, even its own (still there)",
+      ledgerDeleteBlocked && consentStillThere !== null,
+    );
   } finally {
     // --- teardown (owner role) ------------------------------------------------
     await db.debtShare.deleteMany({ where: { ownerId: { in: [userA1.id, userA2.id, userB1.id] } } });

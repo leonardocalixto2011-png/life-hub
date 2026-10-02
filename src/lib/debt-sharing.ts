@@ -1,3 +1,4 @@
+import { DEBT_CONSENTED } from "@/lib/consent";
 import { prisma } from "@/lib/prisma";
 import { perMonth } from "@/lib/money";
 
@@ -26,7 +27,8 @@ import { perMonth } from "@/lib/money";
 
 export type SharedDebtSummary = {
   ownerId: string;
-  ownerName: string;
+  /** Null when they have no name on file — the page shows a neutral "Member". */
+  ownerName: string | null;
   totalBalanceCents: number;
   monthlyPaymentCents: number;
   debtCount: number;
@@ -43,7 +45,8 @@ async function summarySharers(hubId: string, viewerId: string) {
 
   return prisma.debtShare.findMany({
     where: { hubId, visibility: "SUMMARY", ownerId: { not: viewerId } },
-    select: { ownerId: true, owner: { select: { name: true, email: true } } },
+    // Name only — a hub-mate's address is not ours to show (lib/people.ts).
+    select: { ownerId: true, owner: { select: { name: true } } },
   });
 }
 
@@ -63,7 +66,7 @@ export async function sharedDebtSummaries(
     // Trusted client on purpose: the viewer has no RLS route to these rows,
     // and must not — only these aggregates leave this function.
     const debts = await prisma.debt.findMany({
-      where: { ownerId: s.ownerId, status: { not: "PAID_OFF" } },
+      where: { owner: DEBT_CONSENTED, ownerId: s.ownerId, status: { not: "PAID_OFF" } },
       select: {
         balanceCents: true,
         actualPaymentCents: true,
@@ -76,7 +79,7 @@ export async function sharedDebtSummaries(
 
     out.push({
       ownerId: s.ownerId,
-      ownerName: s.owner.name ?? s.owner.email ?? "A member",
+      ownerName: s.owner.name,
       totalBalanceCents: debts.reduce((n, d) => n + d.balanceCents, 0),
       monthlyPaymentCents: debts.reduce(
         (n, d) => n + perMonth(d.actualPaymentCents ?? d.minimumPaymentCents ?? 0, d.paymentFrequency),

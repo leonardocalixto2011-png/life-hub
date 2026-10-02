@@ -16,6 +16,8 @@ export type SessionUser = {
   /** Null until the first-run welcome (/welcome) is finished or skipped. */
   onboardedAt: Date | null;
   interests: string[];
+  /** Null until they dismiss the one-time "AI is done by Anthropic (US)" notice. */
+  aiNoticeAt: Date | null;
 };
 
 export type SessionHub = {
@@ -50,6 +52,7 @@ export const getUser = cache(async (): Promise<SessionUser | null> => {
       locale: true,
       onboardedAt: true,
       interests: true,
+      aiNoticeAt: true,
     },
   });
   return user?.email
@@ -63,6 +66,7 @@ export const getUser = cache(async (): Promise<SessionUser | null> => {
         locale: user.locale,
         onboardedAt: user.onboardedAt,
         interests: user.interests,
+        aiNoticeAt: user.aiNoticeAt,
       }
     : null;
 });
@@ -108,7 +112,8 @@ export const listPendingInvites = cache(async (userId: string) => {
     where: { userId, status: "INVITED" },
     select: {
       hub: {
-        select: { id: true, name: true, color: true, createdBy: { select: { name: true, email: true } } },
+        // Name only: an invite must not hand over the inviter's address.
+        select: { id: true, name: true, color: true, createdBy: { select: { name: true } } },
       },
     },
     orderBy: { createdAt: "desc" },
@@ -117,7 +122,7 @@ export const listPendingInvites = cache(async (userId: string) => {
     id: r.hub.id,
     name: r.hub.name,
     color: r.hub.color,
-    invitedBy: r.hub.createdBy.name ?? r.hub.createdBy.email ?? "Someone",
+    invitedBy: r.hub.createdBy.name ?? "Someone",
   }));
 });
 

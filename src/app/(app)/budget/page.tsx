@@ -11,6 +11,7 @@ import { getLang, getT } from "@/lib/i18n-server";
 import { fmt } from "@/lib/i18n";
 import { money } from "@/lib/format";
 import { centsToInput } from "@/lib/money";
+import { personFirstName } from "@/lib/people";
 import { BudgetTrend } from "@/components/viz/BudgetTrend";
 import { EntryForm } from "./EntryForm";
 import { EntryRow } from "./EntryRow";
@@ -35,8 +36,6 @@ function href(month: Date, venture?: string): string {
   return `/budget?${p.toString()}`;
 }
 
-const firstName = (m: { name: string | null; email: string | null }) =>
-  (m.name ?? m.email ?? "?").split(/[\s@]/)[0];
 
 export default async function BudgetPage({
   searchParams,
@@ -48,6 +47,8 @@ export default async function BudgetPage({
   const isUpcomingMonth = endOfMonth(month) >= startOfMonth(new Date());
   const { user, hub } = await requireHub();
   const [t, lang] = await Promise.all([getT(), getLang()]);
+  const firstName = (m: { name: string | null; email: string | null }) =>
+    personFirstName(m, t("Member"));
   const { ventures, members } = await hubChrome(user.id, hub.id);
   const memberIds = members.map((m) => m.id);
 

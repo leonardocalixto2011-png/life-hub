@@ -73,7 +73,8 @@ export async function parseAndAdd(
     "Turn a person's freeform notes into structured tasks and calendar events for a shared life/business admin app.",
     `Today is ${format(today, "EEEE, yyyy-MM-dd")}. Resolve relative dates ("Friday", "next week", "tomorrow") against it.`,
     `Ventures (use the exact name, or null): ${ventures.map((v) => v.name).join(", ") || "none"}.`,
-    `People (use the exact name, or null): ${members.map((m) => m.name ?? m.email).join(", ") || "none"}.`,
+    // Names only: members' email addresses are never sent to the model.
+    `People (use the exact name, or null): ${members.map((m) => m.name).filter(Boolean).join(", ") || "none"}.`,
     'A line with a specific time (e.g. "call at 3pm", "meeting Tuesday 10:00") is an event; everything else is a task.',
     "task.dueDate is YYYY-MM-DD or null. event.startAt is YYYY-MM-DDTHH:MM (24h). Never invent items not present in the text; return empty arrays if nothing is actionable.",
   ].join("\n");
@@ -101,10 +102,6 @@ export async function parseAndAdd(
   const mByName = new Map<string, string>();
   for (const m of members) {
     if (m.name) mByName.set(m.name.toLowerCase(), m.id);
-    if (m.email) {
-      mByName.set(m.email.toLowerCase(), m.id);
-      mByName.set(m.email.split("@")[0].toLowerCase(), m.id);
-    }
   }
 
   const tasks = parsed.tasks.slice(0, MAX_ITEMS);
@@ -152,7 +149,7 @@ export async function parseAndAdd(
   });
 
   for (const a of assigned) {
-    await notifyAssignment(a.taskId, a.title, a.assigneeId, user.name ?? user.email);
+    await notifyAssignment(a.taskId, a.title, a.assigneeId, user.name);
   }
 
   revalidateContent();

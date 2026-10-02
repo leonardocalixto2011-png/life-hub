@@ -8,6 +8,7 @@ import { useT } from "@/components/I18nProvider";
 import type { T } from "@/lib/i18n";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ActionForm } from "@/components/ActionForm";
+import { personName } from "@/lib/people";
 
 type Existing = {
   id: string;
@@ -82,7 +83,7 @@ function Fields({ existing, members = [], t }: { existing?: Existing; members?: 
                   value={m.id}
                   defaultChecked={!existing?.travelerIds.length || existing.travelerIds.includes(m.id)}
                 />
-                {m.name ?? m.email}
+                {personName(m, t("Member"))}
               </label>
             ))}
           </div>

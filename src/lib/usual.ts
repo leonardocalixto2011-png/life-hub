@@ -1,5 +1,6 @@
 import { endOfMonth, getDaysInMonth, startOfMonth, subMonths } from "date-fns";
 
+import { DEBT_CONSENTED } from "@/lib/consent";
 import type { HubTx } from "@/lib/hub-context";
 
 /**
@@ -183,7 +184,7 @@ export async function usualPaymentsFor(
     }),
     tx.subscription.findMany({ where: { hubId, status: "ACTIVE" }, select: { name: true } }),
     tx.debt.findMany({
-      where: { ownerId: userId, hubId, status: { not: "PAID_OFF" } },
+      where: { owner: DEBT_CONSENTED, ownerId: userId, hubId, status: { not: "PAID_OFF" } },
       select: { name: true },
     }),
     tx.quickFavorite.findMany({

@@ -38,7 +38,7 @@ function Row({ s, t, lang, locale }: { s: SubscriptionWithRefs; t: T; lang: Lang
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           {s.venture && <VentureChip name={s.venture.name} color={s.venture.color} />}
-          {s.owner && <Avatar name={s.owner.name} email={s.owner.email} size={18} />}
+          {s.owner && <Avatar name={s.owner.name} size={18} />}
           {!cancelled && (
             <span className="text-[0.68rem] text-[var(--color-text-dim)]">
               {t("renews")} {countdownLabel(s.renewalDate, lang)}

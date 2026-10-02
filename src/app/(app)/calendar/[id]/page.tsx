@@ -12,6 +12,7 @@ import { moveEventToSchedule } from "../actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PageHeader } from "@/components/SectionHeader";
 import { FormSection } from "@/components/Form";
+import { personName } from "@/lib/people";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +73,7 @@ export default async function EventDetailPage({
                 <select name="personId" defaultValue={event.attendeeIds[0] ?? user.id} className="field">
                   {members.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name ?? m.email}
+                      {personName(m, t("Member"))}
                     </option>
                   ))}
                 </select>

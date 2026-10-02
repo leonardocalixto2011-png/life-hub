@@ -2,6 +2,7 @@
 
 import { useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Check, ChevronLeft } from "lucide-react";
 
 import { useT } from "@/components/I18nProvider";
@@ -17,11 +18,12 @@ import {
   declineWelcomeInvite,
   finishWelcome,
   saveInterests,
+  saveWelcomeAboutYou,
   saveWelcomeHub,
   setWelcomeLocale,
 } from "./actions";
 
-type StepId = "invites" | "lang" | "hub" | "interests" | "notify" | "first";
+type StepId = "invites" | "lang" | "you" | "hub" | "interests" | "notify" | "first";
 
 type Invite = { id: string; name: string; color: string; invitedBy: string; members: number };
 type HubInfo = { id: string; name: string; color: string; owner: boolean; placeholderName: boolean };
@@ -56,6 +58,9 @@ export function Welcome({
   lang,
   localeChosen,
   replay,
+  ageAttested,
+  ageNeeded,
+  name,
   userId,
   first,
   suggestedHubName,
@@ -64,11 +69,17 @@ export function Welcome({
   invites,
   interests,
   aiEnabled,
+  aiNoticeSeen,
   chrome,
 }: {
   lang: Lang;
   localeChosen: boolean;
   replay: boolean;
+  /** Already on record as 14+ (grandfathered, or attested on an earlier visit). */
+  ageAttested: boolean;
+  /** They tried to finish without attesting — open on that step and say why. */
+  ageNeeded: boolean;
+  name: string;
   userId: string;
   first: string | null;
   suggestedHubName: string;
@@ -77,6 +88,7 @@ export function Welcome({
   invites: Invite[];
   interests: string[];
   aiEnabled: boolean;
+  aiNoticeSeen: boolean;
   chrome: Chrome | null;
 }) {
   const t = useT();
@@ -91,6 +103,9 @@ export function Welcome({
     const s: StepId[] = [];
     if (invites.length > 0) s.push("invites");
     s.push("lang");
+    // After the language, so the attestation is read in the right one. Left
+    // out once it is on record — a replay doesn't ask again.
+    if (!ageAttested) s.push("you");
     if (!hub || hub.owner) s.push("hub");
     s.push("interests", "notify", "first");
     return s;
@@ -98,8 +113,16 @@ export function Welcome({
   // Also fixed on arrival, so an answered invite stays on screen as "You're in."
   // instead of vanishing when the refresh drops it from the pending list.
   const [inviteList] = useState(invites);
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(() => (ageNeeded ? Math.max(0, steps.indexOf("you")) : 0));
   const step = steps[index];
+  // The age box starts unchecked, always: an attestation is something the
+  // person does, never a default.
+  const [isOver14, setIsOver14] = useState(false);
+  const [attested, setAttested] = useState(ageAttested);
+  const [displayName, setDisplayName] = useState(name);
+  const youIndex = steps.indexOf("you");
+  /** Everything past the attestation is locked until it is given. */
+  const ageLocked = youIndex !== -1 && !attested;
 
   const [chosenLang, setChosenLang] = useState<Lang>(lang);
   // Until they type, the suggestion follows the language they just picked.
@@ -116,6 +139,11 @@ export function Welcome({
   function next() {
     setError(null);
     if (index < steps.length - 1) setIndex(index + 1);
+  }
+  /** "Skip all" / "Finish" before attesting lands on the attestation instead. */
+  function toAgeStep() {
+    setIndex(youIndex);
+    setError(t("Confirm that you are 14 or older to continue."));
   }
   function back() {
     setError(null);
@@ -141,6 +169,7 @@ export function Welcome({
   }
 
   function finish() {
+    if (ageLocked) return toAgeStep();
     start(async () => {
       await finishWelcome();
     });
@@ -264,6 +293,57 @@ export function Welcome({
             ? next()
             : run(() => setWelcomeLocale(chosenLang === "fr" ? "fr-CA" : "en-CA")),
       };
+      break;
+
+    case "you":
+      title = t("Before we start");
+      body = (
+        <div className="space-y-4">
+          <label className="field-label">
+            {t("What should people call you?")}
+            <input
+              className="field"
+              value={displayName}
+              maxLength={80}
+              onChange={(e) => setDisplayName(e.target.value)}
+              autoComplete="given-name"
+            />
+            <span className="field-hint">
+              {t("The people in your hubs see this name — never your email address, unless you choose to show it.")}
+            </span>
+          </label>
+          <label className="check-row items-start">
+            <input
+              type="checkbox"
+              checked={isOver14}
+              onChange={(e) => setIsOver14(e.target.checked)}
+              className="mt-0.5"
+              aria-describedby="age-why"
+            />
+            <span>{t("I am 14 or older")}</span>
+          </label>
+          <p id="age-why" className="text-xs text-[var(--color-text-dim)]">
+            {t("Life Hub isn't for children under 14. Debts and email analysis ask for 18 or older, when you get to them.")}{" "}
+            <Link href="/confidentialite" className="underline">
+              {t("Privacy policy")}
+            </Link>
+            {" · "}
+            <Link href="/conditions" className="underline">
+              {t("Terms of use")}
+            </Link>
+          </p>
+        </div>
+      );
+      primary = {
+        label: t("Continue"),
+        onClick: () =>
+          run(async () => {
+            const r = await saveWelcomeAboutYou({ attested: isOver14, name: displayName });
+            if (r.ok) setAttested(true);
+            return r;
+          }),
+      };
+      skip = null; // Required: there is no skipping the attestation.
       break;
 
     case "hub": {
@@ -403,6 +483,7 @@ export function Welcome({
               defaultAssigneeId={userId}
               userId={userId}
               aiEnabled={aiEnabled}
+              aiNoticeSeen={aiNoticeSeen}
               favorites={chrome.favorites}
               onSaved={onFirstSaved}
             />
@@ -428,13 +509,21 @@ export function Welcome({
             <span key={s} className="welcome-dot" data-state={i < index ? "done" : i === index ? "now" : undefined} />
           ))}
         </div>
-        {!last && (
-          <form action={finishWelcome}>
-            <button type="submit" className="btn btn-ghost text-sm" disabled={pending}>
-              {replay ? t("Close") : t("Skip all")}
-            </button>
-          </form>
-        )}
+        {!last &&
+          (ageLocked ? (
+            // Not a form: skipping everything still goes through the age step.
+            step !== "you" && (
+              <button type="button" className="btn btn-ghost text-sm" disabled={pending} onClick={toAgeStep}>
+                {t("Skip all")}
+              </button>
+            )
+          ) : (
+            <form action={finishWelcome}>
+              <button type="submit" className="btn btn-ghost text-sm" disabled={pending}>
+                {replay ? t("Close") : t("Skip all")}
+              </button>
+            </form>
+          ))}
       </div>
 
       {index === 0 && (
@@ -459,7 +548,7 @@ export function Welcome({
             type="button"
             className="btn btn-primary btn-lg w-full"
             onClick={primary.onClick}
-            disabled={pending}
+            disabled={pending || (step === "you" && !isOver14)}
           >
             {pending ? t("Saving…") : primary.label}
           </button>
@@ -481,6 +570,16 @@ export function Welcome({
           )}
         </div>
       </div>
+
+      <p className="pt-3 text-center text-[0.6875rem] text-[var(--color-text-dim)]">
+        <Link href="/confidentialite" className="underline">
+          {t("Privacy policy")}
+        </Link>
+        {" · "}
+        <Link href="/conditions" className="underline">
+          {t("Terms of use")}
+        </Link>
+      </p>
 
       {arrived && (
         <div className="welcome-arrival" role="status">

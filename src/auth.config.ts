@@ -35,7 +35,11 @@ export const authConfig = {
       const isPublic =
         pathname === "/" ||
         pathname.startsWith("/login") ||
-        pathname.startsWith("/api/auth");
+        pathname.startsWith("/api/auth") ||
+        // Legal pages must be readable before signing in — they are linked
+        // from the login screen. Exact paths, not prefixes.
+        pathname === "/confidentialite" ||
+        pathname === "/conditions";
 
       if (isPublic) return true;
       return isLoggedIn;

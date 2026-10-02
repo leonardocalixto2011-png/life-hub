@@ -1,9 +1,10 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Banknote } from "lucide-react";
 
 import { getDebt, hubChrome } from "@/lib/data";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { hasConsentIn } from "@/lib/consent";
 import { getT } from "@/lib/i18n-server";
 import { money, toDateInput } from "@/lib/format";
 import { basisPointsToInput, centsToInput } from "@/lib/money";
@@ -23,10 +24,15 @@ export default async function DebtDetailPage({
   const { user, hub } = await requireHub();
   const t = await getT();
   const { id } = await params;
-  const [debt, { ventures, members }] = await Promise.all([
-    withHub(user.id, (tx) => getDebt(tx, user.id, id)),
+  const [[debt, consented], { ventures, members }] = await Promise.all([
+    withHub(user.id, (tx) =>
+      Promise.all([getDebt(tx, user.id, id), hasConsentIn(tx, user.id, "DEBTS_SENSITIVE")]),
+    ),
     hubChrome(user.id, hub.id),
   ]);
+  // No consent on file (never given, or withdrawn): the consent card on /debts
+  // comes first, same as the list.
+  if (!consented) redirect("/debts");
   // getDebt is now owner-scoped itself (RLS would otherwise let a FULL-share
   // viewer read the row, and this page is the edit form). Kept as a belt on
   // top of that brace — it costs nothing and states the rule at the point a

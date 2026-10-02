@@ -1,5 +1,6 @@
 import { endOfDay, startOfDay } from "date-fns";
 
+import { DEBT_CONSENTED } from "@/lib/consent";
 import type { HubTx } from "@/lib/hub-context";
 import { withHub } from "@/lib/hub-context";
 import { listMyHubs, type SessionHub } from "@/lib/session";
@@ -86,7 +87,7 @@ export async function collectDigestForUser(userId: string, windowHours = 48) {
         // Only the recipient's own. A digest must never carry another member's
         // balances into someone else's inbox. Deliberately narrow: name, when,
         // how much — balance, APR and DEFAULT status stay out of email.
-        where: { ownerId: userId, status: { not: "PAID_OFF" }, dueDate: { gte: startOfDay(now), lte: horizon } },
+        where: { owner: DEBT_CONSENTED, ownerId: userId, status: { not: "PAID_OFF" }, dueDate: { gte: startOfDay(now), lte: horizon } },
         select: { name: true, dueDate: true, actualPaymentCents: true, minimumPaymentCents: true },
         orderBy: { dueDate: "asc" },
       }),
@@ -176,7 +177,7 @@ export async function collectWeeklyForUser(userId: string) {
     Promise.all([
       Promise.all(hubs.map((hub) => collectWeeklyInHub(tx, hub.id, userId).then((w) => ({ hub, w })))),
       tx.debt.findMany({
-        where: { ownerId: userId, status: { not: "PAID_OFF" }, dueDate: { gte: weekStart, lte: weekEnd } },
+        where: { owner: DEBT_CONSENTED, ownerId: userId, status: { not: "PAID_OFF" }, dueDate: { gte: weekStart, lte: weekEnd } },
         select: { name: true, actualPaymentCents: true, minimumPaymentCents: true },
       }),
     ]),

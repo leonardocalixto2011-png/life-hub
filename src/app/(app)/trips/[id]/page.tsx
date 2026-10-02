@@ -18,6 +18,7 @@ import { addTripItem, addTripSavings, deleteTrip, deleteTripItem, importTripPlan
 import { SubmitButton } from "@/components/SubmitButton";
 import { ActionForm } from "@/components/ActionForm";
 import { DangerZone, FormSection } from "@/components/Form";
+import { personName } from "@/lib/people";
 
 export const dynamic = "force-dynamic";
 
@@ -215,7 +216,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         </div>
         {who && (
           <span
-            title={who.name ?? who.email ?? undefined}
+            title={personName(who, t("Member"))}
             className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[var(--color-surface-2)] text-[0.55rem] font-bold text-[var(--color-text-dim)]"
           >
             {initials(who.name, who.email)}
@@ -664,7 +665,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                 <option value="">{t("Anyone")}</option>
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name ?? m.email}
+                    {personName(m, t("Member"))}
                   </option>
                 ))}
               </select>

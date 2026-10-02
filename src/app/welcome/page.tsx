@@ -14,6 +14,7 @@ import {
 } from "@/lib/onboarding";
 import { I18nProvider } from "@/components/I18nProvider";
 import { Welcome } from "./Welcome";
+import { hasConsent } from "@/lib/consent";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +24,18 @@ export const dynamic = "force-dynamic";
  * app layout is what sends un-onboarded people here, so being inside it would
  * loop. Also reachable later from /account to replay — nothing is reset.
  */
-export default async function WelcomePage() {
+export default async function WelcomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ age?: string }>;
+}) {
   const user = await requireUser();
-  const [hdrs, store, hubs, inviteRows] = await Promise.all([
+  const sp = await searchParams;
+  const [hdrs, store, hubs, ageAttested, inviteRows] = await Promise.all([
     headers(),
     cookies(),
     listMyHubs(user.id),
+    hasConsent(user.id, "AGE_14"),
     prisma.hubMembership.findMany({
       where: { userId: user.id, status: "INVITED" },
       select: {
@@ -37,7 +44,7 @@ export default async function WelcomePage() {
             id: true,
             name: true,
             color: true,
-            createdBy: { select: { name: true, email: true } },
+            createdBy: { select: { name: true } },
             _count: { select: { memberships: { where: { status: "ACTIVE" } } } },
           },
         },
@@ -58,6 +65,9 @@ export default async function WelcomePage() {
         lang={lang}
         localeChosen={Boolean(user.locale)}
         replay={Boolean(user.onboardedAt)}
+        ageAttested={ageAttested}
+        ageNeeded={sp.age === "1" && !ageAttested}
+        name={user.name ?? ""}
         userId={user.id}
         first={user.name?.trim().split(/\s+/)[0] ?? null}
         suggestedHubName={defaultHubName(first, lang)}
@@ -77,11 +87,12 @@ export default async function WelcomePage() {
           id: r.hub.id,
           name: r.hub.name,
           color: r.hub.color,
-          invitedBy: r.hub.createdBy.name ?? r.hub.createdBy.email ?? "",
+          invitedBy: r.hub.createdBy.name ?? (lang === "fr" ? "Quelqu'un" : "Someone"),
           members: r.hub._count.memberships,
         }))}
         interests={user.interests}
         aiEnabled={Boolean(process.env.ANTHROPIC_API_KEY)}
+        aiNoticeSeen={Boolean(user.aiNoticeAt)}
         chrome={
           chrome && hub
             ? {

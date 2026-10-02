@@ -15,6 +15,7 @@ import {
   setCurrentHub,
 } from "@/lib/hub-setup";
 import { defaultHubName, firstNameOf, isInterest } from "@/lib/onboarding";
+import { grantConsent, hasConsent } from "@/lib/consent";
 
 /**
  * Server actions for the first-run welcome. Unlike their counterparts under
@@ -98,6 +99,29 @@ export async function declineWelcomeInvite(hubId: string): Promise<Result> {
   return { ok: true };
 }
 
+/**
+ * The age attestation (Law 25: a person under 14 cannot consent for
+ * themselves). `attested` is the state of a checkbox that starts unchecked;
+ * anything but `true` records nothing. Also saves the name other hub members
+ * will see, since members no longer see each other's email address.
+ */
+export async function saveWelcomeAboutYou(input: { attested: boolean; name?: string }): Promise<Result> {
+  const user = await requireUser();
+  if (input?.attested !== true) {
+    return { ok: false, error: "Confirm that you are 14 or older to continue." };
+  }
+  const name = z.string().trim().max(80).safeParse(input.name ?? "");
+  if (!name.success || name.data.includes("@")) {
+    return { ok: false, error: "A name can't contain @ — your email stays private." };
+  }
+  await grantConsent(user.id, "AGE_14");
+  if (name.data && name.data !== user.name) {
+    await prisma.user.update({ where: { id: user.id }, data: { name: name.data } });
+  }
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export async function saveInterests(keys: string[]): Promise<Result> {
   const user = await requireUser();
   const list = z.array(z.string()).max(20).safeParse(keys);
@@ -114,6 +138,13 @@ export async function saveInterests(keys: string[]): Promise<Result> {
  */
 export async function finishWelcome(): Promise<void> {
   const user = await requireUser();
+
+  // The welcome cannot be finished — or skipped — without the age attestation.
+  // This is the server-side gate: `onboardedAt` is what lets someone into the
+  // app (see the (app) layout), and it is only ever set below. People who
+  // onboarded before the attestation existed were recorded as 14+ by the
+  // migration, so a replay passes straight through.
+  if (!(await hasConsent(user.id, "AGE_14"))) redirect("/welcome?age=1");
 
   const hubs = await listMyHubs(user.id);
   if (hubs.length === 0) {

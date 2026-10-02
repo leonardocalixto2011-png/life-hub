@@ -9,6 +9,7 @@ import { fetchImapBatch } from "./imap";
 import { fetchMicrosoftBatch } from "./microsoft";
 import { isMuted, isTrusted } from "./trust";
 import { RUN_TIME_BUDGET_MS, type MailBatchItem } from "./types";
+import { allMailAiConsentKeys } from "@/lib/consent";
 
 const MIN_AUTO_FILE_CONFIDENCE = 0.6;
 const MIN_AUTO_FILE_CONFIDENCE_UNTRUSTED_EVENT = 0.85; // "high-confidence, low-stakes" per the prompt
@@ -102,7 +103,9 @@ async function pollMailAccount(account: MailAccount, runStartedAt: number): Prom
               sourceSnippet: message.snippet.slice(0, 500),
               fromAddress,
               hubId: account.hubId,
-              note: `From ${account.emailAddress} — couldn't classify (assistant unavailable).`,
+              // No mailbox address in the note: the review inbox is hub-wide,
+              // and a member's address is theirs to show (lib/people.ts).
+              note: "Couldn't classify (assistant unavailable).",
               draft: {
                 kind: "task",
                 title: message.subject || "(no subject)",
@@ -184,13 +187,27 @@ export async function pollAllMailAccounts(
   accounts: number;
   errors: number;
   skipped: number;
+  paused: number;
 }> {
   const accounts = await prisma.mailAccount.findMany({ where: { status: { not: "REVOKED" } } });
+  // AI analysis of mail is opt-in (Law 25), per person and per hub. A mailbox
+  // whose connecting user has no active MAIL_AI consent for its hub is not
+  // touched at all — not fetched, not classified, checkpoint left where it
+  // is — so nothing of theirs reaches the model. That includes every mailbox
+  // connected before the consent existed, until its owner ticks the box on
+  // /mail, and any mailbox whose owner later switched analysis off. When they
+  // consent, polling resumes from the saved checkpoint.
+  const consented = await allMailAiConsentKeys();
   let errors = 0;
   let processed = 0;
   let skipped = 0;
+  let paused = 0;
 
   for (const account of accounts) {
+    if (!consented.has(`${account.userId}:${account.hubId}`)) {
+      paused++;
+      continue;
+    }
     if (Date.now() - runStartedAt > RUN_TIME_BUDGET_MS) break;
     skipped += await pollMailAccount(account, runStartedAt);
     processed++;
@@ -200,5 +217,6 @@ export async function pollAllMailAccounts(
 
   //  = bulk messages filtered out before any AI call. Surfaced so
   // the saving is measurable rather than assumed.
-  return { accounts: processed, errors, skipped };
+  // `paused` = mailboxes left alone because their owner has not agreed to AI analysis.
+  return { accounts: processed, errors, skipped, paused };
 }

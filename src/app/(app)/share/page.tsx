@@ -4,6 +4,7 @@ import { requireHub } from "@/lib/session";
 import { hubChrome } from "@/lib/data";
 import { getT } from "@/lib/i18n-server";
 import { ShareCapture } from "./ShareCapture";
+import { AiNotice } from "@/components/AiNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,7 @@ export default async function SharePage({
         title={t("Capture")}
         sub={t("Shared from another app. Turn it into tasks, events, deadlines or budget entries.")}
       />
+      {Boolean(process.env.ANTHROPIC_API_KEY) && !user.aiNoticeAt && <AiNotice />}
 
       <ShareCapture
         initialText={shared}
