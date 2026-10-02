@@ -46,11 +46,11 @@ export const tripPlanSchema = z.object({
   /** What the trip itself should say (title, dates, notes) under this plan. */
   trip: tripFields.omit({ budget: true }).optional(),
   /**
-   * The trip as an earlier version of this plan set it. A trip field is only
-   * moved to the new value while it still holds the old one (or nothing), so
+   * The trip as earlier versions of this plan set it. A trip field is only
+   * moved to the new value while it still holds one of those (or nothing), so
    * a date or title a person changed by hand is never overwritten.
    */
-  previous: tripFields.optional(),
+  previous: z.array(tripFields).max(10).optional(),
   stops: z
     .array(
       z
@@ -205,28 +205,31 @@ type TripRow = {
  * with no previous version is filled only when the trip has none, as before.
  */
 export function planTripPatch(plan: TripPlan, trip: TripRow) {
-  const prev = plan.previous ?? {};
+  const prev = plan.previous ?? [];
   const next = plan.trip ?? {};
   const patch: Partial<TripRow> = {};
   const same = (a: string | null | undefined, b: string | undefined) => (a ?? "").trim() === (b ?? "").trim();
+  const wasText = (key: "title" | "destination" | "notes", value: string | null) =>
+    prev.some((p) => p[key] != null && same(value, p[key]));
+  const wasDay = (key: "start" | "end", value: Date) => prev.some((p) => p[key] === ymd(value));
 
-  if (next.title && next.title !== trip.title && same(trip.title, prev.title)) patch.title = next.title;
+  if (next.title && next.title !== trip.title && wasText("title", trip.title)) patch.title = next.title;
   if (next.destination != null && !same(trip.destination, next.destination)) {
-    if (!trip.destination || same(trip.destination, prev.destination)) patch.destination = next.destination;
+    if (!trip.destination || wasText("destination", trip.destination)) patch.destination = next.destination;
   }
   if (next.notes != null && !same(trip.notes, next.notes)) {
-    if (!trip.notes || same(trip.notes, prev.notes)) patch.notes = next.notes;
+    if (!trip.notes || wasText("notes", trip.notes)) patch.notes = next.notes;
   }
-  if (next.start && next.start !== ymd(trip.startDate) && ymd(trip.startDate) === prev.start) {
+  if (next.start && next.start !== ymd(trip.startDate) && wasDay("start", trip.startDate)) {
     patch.startDate = noon(next.start);
   }
-  if (next.end && next.end !== ymd(trip.endDate) && ymd(trip.endDate) === prev.end) {
+  if (next.end && next.end !== ymd(trip.endDate) && wasDay("end", trip.endDate)) {
     patch.endDate = noon(next.end);
   }
   if (plan.budget != null) {
     const want = cents(plan.budget);
-    const was = cents(prev.budget);
-    if (trip.budgetCents !== want && (trip.budgetCents == null || trip.budgetCents === was)) patch.budgetCents = want;
+    const was = prev.some((p) => p.budget != null && cents(p.budget) === trip.budgetCents);
+    if (trip.budgetCents !== want && (trip.budgetCents == null || was)) patch.budgetCents = want;
   }
   // Never leave the trip ending before it starts.
   const start = patch.startDate ?? trip.startDate;

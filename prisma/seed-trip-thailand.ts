@@ -108,7 +108,7 @@ async function main() {
 
   const hub = await pickHub(user.id);
 
-  const titles = [TITLE, plan.previous?.title].filter((t): t is string => !!t);
+  const titles = [TITLE, ...(plan.previous ?? []).map((p) => p.title)].filter((t): t is string => !!t);
   const existing = await prisma.trip.findFirst({ where: { hubId: hub.id, title: { in: titles } } });
   if (existing) {
     console.log(`"${existing.title}" is already in ${hub.name}. Open it and use Import → the Thailand plan to update it.`);
