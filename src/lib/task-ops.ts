@@ -36,10 +36,14 @@ export function dueFields(before: Date | null, dueDate: Date | null) {
 export async function completeTask(tx: HubTx, id: string, hubId: string, userId: string) {
   const task = await findScopedTask(tx, id, hubId, userId);
 
-  await tx.task.update({
-    where: { id },
+  // Conditional, so two devices pressing "Done" at once can't both pass and
+  // spawn two next occurrences of a recurring task: only the one that
+  // actually flips the row continues.
+  const flipped = await tx.task.updateMany({
+    where: { ...scopedTask(id, hubId, userId), status: { not: "DONE" } },
     data: { status: "DONE", completedAt: new Date() },
   });
+  if (flipped.count === 0) return;
 
   if (task.isRecurring && task.recurrence) {
     const base = task.dueDate ?? new Date();

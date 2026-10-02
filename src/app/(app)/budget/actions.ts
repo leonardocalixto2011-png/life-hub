@@ -121,6 +121,7 @@ export async function updateEntry(fd: FormData) {
  * moment it is deleted. The row's Undo hands it back to `restoreEntry`.
  */
 const snapshotSchema = z.object({
+  hubId: z.string().cuid(),
   type: z.enum(["INCOME", "EXPENSE"]),
   amountCents: z.number().int().positive().max(100_000_000),
   currency: z.string().length(3),
@@ -149,6 +150,7 @@ export async function deleteEntry(
     const row = await tx.budgetEntry.findFirst({
       where: { id: parsed.data, hubId: hub.id },
       select: {
+        hubId: true,
         type: true,
         amountCents: true,
         currency: true,
@@ -184,6 +186,9 @@ export async function restoreEntry(
   const p = snapshotSchema.safeParse(input);
   if (!p.success) return { ok: false, error: "Could not undo" };
   const d = p.data;
+  // Switched hub in another tab since the delete: put it back where it was
+  // or not at all, never into whichever hub is open now.
+  if (d.hubId !== hub.id) return { ok: false, error: "Could not undo" };
   // A venture deleted in the meantime shouldn't block getting the entry back.
   let ventureId = d.ventureId;
   try {

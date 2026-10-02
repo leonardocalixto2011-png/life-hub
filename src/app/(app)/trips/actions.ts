@@ -292,13 +292,12 @@ async function addTripSavingsCore(tripId: string, fd: FormData) {
   await withHub(user.id, async (tx) => {
     const trip = await tx.trip.findFirst({
       where: { id: tripId, ...visibleTrip(hub.id, user.id) },
-      select: { savedCents: true },
+      select: { id: true },
     });
     if (!trip) throw new Error("Trip not found");
-    await tx.trip.update({
-      where: { id: tripId },
-      data: { savedCents: Math.max(0, trip.savedCents + cents) },
-    });
+    // One statement, so two quick taps can't read the same total and drop
+    // one of the amounts. Still floored at 0 for a withdrawal.
+    await tx.$executeRaw`UPDATE "Trip" SET "savedCents" = GREATEST(0, "savedCents" + ${cents}) WHERE "id" = ${tripId}`;
   });
   revalidateContent(`/trips/${tripId}`, "/trips");
 }
@@ -323,7 +322,8 @@ async function importTripPlanCore(tripId: string, fd: FormData): Promise<ActionR
   const json = String(fd.get("json") ?? "").trim();
   // Object.hasOwn, not a plain lookup: "constructor" or "__proto__" would
   // otherwise find something on Object.prototype and crash on `.plan`.
-  if (key && Object.hasOwn(TRIP_TEMPLATES, key)) {
+  const builtIn = !!key && Object.hasOwn(TRIP_TEMPLATES, key);
+  if (builtIn) {
     plan = TRIP_TEMPLATES[key].plan;
   } else if (json) {
     let raw: unknown;
@@ -380,7 +380,7 @@ async function importTripPlanCore(tripId: string, fd: FormData): Promise<ActionR
 
     if (Object.keys(patch).length > 0) await tx.trip.update({ where: { id: tripId }, data: patch });
 
-    const reminders = await syncPlanDeadlines(tx, resolved, tripId, trip.hubId, user.id, trip.visibility);
+    const reminders = await syncPlanDeadlines(tx, resolved, tripId, trip.hubId, user.id, trip.visibility, builtIn);
     // Only worth saying when something new actually landed on moved dates.
     return shiftDays !== 0 && (rows.some((r) => r.date) || reminders > 0) ? dates.startDate : null;
   });
@@ -411,6 +411,10 @@ async function syncPlanDeadlines(
   // A private trip's reminders stay private too, or they'd land in every
   // member's deadlines and digest.
   visibility: "PRIVATE" | "SHARED",
+  // Only a built-in template may adopt unlinked deadlines from before the
+  // trip link existed. Pasted JSON could otherwise name any hub deadline by
+  // title and day, take it over, and have it deleted with the trip.
+  builtIn: boolean,
 ) {
   const want = plan.deadlines ?? [];
   const gone = plan.retiredDeadlines ?? [];
@@ -423,7 +427,7 @@ async function syncPlanDeadlines(
       AND: [
         // This trip's own, or ones from before the link existed. Never
         // another trip's: two trips from one template each keep their own.
-        { OR: [{ tripId }, { tripId: null }] },
+        builtIn ? { OR: [{ tripId }, { tripId: null }] } : { tripId },
         // Mirrors the deadline RLS policy, per this app's defense-in-depth rule.
         { OR: [{ visibility: "SHARED" }, { createdById: userId }] },
       ],
