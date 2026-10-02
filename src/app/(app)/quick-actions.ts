@@ -19,7 +19,8 @@ import {
   type ImageMediaType,
   type ParseOutcome,
 } from "@/lib/parse";
-import { commitDraftsCore } from "@/lib/commit-drafts";
+import { commitDraftsCore, draftSharing } from "@/lib/commit-drafts";
+import { balanceMessage } from "@/lib/balance-message";
 import { CommitSchema } from "@/lib/commit-schema";
 import { revalidateContent } from "@/lib/revalidate";
 import { langOf } from "@/lib/i18n";
@@ -104,18 +105,30 @@ export async function dismissAiNotice(): Promise<void> {
 
 export async function commitDrafts(
   raw: unknown,
-): Promise<{ ok: boolean; created: string[]; error?: string }> {
+): Promise<{ ok: boolean; created: string[]; error?: string; balance?: string }> {
   const { user, hub } = await requireHub();
   const list = z.array(CommitSchema).max(25).safeParse(raw);
   if (!list.success) return { ok: false, created: [], error: "Invalid draft data." };
 
   const result = await withHub(user.id, (tx) =>
-    commitDraftsCore(tx, hub.id, user.id, list.data, langOf(user.locale)),
+    commitDraftsCore(tx, hub.id, user.id, list.data, langOf(user.locale), { activity: true }),
   );
 
   if (!result.ok) return result;
 
   revalidateContent();
 
-  return result;
+  // A split expense moved who-owes-whom: say where that leaves things, in the
+  // same words the Budget page uses. Read after the commit, in its own
+  // transaction, and never allowed to turn a saved entry into an error.
+  let balance: string | undefined;
+  if (list.data.some((d) => draftSharing(d, user.id).payerSharePct != null)) {
+    try {
+      balance = (await balanceMessage(user, hub)) ?? undefined;
+    } catch {
+      balance = undefined;
+    }
+  }
+
+  return { ...result, balance };
 }

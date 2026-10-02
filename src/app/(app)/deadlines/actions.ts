@@ -8,7 +8,9 @@ import { assertVentureInHub } from "@/lib/membership";
 import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { revalidateContent } from "@/lib/revalidate";
+import { rescopeActivity } from "@/lib/activity-rescope";
 import { visibleTo } from "@/lib/visibility";
+import { logActivity } from "@/lib/activity";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -48,8 +50,8 @@ export async function createDeadline(fd: FormData) {
   const { user, hub } = await requireHub();
   const d = parse(createSchema, fd);
   await assertVentureInHub(hub.id, d.ventureId);
-  await withHub(user.id, (tx) =>
-    tx.deadline.create({
+  await withHub(user.id, async (tx) => {
+    const row = await tx.deadline.create({
       data: {
         title: d.title,
         notes: d.notes,
@@ -60,8 +62,18 @@ export async function createDeadline(fd: FormData) {
         createdById: user.id,
         visibility: d.visibility,
       },
-    }),
-  );
+      select: { id: true, title: true, visibility: true },
+    });
+    await logActivity(tx, {
+      hubId: hub.id,
+      actorId: user.id,
+      verb: "DEADLINE_ADDED",
+      entityType: "deadline",
+      entityId: row.id,
+      summary: row.title,
+      visibility: row.visibility,
+    });
+  });
   revalidateContent();
 }
 
@@ -83,8 +95,10 @@ export async function updateDeadline(fd: FormData) {
     });
     if (count === 0) throw new Error("Not found.");
   });
+  await rescopeActivity(hub.id, "deadline", d.id, { visibility: d.visibility, title: d.title });
   revalidateContent(`/deadlines/${d.id}`);
-  redirect("/deadlines");
+  // In the edit sheet the form closes itself and stays on the list it opened over.
+  if (!fd.get("inSheet")) redirect("/deadlines");
 }
 
 export async function toggleDeadlineDone(fd: FormData) {
@@ -95,11 +109,27 @@ export async function toggleDeadlineDone(fd: FormData) {
   });
   const { id, done } = schema.parse({ id: fd.get("id"), done: fd.get("done") });
   await withHub(user.id, async (tx) => {
+    // Only a real open → done flip is news; re-ticking a done one is not.
+    const before = await tx.deadline.findFirst({
+      where: scoped(id, hub.id, user.id),
+      select: { title: true, visibility: true, doneAt: true },
+    });
     const { count } = await tx.deadline.updateMany({
       where: scoped(id, hub.id, user.id),
       data: { doneAt: done ? new Date() : null },
     });
     if (count === 0) throw new Error("Not found.");
+    if (done && before && !before.doneAt) {
+      await logActivity(tx, {
+        hubId: hub.id,
+        actorId: user.id,
+        verb: "DEADLINE_DONE",
+        entityType: "deadline",
+        entityId: id,
+        summary: before.title,
+        visibility: before.visibility,
+      });
+    }
   });
   revalidateContent();
 }
@@ -112,5 +142,6 @@ export async function deleteDeadline(fd: FormData) {
     if (count === 0) throw new Error("Not found.");
   });
   revalidateContent();
-  redirect("/deadlines");
+  // In the edit sheet the form closes itself and stays on the list it opened over.
+  if (!fd.get("inSheet")) redirect("/deadlines");
 }

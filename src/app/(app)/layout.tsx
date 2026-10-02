@@ -14,11 +14,15 @@ import { AccountMenu } from "@/components/AccountMenu";
 import { HubSwitcher } from "@/components/HubSwitcher";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { ToastHost } from "@/components/Toast";
+import { SearchButton } from "@/components/SearchSheet";
 
 export default async function AppLayout({
   children,
+  modal,
 }: {
   children: React.ReactNode;
+  /** The @modal slot: a detail route opened over the current list, in the edit sheet. */
+  modal: React.ReactNode;
 }) {
   // First-run welcome before anything else — including requireHub's own
   // "no hub yet" redirect, since /welcome is where a first hub gets made.
@@ -93,6 +97,7 @@ export default async function AppLayout({
       <header className="opaque sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 py-1 pl-4 pr-2 backdrop-blur">
         <HubSwitcher hubs={hubs} currentHubId={hub.id} pendingInvites={invites.length} />
         <div className="flex items-center gap-1">
+          <SearchButton />
           <Link
             href="/inbox"
             aria-label={
@@ -156,6 +161,7 @@ export default async function AppLayout({
         <main className="page-fade flex-1 overflow-y-auto">{children}</main>
       </div>
 
+      {modal}
       <ToastHost />
       <BottomNav />
     </div>

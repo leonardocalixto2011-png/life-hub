@@ -33,7 +33,7 @@ export default async function SharePage({
   const { user, hub } = await requireHub();
   const sp = await searchParams;
   const t = await getT();
-  const { ventures } = await hubChrome(user.id, hub.id);
+  const { ventures, members } = await hubChrome(user.id, hub.id);
 
   const shared = [sp.title, sp.text, sp.url]
     .map((s) => s?.trim())
@@ -54,6 +54,8 @@ export default async function SharePage({
         initialText={shared}
         userId={user.id}
         ventures={ventures.map((v) => ({ id: v.id, name: v.name }))}
+        members={members.map((m) => ({ id: m.id, name: m.name, email: m.email }))}
+        currency={hub.currency}
         aiEnabled={Boolean(process.env.ANTHROPIC_API_KEY)}
         sharedImages={sp.shared === "1"}
         notices={{

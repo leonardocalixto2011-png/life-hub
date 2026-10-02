@@ -7,6 +7,7 @@ import { Trash2 } from "lucide-react";
 import { createDeadline, deleteDeadline, updateDeadline } from "./actions";
 import { DangerZone, FormSection } from "@/components/Form";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { useSheetAction } from "@/components/EditSheet";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
 import { useT } from "@/components/I18nProvider";
 import type { T } from "@/lib/i18n";
@@ -102,6 +103,7 @@ export function DeadlineForm({
   existing?: Existing;
 }) {
   const router = useRouter();
+  const inSheet = useSheetAction();
   const t = useT();
   const formRef = useRef<HTMLFormElement>(null);
   const [open, setOpen] = useState(false);
@@ -112,13 +114,13 @@ export function DeadlineForm({
   if (existing) {
     return (
       <>
-        <form action={updateDeadline} className="space-y-5">
+        <form action={inSheet(updateDeadline)} className="space-y-5">
           <input type="hidden" name="id" value={existing.id} />
           <Fields ventures={ventures} existing={existing} t={t} grouped />
           <SubmitButton className="btn btn-primary btn-lg w-full">{t("Save")}</SubmitButton>
         </form>
         <DangerZone>
-          <form action={deleteDeadline}>
+          <form action={inSheet(deleteDeadline)}>
             <input type="hidden" name="id" value={existing.id} />
             <ConfirmButton>
               <Trash2 size={16} strokeWidth={2} aria-hidden />

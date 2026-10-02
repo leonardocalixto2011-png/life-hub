@@ -11,6 +11,7 @@ import { revalidateContent } from "@/lib/revalidate";
 import { dollarsToCents } from "@/lib/money";
 import { formResult, type ActionResult } from "@/lib/action-result";
 import { FAVORITE_CAP, ownFavorites, sameFavorite } from "@/lib/favorites";
+import { logActivity } from "@/lib/activity";
 
 /**
  * Favourites are personal and live in one hub. Every query below carries
@@ -80,6 +81,17 @@ export async function applyFavorite(
         },
         select: { id: true },
       });
+      if (fav.entryType === "EXPENSE") {
+        await logActivity(tx, {
+          hubId: hub.id,
+          actorId: user.id,
+          verb: "EXPENSE_ADDED",
+          entityType: "budget",
+          entityId: row.id,
+          summary: fav.category ?? fav.label,
+          amountCents: fav.amountCents,
+        });
+      }
       return { kind: "BUDGET", id: row.id };
     }
     if (fav.kind === "EVENT") {
@@ -94,6 +106,14 @@ export async function applyFavorite(
         },
         select: { id: true },
       });
+      await logActivity(tx, {
+        hubId: hub.id,
+        actorId: user.id,
+        verb: "EVENT_ADDED",
+        entityType: "event",
+        entityId: row.id,
+        summary: fav.label,
+      });
       return { kind: "EVENT", id: row.id };
     }
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
@@ -107,6 +127,14 @@ export async function applyFavorite(
         createdById: user.id,
       },
       select: { id: true },
+    });
+    await logActivity(tx, {
+      hubId: hub.id,
+      actorId: user.id,
+      verb: "TASK_ADDED",
+      entityType: "task",
+      entityId: row.id,
+      summary: fav.label,
     });
     return { kind: "TASK", id: row.id };
   });
@@ -136,15 +164,21 @@ export async function undoFavorite(input: Created): Promise<{ ok: boolean }> {
     createdById: user.id,
     createdAt: { gte: new Date(Date.now() - UNDO_WINDOW_MS) },
   };
-  const { count } = await withHub(user.id, (tx) => {
+  const { count } = await withHub(user.id, async (tx) => {
     // A favourite writes a plain entry: never a settle-up, never a
     // description (logDebtPayment's entries carry "Debt payment"). Anything
     // else was not made by a favourite tap, so it isn't this undo's to delete.
-    if (p.data.kind === "BUDGET") {
-      return tx.budgetEntry.deleteMany({ where: { ...where, isSettlement: false, description: null } });
+    const gone =
+      p.data.kind === "BUDGET"
+        ? await tx.budgetEntry.deleteMany({ where: { ...where, isSettlement: false, description: null } })
+        : p.data.kind === "EVENT"
+          ? await tx.event.deleteMany({ where })
+          : await tx.task.deleteMany({ where });
+    // An undone tap never happened, so its feed line goes with it.
+    if (gone.count > 0) {
+      await tx.activity.deleteMany({ where: { hubId: hub.id, actorId: user.id, entityId: p.data.id } });
     }
-    if (p.data.kind === "EVENT") return tx.event.deleteMany({ where });
-    return tx.task.deleteMany({ where });
+    return gone;
   });
   if (count > 0) revalidateContent();
   return { ok: count > 0 };

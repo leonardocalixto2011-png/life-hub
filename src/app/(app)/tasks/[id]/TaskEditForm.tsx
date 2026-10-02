@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react";
 import { deleteTask, updateTask } from "@/app/(app)/tasks/actions";
 import { DangerZone, FormSection } from "@/components/Form";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { useSheetAction } from "@/components/EditSheet";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
 import { SubmitButton } from "@/components/SubmitButton";
 import { useT } from "@/components/I18nProvider";
@@ -34,9 +35,10 @@ export function TaskEditForm({
   members: Option[];
 }) {
   const t = useT();
+  const inSheet = useSheetAction();
   return (
     <>
-      <form action={updateTask} className="space-y-5">
+      <form action={inSheet(updateTask)} className="space-y-5">
         <input type="hidden" name="id" value={task.id} />
 
         <FormSection title={t("Details")}>
@@ -127,7 +129,7 @@ export function TaskEditForm({
       </form>
 
       <DangerZone>
-        <form action={deleteTask}>
+        <form action={inSheet(deleteTask)}>
           <input type="hidden" name="id" value={task.id} />
           <ConfirmButton>
             <Trash2 size={16} strokeWidth={2} aria-hidden />

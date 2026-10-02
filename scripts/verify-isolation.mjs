@@ -385,6 +385,141 @@ async function main() {
       "app_user cannot delete a consent row, even its own (still there)",
       ledgerDeleteBlocked && consentStillThere !== null,
     );
+
+    // --- activity feed: hub-scoped, a private item's line is its actor's only --
+    // Torn down by the hub delete below (Activity cascades from Hub).
+    const sharedActA1 = await db.activity.create({
+      data: {
+        hubId: hubA.id, actorId: userA1.id, verb: "TASK_DONE", entityType: "task",
+        entityId: sharedTaskA.id, summary: "shared in A", visibility: "SHARED",
+      },
+    });
+    const privateActA1 = await db.activity.create({
+      data: {
+        hubId: hubA.id, actorId: userA1.id, verb: "TASK_ADDED", entityType: "task",
+        entityId: privateTaskA.id, summary: "private in A (A1 only)", visibility: "PRIVATE",
+      },
+    });
+
+    const a1Feed = await asAppUser(userA1.id, (tx) => tx.activity.findMany());
+    check(
+      "A1 sees both of their own activity lines, private one included",
+      a1Feed.some((a) => a.id === sharedActA1.id) && a1Feed.some((a) => a.id === privateActA1.id),
+    );
+    const a2Feed = await asAppUser(userA2.id, (tx) => tx.activity.findMany());
+    check(
+      "A2 (hub-mate) sees A1's shared activity line but NOT the private item's line",
+      a2Feed.some((a) => a.id === sharedActA1.id) && !a2Feed.some((a) => a.id === privateActA1.id),
+    );
+    const a2PrivateActById = await asAppUser(userA2.id, (tx) =>
+      tx.activity.findUnique({ where: { id: privateActA1.id } }),
+    );
+    check("A2 gets null reading the private activity line by id", a2PrivateActById === null);
+    const b1Feed = await asAppUser(userB1.id, (tx) => tx.activity.findMany());
+    check(
+      "B1 (other hub) sees none of Hub A's activity",
+      !b1Feed.some((a) => a.hubId === hubA.id),
+    );
+
+    // Forging a line in someone else's name is the dangerous direction.
+    let a2ForgedActivity = false;
+    try {
+      await asAppUser(userA2.id, (tx) =>
+        tx.activity.create({
+          data: { hubId: hubA.id, actorId: userA1.id, verb: "TASK_DONE", entityType: "task", summary: "forged" },
+        }),
+      );
+    } catch {
+      a2ForgedActivity = true;
+    }
+    check("A2 cannot write an activity line in A1's name", a2ForgedActivity);
+
+    let b1CrossHubActivity = false;
+    try {
+      await asAppUser(userB1.id, (tx) =>
+        tx.activity.create({
+          data: { hubId: hubA.id, actorId: userB1.id, verb: "TASK_DONE", entityType: "task", summary: "intruder" },
+        }),
+      );
+    } catch {
+      b1CrossHubActivity = true;
+    }
+    check("B1 cannot write an activity line into Hub A", b1CrossHubActivity);
+
+    let a2OwnActivity = false;
+    try {
+      const own = await asAppUser(userA2.id, (tx) =>
+        tx.activity.create({
+          data: { hubId: hubA.id, actorId: userA2.id, verb: "TASK_ADDED", entityType: "task", summary: "A2's own" },
+        }),
+      );
+      a2OwnActivity = Boolean(own.id);
+    } catch {
+      a2OwnActivity = false;
+    }
+    check("A2 CAN write an activity line in their own name", a2OwnActivity);
+
+    // The "merci" reaction is an UPDATE of one column on someone else's line.
+    // The app role holds UPDATE on thankedById only, so the text is not editable.
+    let a2Rewrote = 0;
+    try {
+      a2Rewrote = (
+        await asAppUser(userA2.id, (tx) =>
+          tx.activity.updateMany({ where: { id: sharedActA1.id }, data: { summary: "rewritten" } }),
+        )
+      ).count;
+    } catch {
+      a2Rewrote = 0;
+    }
+    const actIntact = await db.activity.findUnique({ where: { id: sharedActA1.id } });
+    check(
+      "A2 cannot rewrite the text of A1's activity line",
+      a2Rewrote === 0 && actIntact?.summary === "shared in A",
+    );
+
+    const a2Thanked = await asAppUser(
+      userA2.id,
+      (tx) => tx.$executeRaw`
+        UPDATE "Activity" SET "thankedById" = array_append("thankedById", ${userA2.id})
+         WHERE "id" = ${sharedActA1.id} AND NOT (${userA2.id} = ANY("thankedById"))`,
+    );
+    const a2ThankedTwice = await asAppUser(
+      userA2.id,
+      (tx) => tx.$executeRaw`
+        UPDATE "Activity" SET "thankedById" = array_append("thankedById", ${userA2.id})
+         WHERE "id" = ${sharedActA1.id} AND NOT (${userA2.id} = ANY("thankedById"))`,
+    );
+    const thankedRow = await db.activity.findUnique({ where: { id: sharedActA1.id } });
+    check(
+      "A2 can thank A1's shared line exactly once (second attempt changes 0 rows)",
+      a2Thanked === 1 && a2ThankedTwice === 0 && thankedRow?.thankedById.length === 1,
+    );
+
+    const a2ThankPrivate = await asAppUser(
+      userA2.id,
+      (tx) => tx.$executeRaw`
+        UPDATE "Activity" SET "thankedById" = array_append("thankedById", ${userA2.id})
+         WHERE "id" = ${privateActA1.id}`,
+    );
+    const b1Thank = await asAppUser(
+      userB1.id,
+      (tx) => tx.$executeRaw`
+        UPDATE "Activity" SET "thankedById" = array_append("thankedById", ${userB1.id})
+         WHERE "id" = ${sharedActA1.id}`,
+    );
+    check(
+      "A2 cannot thank a private line, and B1 cannot thank anything in Hub A (0 rows each)",
+      a2ThankPrivate === 0 && b1Thank === 0,
+    );
+
+    const a2DeleteAct = await asAppUser(userA2.id, (tx) =>
+      tx.activity.deleteMany({ where: { id: sharedActA1.id } }),
+    );
+    const actStillThere = await db.activity.findUnique({ where: { id: sharedActA1.id } });
+    check(
+      "A2 cannot delete A1's activity line (0 rows, still there)",
+      a2DeleteAct.count === 0 && actStillThere !== null,
+    );
   } finally {
     // --- teardown (owner role) ------------------------------------------------
     await db.debtShare.deleteMany({ where: { ownerId: { in: [userA1.id, userA2.id, userB1.id] } } });

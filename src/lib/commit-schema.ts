@@ -24,4 +24,8 @@ export const CommitSchema = z.object({
   // The uploaded photo a draft came from. Only our own Blob host in
   // production — a task photo loads in every hub member's browser.
   imageUrl: blobUrlSchema.nullable().optional(),
+  // Budget expenses only: who paid, and the part they keep (see lib/couple.ts).
+  // Membership of `paidById` is checked in commitDraftsCore, not here.
+  paidById: z.string().cuid().nullable().optional(),
+  payerSharePct: z.number().int().min(0).max(100).nullable().optional(),
 });

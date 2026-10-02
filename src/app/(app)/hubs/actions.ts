@@ -194,6 +194,8 @@ async function cleanupDepartingMember(hubId: string, subjectUserId: string) {
     await tx.event.deleteMany({ where: { hubId, createdById: subjectUserId, visibility: "PRIVATE" } });
     await tx.specialDate.deleteMany({ where: { hubId, createdById: subjectUserId, visibility: "PRIVATE" } });
     await tx.trip.deleteMany({ where: { hubId, createdById: subjectUserId, visibility: "PRIVATE" } });
+    // The feed lines about those private items were only ever theirs to see.
+    await tx.activity.deleteMany({ where: { hubId, actorId: subjectUserId, visibility: "PRIVATE" } });
     // Favourites are always personal — nobody left in the hub could ever see them.
     await tx.quickFavorite.deleteMany({ where: { hubId, createdById: subjectUserId } });
     // Leaving ends what they agreed to show or send for this hub: the debt

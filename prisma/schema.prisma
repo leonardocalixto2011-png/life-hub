@@ -72,6 +72,7 @@ model User {
   trips              Trip[]
   quickFavorites     QuickFavorite[]
   consents           Consent[]
+  activities         Activity[]
 }
 
 // ---------------------------------------------------------------------------
@@ -185,6 +186,7 @@ model Hub {
   tripItems      TripItem[]
   budgetTargets  BudgetTarget[]
   quickFavorites QuickFavorite[]
+  activities     Activity[]
 }
 
 model HubMembership {
@@ -893,4 +895,52 @@ model QuickFavorite {
   createdAt   DateTime     @default(now())
 
   @@index([hubId, createdById, sortOrder])
+}
+
+// ---------------------------------------------------------------------------
+// Activity — "who did what" in a hub: the feed on /today and /activity.
+// A short snapshot written by the action that did the thing (lib/activity.ts),
+// never a join back to the item, so a row still reads after its item is gone.
+// It copies the item's visibility: a PRIVATE item's activity is visible to its
+// actor only (RLS activity_select + the app-level mirror in lib/activity.ts).
+// Never written for debts. Pruned after 90 days (lib/retention.ts).
+// ---------------------------------------------------------------------------
+
+enum ActivityVerb {
+  TASK_ADDED
+  TASK_DONE
+  TASK_ASSIGNED
+  EVENT_ADDED
+  DEADLINE_ADDED
+  DEADLINE_DONE
+  EXPENSE_ADDED
+  SETTLED_UP
+  TRIP_ADDED
+  TRIP_ITEM_DONE
+  MEMBER_JOINED
+}
+
+model Activity {
+  id          String       @id @default(cuid())
+  hubId       String
+  hub         Hub          @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  /// Who did it. Cascade: a deleted account takes its own feed lines with it.
+  actorId     String
+  actor       User         @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  verb        ActivityVerb
+  /// "task" | "event" | "deadline" | "budget" | "trip" | "member" — where a tap goes.
+  entityType  String
+  /// Plain id, no FK: the line outlives the item (it just stops being tappable).
+  entityId    String?
+  /// The item's title at the time, e.g. "Payer Hydro". Never a debt, never an email address.
+  summary     String
+  amountCents Int?
+  /// TASK_ASSIGNED only — who it was given to. A member id, no FK.
+  targetId    String?
+  visibility  Visibility   @default(SHARED)
+  /// Members who tapped "merci" — once each. The only column app_user may UPDATE.
+  thankedById String[]     @default([])
+  createdAt   DateTime     @default(now())
+
+  @@index([hubId, createdAt])
 }

@@ -36,3 +36,32 @@ export async function notifyAssignment(
     actions: taskActions(lang),
   });
 }
+
+/**
+ * "Lucky te dit merci pour « Payer Hydro »" — one push to the person whose
+ * feed line was thanked (see thankActivity). Same rules as above: their
+ * language, their push preference, a name and never an address. The caller
+ * guarantees it is sent at most once per person per line, and rate limits it.
+ */
+export async function notifyThanks(
+  activityId: string,
+  summary: string,
+  recipientId: string,
+  actorName: string | null,
+) {
+  const [pref, recipient] = await Promise.all([
+    prisma.notificationPreference.findUnique({ where: { userId: recipientId } }),
+    prisma.user.findUnique({ where: { id: recipientId }, select: { locale: true } }),
+  ]);
+  if (pref && pref.pushEnabled === false) return { sent: 0, failed: 0, pruned: 0 };
+  const lang = langOf(recipient?.locale);
+  const actor = actorName?.trim().split(/\s+/)[0] || translate(lang, "Someone");
+  return sendPushToUser(recipientId, {
+    title: translate(lang, "Thanks 🙏"),
+    body: summary.trim()
+      ? translate(lang, "{actor} says thanks for “{title}”", { actor, title: summary.trim() })
+      : translate(lang, "{actor} says thanks", { actor }),
+    url: "/activity",
+    tag: `thanks-${activityId}`,
+  });
+}

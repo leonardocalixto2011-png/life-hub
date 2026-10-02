@@ -6,7 +6,7 @@ import { reportError } from "@/lib/observability";
 import { prisma } from "@/lib/prisma";
 import { mapLimit } from "@/lib/async";
 import { pruneRateLimits } from "@/lib/rate-limit";
-import { pruneReviewItems } from "@/lib/retention";
+import { pruneActivity, pruneReviewItems } from "@/lib/retention";
 import { dispatchReminders } from "@/lib/reminders";
 import { sendEmail } from "@/lib/email";
 import { sendPushToUser, viewAction } from "@/lib/push";
@@ -108,12 +108,22 @@ export async function GET(req: Request) {
     prunedReviews = { error: true };
     await reportError("cron.digest.retention_failed", err, {});
   }
+  // The activity feed keeps 90 days too. Its own try: one sweep failing must
+  // not skip the other.
+  let prunedActivity: number | { error: true };
+  try {
+    prunedActivity = await pruneActivity();
+  } catch (err) {
+    prunedActivity = { error: true };
+    await reportError("cron.digest.activity_retention_failed", err, {});
+  }
 
   return NextResponse.json({
     ok: true,
     count: totalCount,
     prunedRateLimits,
     prunedReviews,
+    prunedActivity,
     reminded,
     failed,
     pushed,

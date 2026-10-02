@@ -30,6 +30,7 @@ const CONTENT_PATHS = [
   "/debts",
   "/budget",
   "/inbox",
+  "/activity",
 ] as const;
 
 /** Invalidate every content route, plus any detail pages passed in. */

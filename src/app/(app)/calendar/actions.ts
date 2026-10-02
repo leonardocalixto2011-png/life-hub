@@ -9,8 +9,10 @@ import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput, fromDateTimeInput } from "@/lib/format";
 import { revalidateContent } from "@/lib/revalidate";
+import { rescopeActivity } from "@/lib/activity-rescope";
 import { assertActiveMember, assertVentureInHub } from "@/lib/membership";
 import { visibleTo } from "@/lib/visibility";
+import { logActivity } from "@/lib/activity";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -102,8 +104,8 @@ export async function createEvent(fd: FormData) {
       throw new Error("No matching days between the start date and \"repeat until\".");
     }
     const recurrenceGroupId = randomBytes(12).toString("hex");
-    await withHub(user.id, (tx) =>
-      tx.event.createMany({
+    await withHub(user.id, async (tx) => {
+      await tx.event.createMany({
         data: offsets.map((offset) => ({
           ...base,
           startAt: addDays(base.startAt, offset),
@@ -112,14 +114,33 @@ export async function createEvent(fd: FormData) {
           createdById: user.id,
           recurrenceGroupId,
         })),
-      }),
-    );
+      });
+      // One line for the whole series (createMany returns no ids to link to).
+      await logActivity(tx, {
+        hubId: hub.id,
+        actorId: user.id,
+        verb: "EVENT_ADDED",
+        entityType: "event",
+        summary: base.title,
+        visibility: base.visibility,
+      });
+    });
   } else {
-    await withHub(user.id, (tx) =>
-      tx.event.create({
+    await withHub(user.id, async (tx) => {
+      const row = await tx.event.create({
         data: { ...base, hubId: hub.id, createdById: user.id },
-      }),
-    );
+        select: { id: true },
+      });
+      await logActivity(tx, {
+        hubId: hub.id,
+        actorId: user.id,
+        verb: "EVENT_ADDED",
+        entityType: "event",
+        entityId: row.id,
+        summary: base.title,
+        visibility: base.visibility,
+      });
+    });
   }
 
   revalidateContent();
@@ -135,8 +156,10 @@ export async function updateEvent(fd: FormData) {
     const { count } = await tx.event.updateMany({ where: { id: d.id, ...scoped(hub.id, user.id) }, data });
     if (count === 0) throw new Error("Not found.");
   });
+  await rescopeActivity(hub.id, "event", d.id, { visibility: d.visibility, title: d.title });
   revalidateContent();
-  redirect("/calendar");
+  // In the edit sheet the form closes itself and stays on the list it opened over.
+  if (!fd.get("inSheet")) redirect("/calendar");
 }
 
 export async function deleteEvent(fd: FormData) {
@@ -147,7 +170,8 @@ export async function deleteEvent(fd: FormData) {
     if (count === 0) throw new Error("Not found.");
   });
   revalidateContent();
-  redirect("/calendar");
+  // In the edit sheet the form closes itself and stays on the list it opened over.
+  if (!fd.get("inSheet")) redirect("/calendar");
 }
 
 /** Deletes exactly the events whose ids are checked — no series logic. */
@@ -207,5 +231,6 @@ export async function deleteEventSeries(fd: FormData) {
     }),
   );
   revalidateContent();
-  redirect("/calendar");
+  // In the edit sheet the form closes itself and stays on the list it opened over.
+  if (!fd.get("inSheet")) redirect("/calendar");
 }

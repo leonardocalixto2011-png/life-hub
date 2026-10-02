@@ -93,7 +93,8 @@ export async function updateSubscription(fd: FormData) {
     if (count === 0) throw new Error("Not found.");
   });
   revalidateContent(`/subscriptions/${d.id}`);
-  redirect("/subscriptions");
+  // In the edit sheet the form closes itself and stays on the list it opened over.
+  if (!fd.get("inSheet")) redirect("/subscriptions");
 }
 
 export async function setSubscriptionStatus(fd: FormData) {
@@ -118,5 +119,6 @@ export async function deleteSubscription(fd: FormData) {
     if (count === 0) throw new Error("Not found.");
   });
   revalidateContent();
-  redirect("/subscriptions");
+  // In the edit sheet the form closes itself and stays on the list it opened over.
+  if (!fd.get("inSheet")) redirect("/subscriptions");
 }

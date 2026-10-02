@@ -20,6 +20,19 @@ import { prisma } from "@/lib/prisma";
  */
 export const REVIEW_RETENTION_DAYS = 90;
 
+/**
+ * The activity feed ("who did what") is a recent-history cue, not a record:
+ * past 90 days a line is of no use to anyone and still names a person, so it
+ * is deleted. Same job, same trusted client, same reasoning as above.
+ */
+export const ACTIVITY_RETENTION_DAYS = 90;
+
+export async function pruneActivity(now: Date = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - ACTIVITY_RETENTION_DAYS * 864e5);
+  const { count } = await prisma.activity.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  return count;
+}
+
 export async function pruneReviewItems(
   now: Date = new Date(),
 ): Promise<{ expired: number; deleted: number }> {

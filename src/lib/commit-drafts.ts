@@ -2,7 +2,8 @@ import type { HubTx } from "@/lib/hub-context";
 import { dollarsToCents } from "@/lib/money";
 import { fromDateInput, fromDateTimeInput } from "@/lib/format";
 import type { Draft } from "@/lib/parse";
-import { assertVentureInHub } from "@/lib/membership";
+import { assertActiveMember, assertVentureInHub } from "@/lib/membership";
+import { logActivity } from "@/lib/activity";
 import { translate, type Lang } from "@/lib/i18n";
 
 /** Draft amounts are typed by people ("4,50", "1 234,56"), so they go
@@ -14,6 +15,17 @@ function toCents(s: string | null): number | null {
 export type CommitResult =
   | { ok: true; created: string[] }
   | { ok: false; created: string[]; error: string };
+
+/**
+ * The split a budget draft asks for, normalised the way budget/actions.ts's
+ * `sharing()` does it: only an EXPENSE can be shared, and a shared one with
+ * no payer named was paid by whoever is saving it.
+ */
+export function draftSharing(d: Draft, userId: string) {
+  const payerSharePct = d.kind === "budget" && d.entryType === "EXPENSE" ? (d.payerSharePct ?? null) : null;
+  const paidById = payerSharePct != null ? (d.paidById ?? userId) : null;
+  return { paidById, payerSharePct };
+}
 
 /**
  * The actual "turn a Draft into a Task/Deadline/Event/Subscription/
@@ -34,9 +46,35 @@ export async function commitDraftsCore(
   userId: string,
   drafts: Draft[],
   lang: Lang = "en",
+  /**
+   * `activity`: write a feed line per item. On for a person saving their own
+   * drafts; off (the default) for the mail poller, where nobody "did" anything
+   * — an auto-filed bill showing up as "Lucky added…" would be untrue.
+   */
+  opts: { activity?: boolean } = {},
 ): Promise<CommitResult> {
   const created: string[] = [];
   const say = (key: string, title: string) => translate(lang, key, { title });
+  const log = (
+    verb: "TASK_ADDED" | "EVENT_ADDED" | "DEADLINE_ADDED" | "EXPENSE_ADDED",
+    entityType: "task" | "event" | "deadline" | "budget",
+    entityId: string,
+    d: Draft,
+    amountCents?: number | null,
+  ) =>
+    opts.activity
+      ? logActivity(tx, {
+          hubId,
+          actorId: userId,
+          verb,
+          entityType,
+          entityId,
+          summary: d.title,
+          amountCents,
+          // Budget entries have no privacy flag; everything else copies its own.
+          visibility: entityType === "budget" ? "SHARED" : d.visibility,
+        })
+      : Promise.resolve();
 
   // A draft's ventureId comes from the client (quick-add, review inbox) or a
   // classifier; either way it must name a venture of *this* hub before
@@ -47,6 +85,16 @@ export async function commitDraftsCore(
     } catch (e) {
       return { ok: false, created, error: e instanceof Error ? e.message : "Invalid draft data." };
     }
+    // `paidById` is a plain member id with no FK: without this a crafted
+    // draft could attribute an expense to anyone in the app.
+    const { paidById } = draftSharing(d, userId);
+    if (paidById && paidById !== userId) {
+      try {
+        await assertActiveMember(hubId, paidById);
+      } catch (e) {
+        return { ok: false, created, error: e instanceof Error ? e.message : "Invalid draft data." };
+      }
+    }
   }
 
   for (const d of drafts) {
@@ -55,7 +103,7 @@ export async function commitDraftsCore(
       // see acceptReview in inbox/actions.ts.
       created.push(say("Marked handled: {title}", d.title));
     } else if (d.kind === "task") {
-      await tx.task.create({
+      const row = await tx.task.create({
         data: {
           title: d.title,
           notes: d.note,
@@ -68,10 +116,12 @@ export async function commitDraftsCore(
           createdById: userId,
           visibility: d.visibility,
         },
+        select: { id: true },
       });
+      await log("TASK_ADDED", "task", row.id, d);
       created.push(say("Task: {title}", d.title));
     } else if (d.kind === "deadline") {
-      await tx.deadline.create({
+      const row = await tx.deadline.create({
         data: {
           title: d.title,
           notes: d.note,
@@ -81,11 +131,13 @@ export async function commitDraftsCore(
           createdById: userId,
           visibility: d.visibility,
         },
+        select: { id: true },
       });
+      await log("DEADLINE_ADDED", "deadline", row.id, d);
       created.push(say("Deadline: {title}", d.title));
     } else if (d.kind === "event") {
       const startAt = fromDateTimeInput(d.time) ?? fromDateInput(d.date) ?? new Date();
-      await tx.event.create({
+      const row = await tx.event.create({
         data: {
           title: d.title,
           notes: d.note,
@@ -96,7 +148,9 @@ export async function commitDraftsCore(
           createdById: userId,
           visibility: d.visibility,
         },
+        select: { id: true },
       });
+      await log("EVENT_ADDED", "event", row.id, d);
       created.push(say("Event: {title}", d.title));
     } else if (d.kind === "subscription") {
       const existing = await tx.subscription.findFirst({
@@ -133,7 +187,10 @@ export async function commitDraftsCore(
       if (cents == null || cents <= 0) {
         return { ok: false, created, error: say("“{title}” needs an amount.", d.title) };
       }
-      await tx.budgetEntry.create({
+      // One entry, whatever produced the split: a preset, or a receipt read
+      // line by line — the itemised detail is only ever a way to arrive at
+      // the percentage, and is not stored.
+      const row = await tx.budgetEntry.create({
         data: {
           type: d.entryType,
           amountCents: cents,
@@ -143,8 +200,11 @@ export async function commitDraftsCore(
           date: fromDateInput(d.date) ?? new Date(),
           ventureId: d.ventureId,
           createdById: userId,
+          ...draftSharing(d, userId),
         },
+        select: { id: true },
       });
+      if (d.entryType === "EXPENSE") await log("EXPENSE_ADDED", "budget", row.id, d, cents);
       created.push(say(d.entryType === "INCOME" ? "Income: {title}" : "Expense: {title}", d.title));
     }
   }

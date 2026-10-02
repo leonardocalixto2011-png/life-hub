@@ -9,6 +9,7 @@ import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
 import { revalidateContent } from "@/lib/revalidate";
+import { logActivity } from "@/lib/activity";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -63,8 +64,8 @@ export async function createEntry(fd: FormData) {
   const share = await sharing(hub.id, user.id, d);
   await assertVentureInHub(hub.id, d.ventureId);
 
-  await withHub(user.id, (tx) =>
-    tx.budgetEntry.create({
+  await withHub(user.id, async (tx) => {
+    const row = await tx.budgetEntry.create({
       data: {
         type: d.type,
         amountCents,
@@ -77,8 +78,21 @@ export async function createEntry(fd: FormData) {
         createdById: user.id,
         ...share,
       },
-    }),
-  );
+      select: { id: true },
+    });
+    // Spending is the shared signal; income stays off the feed.
+    if (d.type === "EXPENSE") {
+      await logActivity(tx, {
+        hubId: hub.id,
+        actorId: user.id,
+        verb: "EXPENSE_ADDED",
+        entityType: "budget",
+        entityId: row.id,
+        summary: d.category,
+        amountCents,
+      });
+    }
+  });
 
   revalidateContent();
 }
@@ -243,8 +257,8 @@ export async function settleUp(fd: FormData) {
   await assertMember(hub.id, d.fromId);
   const amountCents = amountOf(d.amount);
 
-  await withHub(user.id, (tx) =>
-    tx.budgetEntry.create({
+  await withHub(user.id, async (tx) => {
+    const row = await tx.budgetEntry.create({
       data: {
         hubId: hub.id,
         type: "EXPENSE",
@@ -258,8 +272,18 @@ export async function settleUp(fd: FormData) {
         payerSharePct: 0,
         isSettlement: true,
       },
-    }),
-  );
+      select: { id: true },
+    });
+    await logActivity(tx, {
+      hubId: hub.id,
+      actorId: user.id,
+      verb: "SETTLED_UP",
+      entityType: "budget",
+      entityId: row.id,
+      summary: "",
+      amountCents,
+    });
+  });
   revalidateContent();
 }
 
@@ -319,8 +343,8 @@ export async function confirmUsualPayment(
     ventureId = null;
   }
 
-  const row = await withHub(user.id, (tx) =>
-    tx.budgetEntry.create({
+  const row = await withHub(user.id, async (tx) => {
+    const made = await tx.budgetEntry.create({
       data: {
         hubId: hub.id,
         type: "EXPENSE",
@@ -332,8 +356,18 @@ export async function confirmUsualPayment(
         createdById: user.id,
       },
       select: { id: true },
-    }),
-  );
+    });
+    await logActivity(tx, {
+      hubId: hub.id,
+      actorId: user.id,
+      verb: "EXPENSE_ADDED",
+      entityType: "budget",
+      entityId: made.id,
+      summary: p.data.category,
+      amountCents: p.data.amountCents,
+    });
+    return made;
+  });
   revalidateContent();
   return { ok: true, created: { kind: "BUDGET", id: row.id } };
 }

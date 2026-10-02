@@ -35,6 +35,8 @@ import { UsualPayments, type UsualItem } from "@/components/UsualPayments";
 import { dueUsualPayments, usualPaymentsFor } from "@/lib/usual";
 import { isInterest, type InterestKey } from "@/lib/onboarding";
 import { personFirstName } from "@/lib/people";
+import { recentActivity } from "@/lib/activity";
+import { ActivityRows } from "@/components/ActivityRows";
 
 export const dynamic = "force-dynamic";
 
@@ -81,7 +83,7 @@ export default async function DashboardPage() {
   const now = new Date();
   const todayStart = startOfDay(now);
 
-  const [[d, plans, shifts, recap, usual, myMailboxes, mailAi], { ventures, members: membersRaw }] = await Promise.all([
+  const [[d, plans, shifts, recap, usual, myMailboxes, mailAi, feed], { ventures, members: membersRaw }] = await Promise.all([
     withHub(user.id, (tx) =>
       Promise.all([
         dashboard(tx, hub.id, user.id, hub.currency),
@@ -91,6 +93,7 @@ export default async function DashboardPage() {
         usualPaymentsFor(tx, hub.id, user.id, now),
         tx.mailAccount.count({ where: { userId: user.id, hubId: hub.id, status: "ACTIVE" } }),
         hasConsentIn(tx, user.id, "MAIL_AI", hub.id),
+        recentActivity(tx, hub.id, user.id, { take: 5 }),
       ]),
     ),
     hubChrome(user.id, hub.id),
@@ -204,6 +207,24 @@ export default async function DashboardPage() {
         <section>
           <SectionHeader title={t("Tasks this week")} href="/tasks" cta={t("All tasks")} />
           <TaskListCard tasks={d.dueSoon} ventures={vOpts} members={membersRaw} />
+        </section>
+      )}
+
+      {/* Who did what — only where there is someone else to see it. Alone in
+          a hub it would be a list of your own taps. */}
+      {membersRaw.length >= 2 && feed.rows.length > 0 && (
+        <section>
+          <SectionHeader title={t("Activity")} href="/activity" cta={t("All")} />
+          <ActivityRows
+            rows={feed.rows}
+            links={feed.links}
+            members={membersRaw}
+            viewerId={user.id}
+            now={now}
+            lang={lang}
+            t={t}
+            formatMoney={(c) => money(c, currency, locale)}
+          />
         </section>
       )}
 

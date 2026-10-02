@@ -59,6 +59,7 @@ export async function exportUserData(userId: string) {
     notificationPref,
     quickFavorites,
     consents,
+    activity,
   ] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
@@ -109,6 +110,16 @@ export async function exportUserData(userId: string) {
       select: { kind: true, hubId: true, grantedAt: true, revokedAt: true, policyVersion: true },
       orderBy: { grantedAt: "asc" },
     }),
+    // The feed lines about what they did (kept 90 days). Lines by other
+    // people are not theirs, even where they were thanked or assigned.
+    prisma.activity.findMany({
+      where: { actorId: userId },
+      select: {
+        verb: true, entityType: true, summary: true, amountCents: true,
+        visibility: true, createdAt: true, hub: { select: { name: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
 
   return {
@@ -133,6 +144,7 @@ export async function exportUserData(userId: string) {
     notificationPref,
     quickFavorites,
     consents,
+    activity,
   };
 }
 
@@ -209,6 +221,12 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
     prisma.tripItem.updateMany({ where: { assignedToId: userId }, data: { assignedToId: null } }),
     // An array column, which updateMany can't edit element-wise.
     prisma.$executeRaw`UPDATE "Trip" SET "travelerIds" = array_remove("travelerIds", ${userId}) WHERE ${userId} = ANY("travelerIds")`,
+    // The activity feed. Their own lines are destroyed (also what the cascade
+    // from User would do — explicit so it doesn't depend on it); in other
+    // people's lines they are removed as the assignee and from the thanks.
+    prisma.activity.deleteMany({ where: { actorId: userId } }),
+    prisma.activity.updateMany({ where: { targetId: userId }, data: { targetId: null } }),
+    prisma.$executeRaw`UPDATE "Activity" SET "thankedById" = array_remove("thankedById", ${userId}) WHERE ${userId} = ANY("thankedById")`,
   ]);
   report.authorshipAnonymised =
     t.count + d.count + e.count + b.count + sd.count + tr.count + h.count +

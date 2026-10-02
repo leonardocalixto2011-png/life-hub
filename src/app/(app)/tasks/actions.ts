@@ -10,11 +10,13 @@ import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
 import { notifyAssignment } from "@/lib/notify";
 import { revalidateContent } from "@/lib/revalidate";
+import { rescopeActivity } from "@/lib/activity-rescope";
 import { assertActiveMember, assertVentureInHub } from "@/lib/membership";
 import { completeTask, dueFields, findScopedTask, scopedTask } from "@/lib/task-ops";
 import { blobUrlSchema } from "@/lib/blob-url";
 import { deleteBlobIfUnreferenced } from "@/lib/blob-delete";
 import { attachmentPrefix } from "@/lib/attachments";
+import { logActivity } from "@/lib/activity";
 
 // The scoping + completion logic lives in lib/task-ops.ts, shared with the
 // notification-button route (/api/push/action).
@@ -58,8 +60,8 @@ export async function createTask(formData: FormData) {
   if (data.assignedToId) await assertActiveMember(hub.id, data.assignedToId);
   await assertVentureInHub(hub.id, data.ventureId);
 
-  const task = await withHub(user.id, (tx) =>
-    tx.task.create({
+  const task = await withHub(user.id, async (tx) => {
+    const row = await tx.task.create({
       data: {
         title: data.title,
         notes: data.notes,
@@ -76,8 +78,21 @@ export async function createTask(formData: FormData) {
         createdById: user.id,
         visibility: data.visibility,
       },
-    }),
-  );
+    });
+    // One line, not two: handing a new task to someone already says it exists.
+    const given = Boolean(data.assignedToId && data.assignedToId !== user.id);
+    await logActivity(tx, {
+      hubId: hub.id,
+      actorId: user.id,
+      verb: given ? "TASK_ASSIGNED" : "TASK_ADDED",
+      entityType: "task",
+      entityId: row.id,
+      summary: row.title,
+      targetId: given ? data.assignedToId : null,
+      visibility: row.visibility,
+    });
+    return row;
+  });
 
   if (data.assignedToId && data.assignedToId !== user.id) {
     await notifyAssignment(task.id, task.title, data.assignedToId, user.name);
@@ -113,6 +128,7 @@ export async function updateTask(formData: FormData) {
         visibility: data.visibility,
       },
     });
+    await logAssignment(tx, hub.id, user.id, before.assignedToId, after);
     return [before, after];
   });
 
@@ -124,8 +140,31 @@ export async function updateTask(formData: FormData) {
     await notifyAssignment(after.id, after.title, data.assignedToId, user.name);
   }
 
+  await rescopeActivity(hub.id, "task", data.id, { visibility: data.visibility, title: data.title });
   revalidateContent(`/tasks/${data.id}`);
-  redirect("/tasks");
+  // In the edit sheet the form closes itself and stays on the list it opened over.
+  if (!formData.get("inSheet")) redirect("/tasks");
+}
+
+/** A feed line when a task changes hands to someone other than the person editing. */
+async function logAssignment(
+  tx: HubTx,
+  hubId: string,
+  actorId: string,
+  previousAssigneeId: string | null,
+  task: { id: string; title: string; assignedToId: string | null; visibility: "PRIVATE" | "SHARED" },
+) {
+  if (!task.assignedToId || task.assignedToId === actorId || task.assignedToId === previousAssigneeId) return;
+  await logActivity(tx, {
+    hubId,
+    actorId,
+    verb: "TASK_ASSIGNED",
+    entityType: "task",
+    entityId: task.id,
+    summary: task.title,
+    targetId: task.assignedToId,
+    visibility: task.visibility,
+  });
 }
 
 const toggleSchema = z.object({
@@ -170,7 +209,8 @@ export async function deleteTask(formData: FormData) {
   await deleteBlobIfUnreferenced(imageUrl);
 
   revalidateContent();
-  redirect("/tasks");
+  // In the edit sheet the form closes itself and stays on the list it opened over.
+  if (!formData.get("inSheet")) redirect("/tasks");
 }
 
 /**
@@ -274,6 +314,7 @@ export async function setTaskFields(input: z.infer<typeof patchSchema>) {
         ...(p.priority !== undefined ? { priority: p.priority } : {}),
       },
     });
+    await logAssignment(tx, hub.id, user.id, before.assignedToId, after);
     return [before, after];
   });
 

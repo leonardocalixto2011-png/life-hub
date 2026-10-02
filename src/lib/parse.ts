@@ -5,6 +5,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 import { ai, aiEnabled, fastEffort, AI_MODEL_FAST } from "@/lib/ai";
 import { reportError } from "@/lib/observability";
+import { cleanReceiptLines } from "@/lib/receipt-split";
 
 // "needs_reply" only ever comes from the mail connector's classifier
 // (lib/mail/classify.ts), never from this file's own parseText() — accepting
@@ -27,7 +28,22 @@ export type Draft = {
   suggestedReply: string | null; // needs_reply only — never auto-sent, just a starting point
   /** The photo this draft was read from, pinned to the task it becomes (tasks only). */
   imageUrl?: string | null;
+  /** Budget expenses: who paid. Null/absent = the person saving, when shared. */
+  paidById?: string | null;
+  /** Budget expenses: the part the payer keeps, 0–100. Null/absent = not shared. */
+  payerSharePct?: number | null;
+  /**
+   * A receipt's purchased lines, when a photo read could make them out. Only
+   * for the review card's "itemise" mode — never stored: the entry saves one
+   * total and one percentage (CommitSchema drops this field).
+   */
+  lines?: ReceiptLine[];
 };
+
+export type ReceiptLine = { name: string; amount: string };
+
+/** Hard cap on itemised lines, applied after the model's own (lib/receipt-split.ts). */
+export const MAX_RECEIPT_LINES = 30;
 
 const AiSchema = z.object({
   items: z.array(
@@ -45,6 +61,26 @@ const AiSchema = z.object({
     }),
   ),
 });
+
+/**
+ * The photo reader's schema: the same items, plus — for a store or restaurant
+ * receipt — the purchased lines, so the review card can offer "itemise" and
+ * split it between members. Its own schema rather than a field on AiSchema:
+ * text parsing has no receipt to itemise, and should not pay for the tokens.
+ */
+const ImageAiSchema = z.object({
+  items: z.array(
+    AiSchema.shape.items.element.extend({
+      lines: z.array(z.object({ name: z.string(), amount: z.number() })).nullable(),
+    }),
+  ),
+});
+
+type ParsedItems = {
+  items: (z.infer<typeof AiSchema>["items"][number] & {
+    lines?: { name: string; amount: number }[] | null;
+  })[];
+};
 
 /**
  * Upstream AI failures mapped to something a person can act on. Anything the
@@ -169,7 +205,7 @@ function itemRules(ventures: VentureRef[]): string[] {
 
 /** Model output → reviewable drafts, shared by parseText and parseImage. */
 function toOutcome(
-  parsed: z.infer<typeof AiSchema> | null,
+  parsed: ParsedItems | null,
   ventures: VentureRef[],
   maxItems: number,
   truncated: boolean,
@@ -182,20 +218,29 @@ function toOutcome(
 
   if (parsed.items.length > maxItems) truncated = true;
 
-  const drafts: Draft[] = parsed.items.slice(0, maxItems).map((it) => ({
-    kind: it.kind,
-    title: it.title.slice(0, 200),
-    date: it.date,
-    time: it.time,
-    amount: it.amount != null ? it.amount.toFixed(2) : null,
-    entryType: it.entryType ?? "EXPENSE",
-    billingCycle: it.billingCycle ?? "MONTHLY",
-    priority: it.priority ?? "MED",
-    ventureId: it.ventureName ? (vByName.get(it.ventureName.toLowerCase()) ?? null) : null,
-    note: it.note,
-    visibility: "SHARED",
-    suggestedReply: null,
-  }));
+  const drafts: Draft[] = parsed.items.slice(0, maxItems).map((it) => {
+    // Lines only ever ride on a paid receipt (a budget expense); two or more,
+    // or there is nothing to divide. Cleaned here, whatever the model sent.
+    const lines =
+      it.kind === "budget" && (it.entryType ?? "EXPENSE") === "EXPENSE"
+        ? cleanReceiptLines(it.lines, MAX_RECEIPT_LINES)
+        : [];
+    return {
+      kind: it.kind,
+      title: it.title.slice(0, 200),
+      date: it.date,
+      time: it.time,
+      amount: it.amount != null ? it.amount.toFixed(2) : null,
+      entryType: it.entryType ?? "EXPENSE",
+      billingCycle: it.billingCycle ?? "MONTHLY",
+      priority: it.priority ?? "MED",
+      ventureId: it.ventureName ? (vByName.get(it.ventureName.toLowerCase()) ?? null) : null,
+      note: it.note,
+      visibility: "SHARED",
+      suggestedReply: null,
+      ...(lines.length >= 2 ? { lines } : {}),
+    };
+  });
 
   return { ok: true, drafts, truncated: truncated || undefined };
 }
@@ -236,6 +281,8 @@ export async function parseImage(
     ...itemRules(ventures),
     "How to read common photos:",
     "- Store or restaurant receipt (already paid): one budget item, entryType EXPENSE, amount = the final total paid including tax and tip, date = purchase date, title = short category + merchant (e.g. \"Épicerie — Metro\" in French, \"Groceries — Metro\" in English). Never one item per line.",
+    `  For that receipt item only, also fill lines: the purchased lines as printed, each { name, amount } with amount = the line's price in dollars after any discount on that line (quantity × unit price already multiplied). At most ${MAX_RECEIPT_LINES} lines; if there are more, keep the ${MAX_RECEIPT_LINES} largest. Leave OUT of lines: subtotal, taxes (TPS, TVQ, GST, HST…), tip, total, change, and anything about the payment — never a card, account, loyalty or transaction number. Short readable names (\"Lait 2 %\", not a barcode). lines = null when the lines can't be read with confidence.`,
+    "For every item that is not a paid receipt, lines = null.",
     "- Bill or invoice still to pay: a task, amount = amount due, date = due date, title = \"Pay <biller>\" (\"Payer <biller>\" in French).",
     "- Invitation, poster or appointment: an event when a clock time is shown (time set), otherwise a deadline with the date. Put the place in note.",
     "- Subscription or renewal notice: a subscription with billingCycle and the next renewal date.",
@@ -245,14 +292,15 @@ export async function parseImage(
     "Only include items clearly visible in the photo. Empty items array if it shows nothing actionable.",
   ].join("\n");
 
-  let parsed: z.infer<typeof AiSchema> | null = null;
+  let parsed: ParsedItems | null = null;
   let truncated = false;
   try {
     const res = await ai().messages.parse({
       model: AI_MODEL_FAST,
-      // A photo usually yields one or two items; this is headroom, not a target.
-      max_tokens: 2048,
-      output_config: { ...fastEffort(), format: zodOutputFormat(AiSchema) },
+      // A photo usually yields one or two items; the headroom is for a long
+      // receipt's lines (≈25 tokens each, capped at MAX_RECEIPT_LINES).
+      max_tokens: 3072,
+      output_config: { ...fastEffort(), format: zodOutputFormat(ImageAiSchema) },
       system,
       messages: [
         {
