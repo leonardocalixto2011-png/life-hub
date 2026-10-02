@@ -29,8 +29,28 @@ const day = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Dates are YYYY-MM-DD")
   .refine(isRealDay, "That date doesn't exist");
 
+const ITEM_KINDS = ["BOOK", "TODO", "PACK", "ACTIVITY", "SAVE", "BUDGET", "TIP"] as const;
+
+/** The trip's own fields as a plan sets them. */
+const tripFields = z.object({
+  title: z.string().trim().min(1).max(120).optional(),
+  destination: z.string().trim().max(160).optional(),
+  start: day.optional(),
+  end: day.optional(),
+  budget: z.number().nonnegative().optional(),
+  notes: z.string().trim().max(2000).optional(),
+});
+
 export const tripPlanSchema = z.object({
   budget: z.number().nonnegative().optional(),
+  /** What the trip itself should say (title, dates, notes) under this plan. */
+  trip: tripFields.omit({ budget: true }).optional(),
+  /**
+   * The trip as an earlier version of this plan set it. A trip field is only
+   * moved to the new value while it still holds the old one (or nothing), so
+   * a date or title a person changed by hand is never overwritten.
+   */
+  previous: tripFields.optional(),
   stops: z
     .array(
       z
@@ -44,7 +64,7 @@ export const tripPlanSchema = z.object({
   items: z
     .array(
       z.object({
-        kind: z.enum(["BOOK", "TODO", "PACK", "ACTIVITY", "SAVE", "BUDGET", "TIP"]),
+        kind: z.enum(ITEM_KINDS),
         title: z.string().trim().min(1).max(160),
         date: day.optional(),
         cost: z.number().nonnegative().optional(),
@@ -53,13 +73,39 @@ export const tripPlanSchema = z.object({
     )
     .max(300)
     .default([]),
+  /**
+   * Rows an earlier version of this plan had and this one drops. Importing
+   * deletes them from the trip, unless someone ticked them: a ticked deposit
+   * or booking is a record of something that happened.
+   */
+  retired: z
+    .array(z.object({ kind: z.enum(["STOP", ...ITEM_KINDS]), title: z.string().trim().min(1).max(160) }))
+    .max(300)
+    .optional(),
+  /** Dated reminders the plan keeps as hub deadlines, matched on title + day. */
+  deadlines: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(160),
+        due: day,
+        notes: z.string().trim().max(800).optional(),
+        remind: z.array(z.number().int().min(0).max(60)).max(6).optional(),
+      }),
+    )
+    .max(30)
+    .optional(),
+  /** Deadlines an earlier version of the plan created; removed unless done. */
+  retiredDeadlines: z
+    .array(z.object({ title: z.string().trim().min(1).max(160), due: day }))
+    .max(30)
+    .optional(),
 });
 
 export type TripPlan = z.infer<typeof tripPlanSchema>;
 
 /** Built-in plans offered on the import form, by key. */
 export const TRIP_TEMPLATES: Record<string, { label: string; plan: TripPlan }> = {
-  "thailand-2027": { label: "Thailand + Vietnam, March 2027", plan: thailand2027 },
+  "thailand-2027": { label: "Thailand, one week, March 2027", plan: thailand2027 },
 };
 
 /** Date-only values are stored at local noon, like the rest of the app. */
@@ -119,3 +165,78 @@ export function planNote(plan: TripPlan, kind: string, title: string): string | 
   const t = title.trim().toLowerCase();
   return plan.items.find((i) => i.kind === kind && i.title.trim().toLowerCase() === t)?.note ?? null;
 }
+
+const itemKey = (kind: string, title: string) => `${kind}|${title.trim().toLowerCase()}`;
+
+/**
+ * Ids of the trip's rows an updated plan drops: listed in `retired`, not
+ * ticked, and not also in the plan itself under the same kind + title.
+ */
+export function retiredRowIds(
+  plan: TripPlan,
+  existing: { id: string; kind: string; title: string; done: boolean }[],
+): string[] {
+  const keep = new Set([
+    ...plan.stops.map((s) => itemKey("STOP", s.name)),
+    ...plan.items.map((i) => itemKey(i.kind, i.title)),
+  ]);
+  const drop = new Set((plan.retired ?? []).map((r) => itemKey(r.kind, r.title)).filter((k) => !keep.has(k)));
+  return existing.filter((e) => !e.done && drop.has(itemKey(e.kind, e.title))).map((e) => e.id);
+}
+
+/** A stored date-only value as YYYY-MM-DD, in the app's pinned zone. */
+export function ymd(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+type TripRow = {
+  title: string;
+  destination: string | null;
+  startDate: Date;
+  endDate: Date;
+  budgetCents: number | null;
+  notes: string | null;
+};
+
+/**
+ * The trip fields a plan moves: each one only while the trip still holds what
+ * the previous version of the plan set, or nothing. A budget the plan gives
+ * with no previous version is filled only when the trip has none, as before.
+ */
+export function planTripPatch(plan: TripPlan, trip: TripRow) {
+  const prev = plan.previous ?? {};
+  const next = plan.trip ?? {};
+  const patch: Partial<TripRow> = {};
+  const same = (a: string | null | undefined, b: string | undefined) => (a ?? "").trim() === (b ?? "").trim();
+
+  if (next.title && next.title !== trip.title && same(trip.title, prev.title)) patch.title = next.title;
+  if (next.destination != null && !same(trip.destination, next.destination)) {
+    if (!trip.destination || same(trip.destination, prev.destination)) patch.destination = next.destination;
+  }
+  if (next.notes != null && !same(trip.notes, next.notes)) {
+    if (!trip.notes || same(trip.notes, prev.notes)) patch.notes = next.notes;
+  }
+  if (next.start && next.start !== ymd(trip.startDate) && ymd(trip.startDate) === prev.start) {
+    patch.startDate = noon(next.start);
+  }
+  if (next.end && next.end !== ymd(trip.endDate) && ymd(trip.endDate) === prev.end) {
+    patch.endDate = noon(next.end);
+  }
+  if (plan.budget != null) {
+    const want = cents(plan.budget);
+    const was = cents(prev.budget);
+    if (trip.budgetCents !== want && (trip.budgetCents == null || trip.budgetCents === was)) patch.budgetCents = want;
+  }
+  // Never leave the trip ending before it starts.
+  const start = patch.startDate ?? trip.startDate;
+  const end = patch.endDate ?? trip.endDate;
+  if (end < start) {
+    delete patch.startDate;
+    delete patch.endDate;
+  }
+  return patch;
+}
+
+/** title + day, the key a plan's deadlines are matched on. */
+export const deadlineKey = (title: string, due: string) => `${title.trim().toLowerCase()}|${due}`;

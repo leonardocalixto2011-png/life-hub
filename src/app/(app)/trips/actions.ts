@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { withHub } from "@/lib/hub-context";
+import { withHub, type HubTx } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
 import { fromDateInput } from "@/lib/format";
 import { dollarsToCents } from "@/lib/money";
@@ -11,12 +11,17 @@ import { revalidateContent } from "@/lib/revalidate";
 import { assertActiveMember } from "@/lib/membership";
 import { formResult, type ActionResult } from "@/lib/action-result";
 import {
+  deadlineKey,
   isRealDay,
   missingPlanRows,
+  noon,
   planNote,
+  planTripPatch,
+  retiredRowIds,
   TRIP_TEMPLATES,
   tripPlanSchema,
   type TripPlan,
+  ymd,
 } from "@/lib/trip-plan";
 
 const emptyToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
@@ -273,20 +278,95 @@ async function importTripPlanCore(tripId: string, fd: FormData) {
   await withHub(user.id, async (tx) => {
     const trip = await tx.trip.findFirst({
       where: { id: tripId, ...visibleTrip(hub.id, user.id) },
-      select: { hubId: true, budgetCents: true, items: { select: { id: true, kind: true, title: true, note: true } } },
+      select: {
+        hubId: true,
+        title: true,
+        destination: true,
+        startDate: true,
+        endDate: true,
+        budgetCents: true,
+        notes: true,
+        visibility: true,
+        items: { select: { id: true, kind: true, title: true, note: true, done: true } },
+      },
     });
     if (!trip) throw new Error("Trip not found");
-    const rows = missingPlanRows(plan, tripId, trip.hubId, trip.items);
+
+    // An updated plan first drops the rows it no longer has (untouched ones only).
+    const dropIds = retiredRowIds(plan, trip.items);
+    if (dropIds.length > 0) await tx.tripItem.deleteMany({ where: { tripId, id: { in: dropIds } } });
+    const kept = trip.items.filter((i) => !dropIds.includes(i.id));
+
+    const rows = missingPlanRows(plan, tripId, trip.hubId, kept);
     if (rows.length > 0) await tx.tripItem.createMany({ data: rows });
     // Rows already there keep everything, but pick up a note the plan now has.
-    for (const e of trip.items) {
+    for (const e of kept) {
       if (e.note) continue;
       const note = planNote(plan, e.kind, e.title);
       if (note) await tx.tripItem.update({ where: { id: e.id }, data: { note } });
     }
-    if (trip.budgetCents == null && plan.budget != null) {
-      await tx.trip.update({ where: { id: tripId }, data: { budgetCents: Math.round(plan.budget * 100) } });
-    }
+
+    const patch = planTripPatch(plan, trip);
+    if (Object.keys(patch).length > 0) await tx.trip.update({ where: { id: tripId }, data: patch });
+
+    await syncPlanDeadlines(tx, plan, trip.hubId, user.id, trip.visibility);
   });
   revalidateContent(`/trips/${tripId}`, "/trips");
+}
+
+/**
+ * The plan's dated steps as hub deadlines, so the digest and pushes carry the
+ * schedule. Matched on title + day among deadlines this person can see: a
+ * match that isn't done takes the plan's notes and reminder days, a missing
+ * one is created, and a retired one is removed unless it was done.
+ */
+async function syncPlanDeadlines(
+  tx: HubTx,
+  plan: TripPlan,
+  hubId: string,
+  userId: string,
+  // A private trip's reminders stay private too, or they'd land in every
+  // member's deadlines and digest.
+  visibility: "PRIVATE" | "SHARED",
+) {
+  const want = plan.deadlines ?? [];
+  const gone = plan.retiredDeadlines ?? [];
+  if (want.length === 0 && gone.length === 0) return;
+
+  const existing = await tx.deadline.findMany({
+    where: {
+      hubId,
+      title: { in: [...want, ...gone].map((d) => d.title) },
+      // Mirrors the deadline RLS policy, per this app's defense-in-depth rule.
+      OR: [{ visibility: "SHARED" }, { createdById: userId }],
+    },
+    select: { id: true, title: true, dueDate: true, doneAt: true },
+  });
+  const byKey = new Map(existing.map((d) => [deadlineKey(d.title, ymd(d.dueDate)), d]));
+  const wanted = new Set(want.map((d) => deadlineKey(d.title, d.due)));
+
+  // A retired step someone already ticked (an old deposit amount, paid) also
+  // covers the new step due the same day: don't ask for that money twice.
+  const doneDays = new Set(
+    gone.filter((d) => byKey.get(deadlineKey(d.title, d.due))?.doneAt).map((d) => d.due),
+  );
+
+  const dropIds = gone
+    .map((d) => byKey.get(deadlineKey(d.title, d.due)))
+    .filter((d): d is NonNullable<typeof d> => !!d && !d.doneAt && !wanted.has(deadlineKey(d.title, ymd(d.dueDate))))
+    .map((d) => d.id);
+  if (dropIds.length > 0) await tx.deadline.deleteMany({ where: { hubId, id: { in: dropIds } } });
+
+  for (const d of want) {
+    const found = byKey.get(deadlineKey(d.title, d.due));
+    const data = { notes: d.notes ?? null, remindDaysBefore: d.remind ?? [7, 3, 1] };
+    if (!found) {
+      if (doneDays.has(d.due)) continue;
+      await tx.deadline.create({
+        data: { ...data, hubId, title: d.title, dueDate: noon(d.due), createdById: userId, visibility },
+      });
+    } else if (!found.doneAt) {
+      await tx.deadline.update({ where: { id: found.id }, data });
+    }
+  }
 }

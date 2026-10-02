@@ -1,5 +1,5 @@
 /**
- * Loads the March 2027 Thailand + Vietnam trip plan into a hub: the trip with
+ * Loads the March 2027 one-week Thailand trip plan into a hub: the trip with
  * its itinerary and checklists, and dated deadlines for
  * every savings deposit and booking step, so the digest and push reminders
  * walk you through it month by month.
@@ -11,63 +11,20 @@
  * belong to exactly one active hub.
  *
  * The plan itself lives in src/lib/trip-plans/thailand-2027.ts, shared with
- * the "Import a whole plan" form on the trip page. Idempotent: re-running adds only the plan items the trip is
- * missing, matched on kind + title.
+ * the "Import a whole plan" form on the trip page. Run once per hub: if the
+ * trip is already there (under this title or the earlier "Thailand + Vietnam"
+ * one), it stops and points you at Import, which updates a live trip
+ * without touching what's been ticked.
  */
 import { PrismaClient } from "@prisma/client";
 
-import { missingPlanRows, planRows } from "../src/lib/trip-plan";
+import { noon, planRows } from "../src/lib/trip-plan";
 import { thailand2027 } from "../src/lib/trip-plans/thailand-2027";
 
 const prisma = new PrismaClient();
 
-const TITLE = "Thailand + Vietnam";
-
-/** dollars -> cents, avoiding float drift. */
-const c = (dollars: number) => Math.round(dollars * 100);
-/** Date-only fields are stored at local noon, like the rest of the app. */
-const day = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12, 0, 0);
-
-
-/** Savings deposits for two, top-ups included: ahead of every payment, see the plan page. */
-const SAVINGS: [Date, number][] = [
-  [day(2026, 10, 1), 1580],
-  [day(2026, 11, 1), 1580],
-  [day(2026, 12, 1), 1030],
-  [day(2027, 1, 1), 900],
-  [day(2027, 2, 1), 800],
-  [day(2027, 3, 1), 800],
-];
-
-const MILESTONES: { due: Date; title: string; notes: string; remind?: number[] }[] = [
-  {
-    due: day(2026, 11, 30),
-    title: "Book the Thailand flights (last good date)",
-    notes: "YUL → BKK out Thu Mar 11, back from Da Nang Mon Mar 22. Aim for ≤ $1,300 each. Book earlier if an alert hits that.",
-    remind: [21, 14, 7, 3, 1],
-  },
-  {
-    due: day(2026, 12, 15),
-    title: "Book the trip hotels (free cancellation)",
-    notes: "Bangkok 3 nights, Railay/Ao Nang 4 nights, Hoi An 3 nights.",
-  },
-  {
-    due: day(2027, 1, 31),
-    title: "Book the regional flights (Krabi, Da Nang)",
-    notes: "DMK → Krabi Mon Mar 15; Krabi → BKK → Da Nang Fri Mar 19. Add checked bags at booking.",
-  },
-  {
-    due: day(2027, 2, 10),
-    title: "Apply for the Vietnam e-visas",
-    notes: "evisa.gov.vn only, about US$25 each, entry point Da Nang airport.",
-  },
-  {
-    due: day(2027, 3, 9),
-    title: "Submit the TDAC arrival cards",
-    notes: "Free, at tdac.immigration.go.th, within 72h before landing. Screenshot the confirmation.",
-    remind: [2, 1],
-  },
-];
+const plan = thailand2027;
+const TITLE = plan.trip?.title ?? "Thailand";
 
 /**
  * Where the trip goes, in order: HUB_NAME if given; else, with SHARE_WITH, a
@@ -151,61 +108,41 @@ async function main() {
 
   const hub = await pickHub(user.id);
 
-  // Re-running adds only what the trip is missing (a newer version of the
-  // plan, or a trip made by hand under the same title). Deadlines are written
-  // once, with the trip.
-  const existing = await prisma.trip.findFirst({
-    where: { hubId: hub.id, title: TITLE },
-    include: { items: { select: { kind: true, title: true } } },
-  });
+  const titles = [TITLE, plan.previous?.title].filter((t): t is string => !!t);
+  const existing = await prisma.trip.findFirst({ where: { hubId: hub.id, title: { in: titles } } });
   if (existing) {
-    const rows = missingPlanRows(thailand2027, existing.id, hub.id, existing.items);
-    const hadPlan = existing.items.some((i) => i.kind === "STOP");
-    await prisma.tripItem.createMany({ data: rows });
-    console.log(`✔ "${TITLE}" in ${hub.name}: added ${rows.length} missing plan items`);
-    if (hadPlan) return;
+    console.log(`"${existing.title}" is already in ${hub.name}. Open it and use Import → the Thailand plan to update it.`);
+    return;
   }
 
+  const t = plan.trip!;
   await prisma.$transaction(async (tx) => {
-    if (!existing) {
-      const trip = await tx.trip.create({
-        data: {
-          hubId: hub.id,
-          title: TITLE,
-          destination: "Bangkok · Krabi · Hoi An",
-          startDate: day(2027, 3, 11),
-          endDate: day(2027, 3, 22),
-          budgetCents: c(6300),
-          notes:
-            "Bangkok 3 nights, Krabi/Railay 4 nights, Hoi An 3 nights. Budget is for two; keep about $500 extra for tailoring and extras.",
-          createdById: user.id,
-        },
-      });
-      await tx.tripItem.createMany({ data: planRows(thailand2027, trip.id, hub.id) });
-    }
+    const trip = await tx.trip.create({
+      data: {
+        hubId: hub.id,
+        title: TITLE,
+        destination: t.destination ?? null,
+        startDate: noon(t.start!),
+        endDate: noon(t.end!),
+        budgetCents: plan.budget != null ? Math.round(plan.budget * 100) : null,
+        notes: t.notes ?? null,
+        createdById: user.id,
+      },
+    });
+    await tx.tripItem.createMany({ data: planRows(plan, trip.id, hub.id) });
     await tx.deadline.createMany({
-      data: [
-        ...SAVINGS.map(([due, total]) => ({
-          hubId: hub.id,
-          title: `Put $${total.toLocaleString("en-CA")} aside for Thailand ($${(total / 2).toLocaleString("en-CA")} each)`,
-          notes: "Then tick it in the trip's booking calendar.",
-          dueDate: due,
-          remindDaysBefore: [3, 1],
-          createdById: user.id,
-        })),
-        ...MILESTONES.map((m) => ({
-          hubId: hub.id,
-          title: m.title,
-          notes: m.notes,
-          dueDate: m.due,
-          remindDaysBefore: m.remind ?? [7, 3, 1],
-          createdById: user.id,
-        })),
-      ],
+      data: (plan.deadlines ?? []).map((d) => ({
+        hubId: hub.id,
+        title: d.title,
+        notes: d.notes ?? null,
+        dueDate: noon(d.due),
+        remindDaysBefore: d.remind ?? [7, 3, 1],
+        createdById: user.id,
+      })),
     });
   });
 
-  console.log(`✔ "${TITLE}" in ${hub.name}: ${thailand2027.stops.length} stops, ${thailand2027.items.length} plan items, ${SAVINGS.length + MILESTONES.length} reminders`);
+  console.log(`✔ "${TITLE}" in ${hub.name}: ${plan.stops.length} stops, ${plan.items.length} plan items, ${plan.deadlines?.length ?? 0} reminders`);
 }
 
 main()

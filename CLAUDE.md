@@ -1140,6 +1140,14 @@ upcoming event including holidays.
   notes on rows that have none, so an updated template can be re-applied to a
   live trip without duplicates or losing ticks. Keep template titles stable,
   since the title is the match key.
+- **Plans can shrink now (2026-10-01).** The Thailand template became one week
+  in Thailand only (Hoi An dropped, home from Krabi Mar 20, $5,800). A plan may
+  carry `retired` (kind + title rows an earlier version had: import deletes the
+  ones nobody ticked), `previous` + `trip` (title/dates/budget/notes move only
+  while the trip still holds the old value, so hand edits win), and
+  `deadlines` / `retiredDeadlines` (hub deadlines matched on title + day,
+  created, updated unless done, or removed unless done). When you change a
+  template's titles, list the old ones in `retired`.
 
 ### Ordered queue (as of 2026-09-07)
 
