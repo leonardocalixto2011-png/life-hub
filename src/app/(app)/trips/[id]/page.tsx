@@ -1,5 +1,18 @@
 import Link from "next/link";
-import { Check, Plus, Trash2, X } from "lucide-react";
+import {
+  Check,
+  Cloud,
+  CloudFog,
+  CloudLightning,
+  CloudRain,
+  CloudSnow,
+  CloudSun,
+  MapPin,
+  Plus,
+  Sun,
+  Trash2,
+  X,
+} from "lucide-react";
 import { notFound } from "next/navigation";
 import { differenceInCalendarDays, eachDayOfInterval, format, startOfDay, startOfMonth } from "date-fns";
 
@@ -20,6 +33,7 @@ import { ActionForm } from "@/components/ActionForm";
 import { DangerZone, FormSection } from "@/components/Form";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { personName } from "@/lib/people";
+import { tripWeather, weatherKind, type DayWeather, type WeatherKind } from "@/lib/weather";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +91,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
     hubChrome(user.id, hub.id),
   ]);
   if (!trip) notFound();
+  const weather = await tripWeather(trip.destination, trip.startDate, trip.endDate);
 
   const currency = hub.currency;
   const locale = user.locale ?? "en-CA";
@@ -98,6 +113,21 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         ? t("Done")
         : countdownLabel(trip.startDate, lang);
   const dayFmt = lang === "fr" ? "EEE d MMM" : "EEE MMM d";
+  const todayKey = dayKey(today);
+  const todayWeather = weather?.get(todayKey) ?? null;
+  // During the trip, today's sky; before it, the first day's.
+  const firstForecast = weather ? [...weather.entries()][0] : null;
+  const heroWeather = todayWeather
+    ? { w: todayWeather, label: t("Today") }
+    : firstForecast
+      ? { w: firstForecast[1], label: fmt(new Date(`${firstForecast[0]}T12:00:00`), dayFmt, lang) }
+      : null;
+  // A place to search for: the item plus the trip's town, so "Abbaye de
+  // Saint-Benoît-du-Lac" finds the abbey and "Dinner" finds dinner *there*.
+  const mapUrl = (i: Item) =>
+    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      [i.title, trip.destination].filter(Boolean).join(", "),
+    )}`;
 
   const items: Item[] = trip.items;
   const stops = items.filter((i) => i.kind === "STOP" && i.date && i.endDate);
@@ -217,7 +247,22 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
           >
             {i.title}
           </span>
-          {i.note && <p className="mt-0.5 text-xs leading-snug text-[var(--color-text-dim)]">{i.note}</p>}
+          {i.note && (
+            <p className="mt-0.5 text-xs leading-snug text-[var(--color-text-dim)]">
+              <Linkified text={i.note} />
+            </p>
+          )}
+          {(i.kind === "ACTIVITY" || i.kind === "BOOK") && !i.done && (
+            <a
+              href={mapUrl(i)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-flex items-center gap-1 text-[0.7rem] font-semibold text-[var(--color-primary)]"
+            >
+              <MapPin size={12} strokeWidth={2.5} aria-hidden />
+              {t("Map")}
+            </a>
+          )}
           {(tag || (showDate && i.date)) && (
             <div className="mt-1 flex flex-wrap items-center gap-2 text-[0.7rem] text-[var(--color-text-dim)]">
               {tag && (
@@ -275,6 +320,18 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
               </div>
             ) : (
               <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold">{status}</span>
+            )}
+            {heroWeather && (
+              <div className="text-center" aria-label={t("Weather")}>
+                <WeatherIcon kind={weatherKind(heroWeather.w.code)} size={26} />
+                <div className="text-lg font-bold leading-none tabular-nums">
+                  {heroWeather.w.max}° <span className="text-sm opacity-80">/ {heroWeather.w.min}°</span>
+                </div>
+                <div className="text-[0.62rem] font-semibold uppercase tracking-wide opacity-90">
+                  {heroWeather.label}
+                  {heroWeather.w.rain != null && heroWeather.w.rain >= 30 ? ` · ☂ ${heroWeather.w.rain}%` : ""}
+                </div>
+              </div>
             )}
             {savedPct != null && (
               <div className="text-right">
@@ -387,12 +444,17 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
               const s = stopOn(d);
               const list = activitiesOn.get(dayKey(d)) ?? [];
               const allDone = list.length > 0 && list.every((a) => a.done);
+              const isToday = dayKey(d) === todayKey;
+              const w = weather?.get(dayKey(d));
+              const last = !s && n === days.length - 1 && days.length > 1;
               return (
                 <div
                   key={dayKey(d)}
+                  id={isToday ? "today" : undefined}
                   className="card overflow-hidden border-l-4 p-0"
                   style={{
                     borderLeftColor: s ? colorOf.get(s.id) : "var(--color-border)",
+                    ...(isToday ? { boxShadow: "0 0 0 2px var(--color-primary)" } : {}),
                   }}
                 >
                   <div className="flex items-baseline justify-between gap-2 px-4 pt-3">
@@ -402,6 +464,11 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                       </span>
                       {fmt(d, dayFmt, lang)}
                       {allDone && <Check size={14} strokeWidth={2.75} aria-label={t("Done")} className="ml-1.5 inline align-[-2px] text-[var(--color-ok)]" />}
+                      {isToday && (
+                        <span className="ml-1.5 rounded-full bg-[var(--color-primary)] px-1.5 py-0.5 align-[1px] text-[0.58rem] font-bold uppercase tracking-wide text-white">
+                          {t("Today")}
+                        </span>
+                      )}
                     </span>
                     <span
                       className="text-[0.62rem] font-bold uppercase tracking-wide"
@@ -409,9 +476,10 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                         color: s ? colorOf.get(s.id) : "var(--color-text-dim)",
                       }}
                     >
-                      {s?.title ?? t("Travel day")}
+                      {s?.title ?? (last ? t("Heading home") : t("Travel day"))}
                     </span>
                   </div>
+                  {w && <WeatherLine w={w} t={t} />}
                   {list.length === 0 ? (
                     <p className="px-4 pb-3 pt-1 text-xs text-[var(--color-text-dim)]">
                       {t("Nothing planned yet")}
@@ -960,5 +1028,76 @@ function SavingsChart({
         </span>
       </div>
     </div>
+  );
+}
+
+const WEATHER_ICONS: Record<WeatherKind, typeof Sun> = {
+  sun: Sun,
+  partly: CloudSun,
+  cloud: Cloud,
+  fog: CloudFog,
+  rain: CloudRain,
+  snow: CloudSnow,
+  storm: CloudLightning,
+};
+
+const WEATHER_WORDS: Record<WeatherKind, string> = {
+  sun: "Sunny",
+  partly: "Some clouds",
+  cloud: "Cloudy",
+  fog: "Fog",
+  rain: "Rain",
+  snow: "Snow",
+  storm: "Storms",
+};
+
+function WeatherIcon({ kind, size = 16 }: { kind: WeatherKind; size?: number }) {
+  const Icon = WEATHER_ICONS[kind];
+  return <Icon size={size} strokeWidth={2} aria-hidden className="inline" />;
+}
+
+/** One line under a day's header: sky, high / low, and the chance of rain. */
+function WeatherLine({ w, t }: { w: DayWeather; t: T }) {
+  const kind = weatherKind(w.code);
+  return (
+    <div className="flex items-center gap-1.5 px-4 pt-1 text-[0.72rem] text-[var(--color-text-dim)]">
+      <WeatherIcon kind={kind} size={14} />
+      <span>{t(WEATHER_WORDS[kind])}</span>
+      <span className="tabular-nums font-semibold text-[var(--color-text)]">
+        {w.max}° / {w.min}°
+      </span>
+      {w.rain != null && w.rain > 0 && <span className="tabular-nums">· {t("rain {n}%", { n: w.rain })}</span>}
+    </div>
+  );
+}
+
+/** Notes carry links ("sepaq.com/pq/mor"); make them tappable. */
+const LINK_RE = /((?:https?:\/\/)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s,;)]*)?)/gi;
+
+function Linkified({ text }: { text: string }) {
+  const parts = text.split(LINK_RE);
+  return (
+    <>
+      {parts.map((part, n) => {
+        // split() with a capture group puts matches at the odd indexes.
+        if (n % 2 === 0) return part;
+        const clean = part.replace(/[.]+$/, "");
+        const tail = part.slice(clean.length);
+        // "a.m." and "p.m." look like domains to the pattern; skip anything
+        // without a real-looking TLD or a slash.
+        if (!/^https?:/i.test(clean) && !/\.(com|ca|org|net|qc\.ca|gouv|travel|io|co|fr|th|vn)(\/|$)/i.test(clean)) {
+          return part;
+        }
+        const href = /^https?:/i.test(clean) ? clean : `https://${clean}`;
+        return (
+          <span key={n}>
+            <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-[var(--color-primary)]">
+              {clean}
+            </a>
+            {tail}
+          </span>
+        );
+      })}
+    </>
   );
 }

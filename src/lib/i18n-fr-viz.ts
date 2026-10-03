@@ -14,4 +14,16 @@ export const FR_VIZ: Record<string, string> = {
   "In and out, last 6 months": "Revenus et dépenses, 6 derniers mois",
   "See the numbers": "Voir les chiffres",
   "Month": "Mois",
+  // Trip page: forecast, map links.
+  "Map": "Carte",
+  "Weather": "Météo",
+  "Heading home": "Retour",
+  "Sunny": "Ensoleillé",
+  "Some clouds": "Passages nuageux",
+  "Cloudy": "Nuageux",
+  "Fog": "Brouillard",
+  "Rain": "Pluie",
+  "Snow": "Neige",
+  "Storms": "Orages",
+  "rain {n}%": "pluie {n} %",
 };
