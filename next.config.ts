@@ -43,6 +43,9 @@ const contentSecurityPolicy = [
   // client-upload flow); without it every photo upload is blocked by CSP.
   `connect-src 'self' https://*.public.blob.vercel-storage.com https://vercel.com/api/blob/${isDev ? " ws: http://localhost:*" : ""}`,
   "form-action 'self'",
+  // Trip items show a keyless Google Maps embed (trips/map.ts). Nothing else
+  // may be framed.
+  "frame-src https://www.google.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "object-src 'none'",

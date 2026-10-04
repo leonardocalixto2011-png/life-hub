@@ -30,6 +30,17 @@ const day = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Dates are YYYY-MM-DD")
   .refine(isRealDay, "That date doesn't exist");
 
+/**
+ * A web link a plan may carry: a photo to copy in, or a site to open. http(s)
+ * only — a link is rendered as an href, and `javascript:` must never get there.
+ */
+export const webUrl = z
+  .string()
+  .trim()
+  .max(1000)
+  .url("Links must be full web addresses (https://…)")
+  .refine((v) => /^https?:\/\//i.test(v), "Links must start with https://");
+
 const ITEM_KINDS = ["BOOK", "TODO", "PACK", "ACTIVITY", "SAVE", "BUDGET", "TIP"] as const;
 
 /**
@@ -48,6 +59,8 @@ const tripFields = z.object({
   end: day.optional(),
   budget: z.number().nonnegative().optional(),
   notes: z.string().trim().max(2000).optional(),
+  /** The trip page's hero photo. Copied into our own storage on import. */
+  image: webUrl.optional(),
   fr: z
     .object({
       title: z.string().trim().min(1).max(120).optional(),
@@ -74,6 +87,11 @@ export const tripPlanSchema = z.object({
           name: z.string().trim().min(1).max(80),
           from: day,
           to: day,
+          /** A photo of where you sleep; copied into our own storage on import. */
+          image: webUrl.optional(),
+          url: webUrl.optional(),
+          /** What the map searches for (an address); the name otherwise. */
+          place: z.string().trim().max(200).optional(),
           fr: z.object({ name: z.string().trim().min(1).max(80) }).optional(),
         })
         // Same rule as adding a stop by hand: you leave after you arrive.
@@ -90,6 +108,12 @@ export const tripPlanSchema = z.object({
         date: day.optional(),
         cost: z.number().nonnegative().optional(),
         note: z.string().trim().max(800).optional(),
+        /** A photo; copied into our own storage on import. */
+        image: webUrl.optional(),
+        /** The place's site or the booking page. */
+        url: webUrl.optional(),
+        /** What the map searches for (an address); the title otherwise. */
+        place: z.string().trim().max(200).optional(),
         fr: frTitle.extend({ note: z.string().trim().max(800).optional() }).optional(),
       }),
     )
@@ -291,6 +315,8 @@ export function planRows(plan: ResolvedPlan, tripId: string, hubId: string) {
       title: s.name,
       date: noon(s.from),
       endDate: noon(s.to),
+      url: s.url ?? null,
+      place: s.place ?? null,
     })),
     ...plan.items.map((i) => ({
       tripId,
@@ -300,6 +326,8 @@ export function planRows(plan: ResolvedPlan, tripId: string, hubId: string) {
       date: i.date ? noon(i.date) : null,
       costCents: cents(i.cost),
       note: i.note ?? null,
+      url: i.url ?? null,
+      place: i.place ?? null,
     })),
   ];
   return rows.map((r, n) => ({ ...r, createdAt: new Date(base + n) }));
@@ -340,6 +368,25 @@ export function planNote(plan: ResolvedPlan, kind: string, title: string): strin
     if (i.alt && norm(i.alt) === t) return i.altNote ?? null;
   }
   return null;
+}
+
+/**
+ * The photo, link and map place a plan gives a row, matched like planNote but
+ * in either language (a photo or an address doesn't depend on it).
+ */
+export function planExtras(
+  plan: ResolvedPlan,
+  kind: string,
+  title: string,
+): { image?: string; url?: string; place?: string } | null {
+  const t = norm(title);
+  const hit = (name: string, alt?: string) => norm(name) === t || (!!alt && norm(alt) === t);
+  if (kind === "STOP") {
+    const s = plan.stops.find((s) => hit(s.name, s.alt));
+    return s ? { image: s.image, url: s.url, place: s.place } : null;
+  }
+  const i = plan.items.find((i) => i.kind === kind && hit(i.title, i.alt));
+  return i ? { image: i.image, url: i.url, place: i.place } : null;
 }
 
 function itemKey(kind: string, title: string) {

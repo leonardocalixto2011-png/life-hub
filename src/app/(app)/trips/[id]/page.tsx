@@ -7,7 +7,9 @@ import {
   CloudRain,
   CloudSnow,
   CloudSun,
+  ExternalLink,
   MapPin,
+  Pencil,
   Plus,
   Sun,
   Trash2,
@@ -33,9 +35,14 @@ import {
   deleteTrip,
   deleteTripItem,
   importTripPlan,
+  setTripCover,
+  setTripCoverFromLink,
   setTripItemPaid,
   toggleTripItem,
 } from "../actions";
+import { PlanPhoto } from "../PlanPhoto";
+import { mapEmbedUrl, mapSearchUrl } from "../map";
+import { PhotoThumb } from "@/components/PhotoViewer";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ActionForm } from "@/components/ActionForm";
 import { DangerZone, FormSection } from "@/components/Form";
@@ -76,6 +83,9 @@ type Item = {
   done: boolean;
   assignedToId: string | null;
   note: string | null;
+  imageUrl: string | null;
+  url: string | null;
+  place: string | null;
 };
 
 const dayKey = (d: Date) => format(d, "yyyy-MM-dd");
@@ -136,10 +146,9 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       : null;
   // A place to search for: the item plus the trip's town, so "Abbaye de
   // Saint-Benoît-du-Lac" finds the abbey and "Dinner" finds dinner *there*.
-  const mapUrl = (i: Item) =>
-    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-      [i.title, trip.destination].filter(Boolean).join(", "),
-    )}`;
+  // An item's own address wins when it has one.
+  const mapUrl = (i: Item) => mapSearchUrl(i.place || [i.title, trip.destination].filter(Boolean).join(", "));
+  const itemHref = (i: Item) => `/trips/${trip.id}/items/${i.id}`;
 
   const items: Item[] = trip.items;
   const stops = items.filter((i) => i.kind === "STOP" && i.date && i.endDate);
@@ -251,7 +260,14 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
           </SubmitButton>
         </form>
         <div className="min-w-0 flex-1">
-          <span
+          {i.imageUrl && (
+            <div className="mb-2">
+              <PhotoThumb src={i.imageUrl} alt={i.title} size="full" />
+            </div>
+          )}
+          {/* Tapping the title opens the item: photo, map, and its real price. */}
+          <Link
+            href={itemHref(i)}
             className="text-sm"
             style={
               i.done
@@ -263,23 +279,30 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
             }
           >
             {i.title}
-          </span>
+          </Link>
           {i.note && (
             <p className="mt-0.5 text-xs leading-snug text-[var(--color-text-dim)]">
               <Linkified text={i.note} />
             </p>
           )}
-          {(i.kind === "ACTIVITY" || i.kind === "BOOK") && !i.done && (
-            <a
-              href={mapUrl(i)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-1 inline-flex items-center gap-1 text-[0.7rem] font-semibold text-[var(--color-primary)]"
-            >
-              <MapPin size={12} strokeWidth={2.5} aria-hidden />
-              {t("Map")}
-            </a>
-          )}
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.7rem] font-semibold text-[var(--color-primary)]">
+            {(i.kind === "ACTIVITY" || i.kind === "BOOK" || i.place) && !i.done && (
+              <a href={mapUrl(i)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1">
+                <MapPin size={12} strokeWidth={2.5} aria-hidden />
+                {t("Map")}
+              </a>
+            )}
+            {i.url && (
+              <a href={i.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1">
+                <ExternalLink size={12} strokeWidth={2.5} aria-hidden />
+                {t("Website")}
+              </a>
+            )}
+            <Link href={itemHref(i)} className="inline-flex items-center gap-1">
+              <Pencil size={12} strokeWidth={2.5} aria-hidden />
+              {t("Edit")}
+            </Link>
+          </div>
           {(tag || (showDate && i.date)) && (
             <div className="mt-1 flex flex-wrap items-center gap-2 text-[0.7rem] text-[var(--color-text-dim)]">
               {tag && (
@@ -360,7 +383,20 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
 
       {/* ---- hero: where, when, and the route ---------------------------- */}
       <div className="card overflow-hidden p-0">
-        <div className="p-4 text-white" style={{ background: heroBg }}>
+        <div
+          className="relative p-4 text-white"
+          style={
+            trip.coverImageUrl
+              ? {
+                  // The photo under a dark wash so the white text stays readable.
+                  backgroundImage: `linear-gradient(180deg, rgba(0,0,0,.25), rgba(0,0,0,.6)), url("${trip.coverImageUrl}")`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  minHeight: "13rem",
+                }
+              : { background: heroBg }
+          }
+        >
           <div className="text-[0.62rem] font-bold uppercase tracking-[0.14em] opacity-90">
             {fmt(trip.startDate, dayFmt, lang)} – {fmt(trip.endDate, `${dayFmt} yyyy`, lang)}
             {nights > 0 ? ` · ${nights === 1 ? t("1 night") : t("{n} nights", { n: nights })}` : ""}
@@ -527,15 +563,26 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                         </span>
                       )}
                     </span>
-                    <span
-                      className="text-[0.62rem] font-bold uppercase tracking-wide"
-                      style={{
-                        color: s ? colorOf.get(s.id) : "var(--color-text-dim)",
-                      }}
-                    >
-                      {s?.title ?? (last ? t("Heading home") : t("Travel day"))}
-                    </span>
+                    {s ? (
+                      <Link
+                        href={itemHref(s)}
+                        className="text-[0.62rem] font-bold uppercase tracking-wide"
+                        style={{ color: colorOf.get(s.id) }}
+                      >
+                        {s.title}
+                      </Link>
+                    ) : (
+                      <span className="text-[0.62rem] font-bold uppercase tracking-wide text-[var(--color-text-dim)]">
+                        {last ? t("Heading home") : t("Travel day")}
+                      </span>
+                    )}
                   </div>
+                  {/* Where you sleep, pictured on the night you arrive. */}
+                  {s?.imageUrl && dayKey(startOfDay(s.date!)) === dayKey(d) && (
+                    <div className="px-4 pt-2">
+                      <PhotoThumb src={s.imageUrl} alt={s.title} size="full" />
+                    </div>
+                  )}
                   {w && <WeatherLine w={w} t={t} />}
                   {list.length === 0 ? (
                     <p className="px-4 pb-3 pt-1 text-xs text-[var(--color-text-dim)]">
@@ -663,7 +710,9 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                         background: MONEY_COLORS[n % MONEY_COLORS.length],
                       }}
                     />
-                    <span className="min-w-0 flex-1">{b.title}</span>
+                    <Link href={itemHref(b)} className="min-w-0 flex-1">
+                      {b.title}
+                    </Link>
                     <span className="tabular-nums text-[var(--color-text-dim)]">
                       {Math.round(shareOf(b.costCents!))}%
                     </span>
@@ -756,7 +805,9 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                 }}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="text-sm font-semibold">{tip.title}</h3>
+                  <h3 className="text-sm font-semibold">
+                    <Link href={itemHref(tip)}>{tip.title}</Link>
+                  </h3>
                   <form action={deleteTripItem}>
                     <input type="hidden" name="id" value={tip.id} />
                     <SubmitButton aria-label={t("Delete")} className="-m-2 grid h-9 w-9 place-items-center rounded-full text-[var(--color-text-dim)]" pendingLabel="…">
@@ -764,8 +815,15 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                     </SubmitButton>
                   </form>
                 </div>
+                {tip.imageUrl && (
+                  <div className="mt-2">
+                    <PhotoThumb src={tip.imageUrl} alt={tip.title} size="full" />
+                  </div>
+                )}
                 {tip.note && (
-                  <p className="mt-1 text-[0.8rem] leading-relaxed text-[var(--color-text-dim)]">{tip.note}</p>
+                  <p className="mt-1 text-[0.8rem] leading-relaxed text-[var(--color-text-dim)]">
+                    <Linkified text={tip.note} />
+                  </p>
                 )}
               </div>
             ))}
@@ -811,6 +869,17 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
           </label>
           <div className="form-grid">
             <label className="field-label">
+              {t("Address for the map")}
+              <input name="place" className="field" placeholder={t("Optional")} />
+            </label>
+            <label className="field-label">
+              {t("Website or booking link")}
+              <input name="url" type="url" inputMode="url" className="field" placeholder="https://" />
+            </label>
+          </div>
+          <p className="field-hint mt-0">{t("Add a photo after: tap the item once it's on the plan.")}</p>
+          <div className="form-grid">
+            <label className="field-label">
               {t("Cost")}
               <input name="cost" type="number" step="0.01" min="0" inputMode="decimal" className="field" placeholder="0.00" />
             </label>
@@ -833,7 +902,27 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         </FormSection>
       </ActionForm>
 
-      {trip.notes && <p className="card p-4 text-sm whitespace-pre-wrap">{trip.notes}</p>}
+      {trip.notes && (
+        <p className="card p-4 text-sm whitespace-pre-wrap">
+          <Linkified text={trip.notes} />
+        </p>
+      )}
+
+      {trip.destination && (
+        <details className="group">
+          <summary className="section-title cursor-pointer list-none text-[var(--color-primary)]">
+            {t("Map of the trip")}
+          </summary>
+          {/* Lazy, and only built once opened: Google sees the town, nothing else. */}
+          <iframe
+            src={mapEmbedUrl(trip.destination)}
+            title={t("Map of the trip")}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className="h-64 w-full rounded-[var(--r-md)] border border-[var(--color-border)]"
+          />
+        </details>
+      )}
 
       <details className="group" open={items.length === 0}>
         <summary className="section-title cursor-pointer list-none text-[var(--color-primary)]">
@@ -887,6 +976,13 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         <summary className="section-title cursor-pointer list-none text-[var(--color-primary)]">
           {t("Edit trip details")}
         </summary>
+        <PlanPhoto
+          imageUrl={trip.coverImageUrl}
+          alt={trip.title}
+          userId={user.id}
+          save={setTripCover.bind(null, trip.id)}
+          saveLink={setTripCoverFromLink.bind(null, trip.id)}
+        />
         <TripForm
           existing={{
             id: trip.id,
