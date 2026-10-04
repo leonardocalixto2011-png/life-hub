@@ -312,4 +312,83 @@ const english: TripPlan = {
   ],
 };
 
-export const thailand2027: TripPlan = withFrench(english, thailand2027Fr);
+/** Wikimedia Commons, free licences; the importer copies each one into our own storage. */
+const commons = (file: string) => `https://commons.wikimedia.org/wiki/Special:FilePath/${file}?width=1280`;
+
+const KRABI_AIRPORT = "Krabi International Airport (KBV), Krabi, Thailand";
+const TDAC = "https://tdac.immigration.go.th";
+const FLIGHTS = "https://www.google.com/travel/flights";
+
+/**
+ * Photos, map places and links, keyed `KIND|title` like the French. Kept apart
+ * from the rows so the day-by-day list above stays readable. Importing fills
+ * these into rows that don't have them yet, so re-importing onto a live trip
+ * adds the pictures without touching ticks or anything edited by hand.
+ */
+const MEDIA: Record<string, { image?: string; url?: string; place?: string }> = {
+  "ACTIVITY|Evening flight YUL → Krabi, connecting in Bangkok (~26–30h)": { url: FLIGHTS },
+  "ACTIVITY|Submit the TDAC arrival cards before boarding": { url: TDAC },
+  "ACTIVITY|Land in Krabi, car to the Ao Nang hotel (~40 min)": { place: KRABI_AIRPORT },
+  "ACTIVITY|Easy walk along Ao Nang beach, early night": {
+    image: commons("Ao_nang_thailand.jpg"),
+    place: "Ao Nang Beach, Krabi, Thailand",
+  },
+  "ACTIVITY|Sunset on Ao Nang beach, street food at the night market": {
+    place: "Ao Nang Landmark Night Market, Krabi, Thailand",
+  },
+  "ACTIVITY|Tiger Cave Temple, early (1,260 steps; shoulders + knees covered)": {
+    image: commons("Krabi_-_Wat_Tham_Suea_-_0001.jpg"),
+    place: "Wat Tham Suea (Tiger Cave Temple), Krabi, Thailand",
+  },
+  "ACTIVITY|Krabi Town walking street night market (Sunday)": {
+    image: commons("Krabi_Walking_Street_2.jpg"),
+    place: "Krabi Town Walking Street, Krabi, Thailand",
+  },
+  "ACTIVITY|Longtail boat from Ao Nang to Railay": {
+    image: commons("Railay_Beach_5.jpg"),
+    place: "Ao Nang Longtail Boat Service, Krabi, Thailand",
+  },
+  "ACTIVITY|Sunset on Railay West beach": {
+    image: commons("Railay_West_(31699911521).jpg"),
+    place: "Railay West Beach, Krabi, Thailand",
+  },
+  "ACTIVITY|Four-islands boat tour: Phra Nang cave, Chicken Island, Tup sandbar": {
+    image: commons("Phra_Nang_Cave_Beach.jpg"),
+    place: "Phra Nang Cave Beach, Krabi, Thailand",
+  },
+  "ACTIVITY|Railay viewpoint trail, early morning": { place: "Railay Viewpoint, Krabi, Thailand" },
+  "ACTIVITY|Kayak the Ao Thalane mangroves, or a beginner climbing class": {
+    place: "Ao Thalane, Krabi, Thailand",
+  },
+  "ACTIVITY|Afternoon flight Krabi → Bangkok, connect to the flight home": { place: KRABI_AIRPORT },
+  "BOOK|Flights YUL → Krabi and back, one ticket via Bangkok (alert at $1,300 each)": { url: FLIGHTS },
+  "BOOK|Ao Nang hotel with a pool, 7 nights (~$90/night)": {
+    url: "https://www.booking.com/searchresults.html?ss=Ao+Nang&checkin=2027-03-12&checkout=2027-03-19&group_adults=2",
+    place: "Ao Nang, Krabi, Thailand",
+  },
+  "TODO|Set Google Flights alerts: YUL ⇄ Krabi (KBV), Mar 11 – Mar 19": { url: FLIGHTS },
+  "TODO|TDAC arrival cards at tdac.immigration.go.th (free)": { url: TDAC },
+  "TIP|Entry rules (Canadian passport)": {
+    url: "https://travel.gc.ca/destinations/thailand",
+  },
+};
+
+function withMedia(plan: TripPlan): TripPlan {
+  return {
+    ...plan,
+    trip: plan.trip ? { ...plan.trip, image: commons("Railay_Beach_at_Sunrise.jpg") } : plan.trip,
+    stops: plan.stops.map((s) =>
+      s.name === "Ao Nang, Krabi"
+        ? { ...s, image: commons("Ao_Nang_beach_panorama_1.jpg"), place: "Ao Nang, Krabi, Thailand" }
+        : s,
+    ),
+    items: plan.items.map((i) => ({ ...i, ...MEDIA[`${i.kind}|${i.title}`] })),
+  };
+}
+
+/** Keys in MEDIA that no row has: a renamed title would silently drop its photo. */
+export const thailandMediaOrphans = Object.keys(MEDIA).filter(
+  (k) => !english.items.some((i) => `${i.kind}|${i.title}` === k),
+);
+
+export const thailand2027: TripPlan = withFrench(withMedia(english), thailand2027Fr);

@@ -24,6 +24,7 @@ import {
 } from "../src/lib/trip-plan";
 import { checkFrench } from "../src/lib/trip-plans/localise";
 import { thailand2027Fr } from "../src/lib/trip-plans/thailand-2027.fr";
+import { thailandMediaOrphans } from "../src/lib/trip-plans/thailand-2027";
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -37,6 +38,12 @@ const trip = (start: string, end: string) => ({ startDate: noon(start), endDate:
 
 check("the template, French included, is a valid plan", () => {
   tripPlanSchema.parse(plan);
+});
+
+check("every Thailand photo, place and link matches a row", () => {
+  assert.deepEqual(thailandMediaOrphans, []);
+  assert.ok(plan.trip?.image, "the trip has a cover photo");
+  assert.ok(plan.items.filter((i) => i.image).length >= 6);
 });
 
 check("every item, stop and reminder has French, and no French key is orphaned", () => {
