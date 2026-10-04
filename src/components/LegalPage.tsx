@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 
 import type { LegalDoc, LegalLang } from "@/content/legal/types";
 import { POLICY_UPDATED, POLICY_VERSION, legalPublished } from "@/content/legal/version";
@@ -11,20 +10,15 @@ import { getUser } from "@/lib/session";
  * module. Public — works signed out — so it reads nothing hub-scoped.
  *
  * Language: an explicit `?lang=` wins, then the signed-in person's own
- * setting, then the browser's Accept-Language. French is the default: with no
- * signal at all, or a browser that lists neither language, the page is in
- * French (the reference version).
+ * setting. Otherwise French, whatever the browser asks for: these are
+ * contracts of adhesion, and the Charter of the French language (s. 55)
+ * requires the French version to be handed over first — someone may then
+ * choose English with the link at the top. Do not bring Accept-Language back.
  */
 export async function resolveLegalLang(param: string | undefined): Promise<LegalLang> {
   if (param === "fr" || param === "en") return param;
   const user = await getUser();
   if (user?.locale) return langOf(user.locale);
-  const accept = (await headers()).get("accept-language");
-  for (const part of accept?.split(",") ?? []) {
-    const tag = part.split(";")[0].trim().toLowerCase();
-    if (tag.startsWith("fr")) return "fr";
-    if (tag.startsWith("en")) return "en";
-  }
   return "fr";
 }
 
