@@ -49,9 +49,14 @@ export default async function TripsPage() {
         className="card block p-4 transition-transform active:scale-[0.99]"
       >
         <div className="flex items-start gap-3">
-          <span className="icon-tile h-10 w-10 rounded-xl" aria-hidden>
-            <Plane size={19} strokeWidth={2} />
-          </span>
+          {trip.coverImageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- our own Blob URL, shown as-is
+            <img src={trip.coverImageUrl} alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded-xl object-cover" />
+          ) : (
+            <span className="icon-tile h-10 w-10 rounded-xl" aria-hidden>
+              <Plane size={19} strokeWidth={2} />
+            </span>
+          )}
           <div className="min-w-0 flex-1">
             <div className="truncate text-base font-semibold leading-snug">{trip.title}</div>
             <div className="mt-0.5 truncate text-xs text-[var(--color-text-dim)]">

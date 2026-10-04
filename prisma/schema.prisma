@@ -798,6 +798,8 @@ model Trip {
   /// everyone in the hub. Drives the per-person "Each" split of deposits.
   travelerIds String[]   @default([])
   notes       String?
+  /// The hero photo on the trip page (Vercel Blob URL).
+  coverImageUrl String?
   createdById String
   createdBy   User       @relation(fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime   @default(now())
@@ -847,6 +849,12 @@ model TripItem {
   /// Only for STOP: the day you leave.
   endDate      DateTime?
   note         String?
+  /// A photo of the place (Vercel Blob URL, ours only — see lib/blob-url.ts).
+  imageUrl     String?
+  /// The place's own site or the booking page.
+  url          String?
+  /// Address or place name the map searches for; falls back to the title.
+  place        String?
   done         Boolean      @default(false)
   assignedToId String?
   createdAt    DateTime     @default(now())

@@ -190,6 +190,12 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
     where: { createdById: userId, visibility: "PRIVATE", imageUrl: { not: null } },
     select: { imageUrl: true },
   });
+  // Private trips take their cover and item photos with them.
+  const privateTrips = await prisma.trip.findMany({
+    where: { createdById: userId, visibility: "PRIVATE" },
+    select: { coverImageUrl: true, items: { where: { imageUrl: { not: null } }, select: { imageUrl: true } } },
+  });
+  const privateTripPhotos = privateTrips.flatMap((t) => [t.coverImageUrl, ...t.items.map((i) => i.imageUrl)]);
   await prisma.$transaction([
     prisma.task.deleteMany({ where: { createdById: userId, visibility: "PRIVATE" } }),
     prisma.deadline.deleteMany({ where: { createdById: userId, visibility: "PRIVATE" } }),
@@ -202,7 +208,10 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
     where: { userId, role: "OWNER" },
     select: { hubId: true },
   });
-  const blobsToDelete = privatePhotos.map((p) => p.imageUrl!);
+  const blobsToDelete = [
+    ...privatePhotos.map((p) => p.imageUrl!),
+    ...privateTripPhotos.filter((u): u is string => !!u),
+  ];
 
   for (const { hubId } of ownedHubs) {
     const heir = await prisma.hubMembership.findFirst({
@@ -223,6 +232,14 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
         select: { imageUrl: true },
       });
       blobsToDelete.push(...photos.map((p) => p.imageUrl!));
+      const trips = await prisma.trip.findMany({
+        where: { hubId },
+        select: { coverImageUrl: true, items: { where: { imageUrl: { not: null } }, select: { imageUrl: true } } },
+      });
+      for (const tr of trips) {
+        if (tr.coverImageUrl) blobsToDelete.push(tr.coverImageUrl);
+        blobsToDelete.push(...tr.items.map((i) => i.imageUrl!));
+      }
       await prisma.hub.delete({ where: { id: hubId } });
       report.hubsDeleted++;
     }

@@ -17,14 +17,16 @@ import { prisma } from "@/lib/prisma";
  */
 export async function deleteBlobIfUnreferenced(url: string | null | undefined): Promise<void> {
   if (!url) return;
-  const [users, hubs, tasks] = await Promise.all([
+  const [users, hubs, tasks, trips, tripItems] = await Promise.all([
     prisma.user.count({ where: { backgroundImageUrl: url } }),
     prisma.hub.count({ where: { coverImageUrl: url } }),
     // One photo can be pinned to several tasks (every task drafted from it),
     // so deleting one of them only frees the file once the last is gone.
     prisma.task.count({ where: { imageUrl: url } }),
+    prisma.trip.count({ where: { coverImageUrl: url } }),
+    prisma.tripItem.count({ where: { imageUrl: url } }),
   ]);
-  if (users + hubs + tasks > 0) return;
+  if (users + hubs + tasks + trips + tripItems > 0) return;
   try {
     await del(url);
   } catch {
