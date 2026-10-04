@@ -108,13 +108,13 @@ dictation is done by the browser/phone vendor: `User.aiNoticeAt`.
    | Review-inbox items still pending | 90 days from arrival | Marked `DISCARDED`, then deleted in the same sweep |
    | Mail classified as advertising / informational, or skipped by the prefilter | Not stored | — |
    | Rate-limit counters (`RateLimit`) | Until the window ends (≤ 1 hour; AI token budget: 30 days) | Deleted at the next daily sweep |
-   | Sign-in tokens (`VerificationToken`) | 24 hours (link validity) | Consumed on use by Auth.js; expired unused tokens are **not yet swept** |
+   | Sign-in tokens (`VerificationToken`) | 24 hours (link validity) | Consumed on use by Auth.js; expired unused tokens deleted by the daily sweep (`pruneExpiredSignInTokens`) |
    | Sessions | 7 days (JWT cookie, refreshed daily) | Expire |
    | Reminder ledger (`ReminderSent`) | Life of the account | Deleted with the account |
    | Consent ledger (`Consent`) | Life of the account, revoked rows included | Deleted with the account |
    | Everything else (tasks, budget, debts, …) | Until the person deletes it or their account | Deleted / anonymised per §4 |
 
-   Still open: expired unused `VerificationToken` rows; an inactivity rule for
+   Still open: an inactivity rule for
    dormant accounts; backups (Neon point-in-time restore) outlive the above by
    the provider's window.
 4. ~~**`RateLimit.key` stores raw email addresses**~~ ✅ Magic-link keys now

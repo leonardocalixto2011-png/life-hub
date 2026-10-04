@@ -1275,3 +1275,28 @@ Remaining, in order:
   older trip meant. Severed with `array_remove` in account deletion.
 - **Adding a known person creates an INVITED membership**, like an email
   invite. Sharing one hub isn't consent to be placed in another.
+
+### Launch hardening (2026-10-04)
+
+Pre-signup audit; full launch plan in the project thread's artifact.
+
+- **Magic-link gate lives in the provider** (`maySendLink` in `src/auth.ts`),
+  not the login form: `POST /api/auth/signin/resend` reaches
+  `sendVerificationRequest` directly, so form-only limits were bypassable and
+  the endpoint told registered addresses apart. Unknown address with signups
+  closed, or over 3/hr per address / 10/hr per IP → silently nothing sent.
+- **Accounts are created only on the callback step.** Auth.js also calls
+  `signIn` on the request step (`email.verificationRequest`); creating there
+  made an account + hub for every address typed. Verified both ways locally.
+- `signupsOpen()` now also requires `LEGAL_PUBLISHED=1`.
+- **Global AI ceiling** `AI_GLOBAL_TOKEN_BUDGET` (default 20M/30 days) on top
+  of the per-subject budget; a person can own at most 10 hubs
+  (`MAX_OWNED_HUBS`), since each hub carries its own mail-AI allowance.
+- `ReviewItem` hub-less rows are visible to nobody now (policy + both app
+  mirrors, migration `20261004120000_review_item_no_null_hub`).
+- Account deletion erases the person's PRIVATE items and their photo/cover
+  blobs instead of handing them to the tombstone.
+- ⚠️ Running `prisma/create-app-role.sql` **after** migrations re-grants
+  DELETE on `Consent` and UPDATE on `Activity` (its blanket GRANT undoes the
+  per-table REVOKEs) — `verify:isolation` fails 2 checks if you do. Re-run the
+  latest migrations' REVOKE lines after re-running that file.

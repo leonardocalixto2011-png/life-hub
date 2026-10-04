@@ -6,7 +6,7 @@ import { reportError } from "@/lib/observability";
 import { prisma } from "@/lib/prisma";
 import { mapLimit } from "@/lib/async";
 import { pruneRateLimits } from "@/lib/rate-limit";
-import { pruneActivity, pruneReviewItems } from "@/lib/retention";
+import { pruneActivity, pruneExpiredSignInTokens, pruneReviewItems } from "@/lib/retention";
 import { dispatchReminders } from "@/lib/reminders";
 import { sendEmail } from "@/lib/email";
 import { sendPushToUser, viewAction } from "@/lib/push";
@@ -117,12 +117,20 @@ export async function GET(req: Request) {
     prunedActivity = { error: true };
     await reportError("cron.digest.activity_retention_failed", err, {});
   }
+  let prunedSignInTokens: number | { error: true };
+  try {
+    prunedSignInTokens = await pruneExpiredSignInTokens();
+  } catch (err) {
+    prunedSignInTokens = { error: true };
+    await reportError("cron.digest.token_retention_failed", err, {});
+  }
 
   return NextResponse.json({
     ok: true,
     count: totalCount,
     prunedRateLimits,
     prunedReviews,
+    prunedSignInTokens,
     prunedActivity,
     reminded,
     failed,

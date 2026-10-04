@@ -583,19 +583,12 @@ export type EventWithRefs = Awaited<ReturnType<typeof listEvents>>[number];
  * all — so with APP_DATABASE_URL unset (owner role, policies inert) every user
  * saw every other user's parsed email: subjects, snippets, senders, amounts.
  *
- * ⚠ The `hubId: null` arm is a real cross-tenant leak at any scale beyond a
- * trusted group, and it is deliberate here only because it matches the policy.
- * POST /api/inbound still creates hub-less rows (the pre-multi-hub
- * manual-forward path), and a hub-less row is visible to EVERYONE. Inbound
- * mail needs hub attribution before this app is public — see CLAUDE.md.
+ * No `hubId: null` arm: a hub-less row would be visible to every user. Those
+ * came from the retired manual-forward path; migration
+ * 20261004120000_review_item_no_null_hub removed the same arm from the policy.
  */
 function reviewVisibility(userId: string): Prisma.ReviewItemWhereInput {
-  return {
-    OR: [
-      { hubId: null },
-      { hub: { memberships: { some: { userId, status: "ACTIVE" } } } },
-    ],
-  };
+  return { hub: { memberships: { some: { userId, status: "ACTIVE" } } } };
 }
 
 export function listPendingReviews(tx: HubTx, userId: string) {

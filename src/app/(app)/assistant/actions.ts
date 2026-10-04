@@ -14,6 +14,8 @@ import { dashboard, listMembers, listVentures } from "@/lib/data";
 import { notifyAssignment } from "@/lib/notify";
 import { dueLabel, fromDateInput, fromDateTimeInput, money } from "@/lib/format";
 import { revalidateContent } from "@/lib/revalidate";
+import { friendlyAiError } from "@/lib/parse";
+import { reportError } from "@/lib/observability";
 
 const MAX_ITEMS = 20;
 
@@ -91,10 +93,9 @@ export async function parseAndAdd(
     await recordAiSpend(user.id, res.usage);
     parsed = res.parsed_output;
   } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? t("Assistant error: {message}", { message: err.message }) : t("Assistant error."),
-    };
+    // Never show the upstream message: it can carry billing state and request ids.
+    await reportError("assistant.parse_failed", err, { userId: user.id });
+    return { ok: false, message: t(friendlyAiError(err)) };
   }
   if (!parsed) return { ok: false, message: t("Couldn’t parse that — try rephrasing.") };
 
@@ -226,9 +227,7 @@ export async function weeklyBriefing(): Promise<{ ok: boolean; text: string }> {
       .trim();
     return { ok: true, text: text || t("No briefing generated.") };
   } catch (err) {
-    return {
-      ok: false,
-      text: err instanceof Error ? t("Assistant error: {message}", { message: err.message }) : t("Assistant error."),
-    };
+    await reportError("assistant.briefing_failed", err, { userId: user.id });
+    return { ok: false, text: t(friendlyAiError(err)) };
   }
 }

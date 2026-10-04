@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { rateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
 
 import { withHub } from "@/lib/hub-context";
@@ -142,6 +143,13 @@ export async function connectImapAccount(formData: FormData) {
     redirect("/mail?error=" + encodeURIComponent("Enter a valid email and app password."));
   }
   const { provider, email, appPassword } = parsed.data;
+
+  // Each attempt is a real login against Gmail/Yahoo from our server's IP.
+  // Unlimited, this form would let anyone test stolen credentials through us
+  // and get the server's IP blocked, which would stop everyone's mail polling.
+  if (!(await rateLimit(`imap-connect:${user.id}`, 5, 3600)).ok) {
+    redirect("/mail?error=" + encodeURIComponent("Too many attempts. Try again in an hour."));
+  }
 
   try {
     await testImapLogin(provider, email, appPassword);

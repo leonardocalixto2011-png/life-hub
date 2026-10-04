@@ -190,6 +190,12 @@ export async function pollAllMailAccounts(
   paused: number;
 }> {
   const accounts = await prisma.mailAccount.findMany({ where: { status: { not: "REVOKED" } } });
+  // Shuffled: the run shares one time budget across every mailbox, so in a
+  // fixed order the ones at the end would be skipped on every busy run.
+  for (let i = accounts.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [accounts[i], accounts[j]] = [accounts[j], accounts[i]];
+  }
   // AI analysis of mail is opt-in (Law 25), per person and per hub. A mailbox
   // whose connecting user has no active MAIL_AI consent for its hub is not
   // touched at all — not fetched, not classified, checkpoint left where it

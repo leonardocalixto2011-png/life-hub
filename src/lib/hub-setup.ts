@@ -31,6 +31,9 @@ export function isHubColor(v: unknown): v is (typeof HUB_COLORS)[number] {
 
 export class HubLimitError extends Error {}
 
+/** Hubs one person may own at once. Generous for a household, finite for a script. */
+export const MAX_OWNED_HUBS = 10;
+
 /**
  * Creates a hub with `userId` as its ACTIVE owner. Runs on the owner-role
  * client: there's no way to satisfy a hub-membership RLS check before the
@@ -41,6 +44,12 @@ export class HubLimitError extends Error {}
 export async function createHubFor(userId: string, name: string, color?: string) {
   if (!(await rateLimit(`hub-create:${userId}`, 10, 3600)).ok) {
     throw new HubLimitError("Too many hubs created — try again in an hour.");
+  }
+  // A total cap as well as a rate: each hub brings its own AI allowance for
+  // mail analysis, so unlimited hubs would mean an unlimited allowance.
+  const owned = await prisma.hubMembership.count({ where: { userId, role: "OWNER" } });
+  if (owned >= MAX_OWNED_HUBS) {
+    throw new HubLimitError("You can own up to 10 hubs. Delete one you no longer use first.");
   }
   return prisma.$transaction(async (tx) => {
     const hub = await tx.hub.create({

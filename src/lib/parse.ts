@@ -88,7 +88,7 @@ type ParsedItems = {
  * the user, because none of it is theirs to resolve and the specifics leak
  * account state.
  */
-function friendlyAiError(err: unknown): string {
+export function friendlyAiError(err: unknown): string {
   const status = (err as { status?: number })?.status;
   if (status === 429) return "The assistant is busy right now — try again in a moment.";
   if (status === 401 || status === 403) return "The assistant isn't set up correctly. An admin needs to check the server config.";

@@ -5,7 +5,6 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
-import { commitDrafts } from "@/app/(app)/quick-actions";
 import { commitDraftsCore } from "@/lib/commit-drafts";
 import { langOf } from "@/lib/i18n";
 import { muteSender, shouldOfferTrust, trustSender } from "@/lib/mail/trust";
@@ -25,16 +24,11 @@ export type AcceptResult = {
  * Which review items this viewer may act on. These actions use the owner
  * client, so RLS is no backstop: an unscoped lookup by id would let anyone who
  * learned an id accept (and commit into) or discard another hub's mail. Must
- * match `reviewVisibility` in lib/data.ts — the inbox lists exactly these —
- * including its null-hub case (the old manual-forward path).
+ * match `reviewVisibility` in lib/data.ts — the inbox lists exactly these.
+ * A hub-less item (the retired manual-forward path) matches nobody.
  */
 function actionableBy(userId: string) {
-  return {
-    OR: [
-      { hubId: null },
-      { hub: { memberships: { some: { userId, status: "ACTIVE" as const } } } },
-    ],
-  };
+  return { hub: { memberships: { some: { userId, status: "ACTIVE" as const } } } };
 }
 
 export async function acceptReview(id: string, rawDraft: Draft): Promise<AcceptResult> {
@@ -54,20 +48,14 @@ export async function acceptReview(id: string, rawDraft: Draft): Promise<AcceptR
     return { ok: false, error: "Already handled." };
   }
 
-  // Mail-connector items always have a hubId — commit into that hub
-  // explicitly rather than the accepting user's current hub (they might be
-  // viewing /inbox from a different one). The old manual-forward path has no
-  // hubId, so it keeps today's behavior: commit into whichever hub the
-  // accepting user currently has selected.
-  if (item.hubId) {
-    const result = await withHub(user.id, (tx) =>
-      commitDraftsCore(tx, item.hubId!, user.id, [draft], langOf(user.locale), { activity: true }),
-    );
-    if (!result.ok) return { ok: false, error: result.error };
-  } else {
-    const result = await commitDrafts([draft]);
-    if (!result.ok) return { ok: false, error: result.error ?? "Could not save." };
-  }
+  // Commit into the item's own hub, not the accepting user's current hub
+  // (they might be viewing /inbox from a different one). `actionableBy` only
+  // matches items that have a hub, so hubId is set here.
+  const hubId = item.hubId!;
+  const result = await withHub(user.id, (tx) =>
+    commitDraftsCore(tx, hubId, user.id, [draft], langOf(user.locale), { activity: true }),
+  );
+  if (!result.ok) return { ok: false, error: result.error };
 
   // Marked only after the commit succeeds — claiming first would lose the
   // item if the commit failed. Conditional on PENDING so a concurrent

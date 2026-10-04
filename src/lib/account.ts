@@ -183,10 +183,26 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
     }
   }
 
+  // Their PRIVATE items. Nobody else can see them, so handing them to the
+  // tombstone below would keep personal data that no one can ever reach or
+  // erase: under Law 25 erasure they go. Photos pinned to those tasks go too.
+  const privatePhotos = await prisma.task.findMany({
+    where: { createdById: userId, visibility: "PRIVATE", imageUrl: { not: null } },
+    select: { imageUrl: true },
+  });
+  await prisma.$transaction([
+    prisma.task.deleteMany({ where: { createdById: userId, visibility: "PRIVATE" } }),
+    prisma.deadline.deleteMany({ where: { createdById: userId, visibility: "PRIVATE" } }),
+    prisma.event.deleteMany({ where: { createdById: userId, visibility: "PRIVATE" } }),
+    prisma.specialDate.deleteMany({ where: { createdById: userId, visibility: "PRIVATE" } }),
+    prisma.trip.deleteMany({ where: { createdById: userId, visibility: "PRIVATE" } }),
+  ]);
+
   const ownedHubs = await prisma.hubMembership.findMany({
     where: { userId, role: "OWNER" },
     select: { hubId: true },
   });
+  const blobsToDelete = privatePhotos.map((p) => p.imageUrl!);
 
   for (const { hubId } of ownedHubs) {
     const heir = await prisma.hubMembership.findFirst({
@@ -198,7 +214,15 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
       await prisma.hubMembership.update({ where: { id: heir.id }, data: { role: "OWNER" } });
       report.hubsHandedOver++;
     } else {
-      // Sole member: the hub and everything in it was only ever theirs.
+      // Sole member: the hub and everything in it was only ever theirs,
+      // including its cover photo and any photos pinned to its tasks.
+      const hub = await prisma.hub.findUnique({ where: { id: hubId }, select: { coverImageUrl: true } });
+      if (hub?.coverImageUrl) blobsToDelete.push(hub.coverImageUrl);
+      const photos = await prisma.task.findMany({
+        where: { hubId, imageUrl: { not: null } },
+        select: { imageUrl: true },
+      });
+      blobsToDelete.push(...photos.map((p) => p.imageUrl!));
       await prisma.hub.delete({ where: { id: hubId } });
       report.hubsDeleted++;
     }
@@ -228,6 +252,15 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
     prisma.activity.updateMany({ where: { targetId: userId }, data: { targetId: null } }),
     prisma.$executeRaw`UPDATE "Activity" SET "thankedById" = array_remove("thankedById", ${userId}) WHERE ${userId} = ANY("thankedById")`,
   ]);
+  // Blobs live outside Postgres; best-effort, like the background above.
+  if (blobsToDelete.length) {
+    try {
+      await del(blobsToDelete);
+    } catch {
+      // Already gone or unreachable — not worth failing the erasure over.
+    }
+  }
+
   report.authorshipAnonymised =
     t.count + d.count + e.count + b.count + sd.count + tr.count + h.count +
     paid.count + shifts.count + tripTasks.count + travellers;

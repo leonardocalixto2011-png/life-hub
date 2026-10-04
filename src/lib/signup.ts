@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { logInfo } from "@/lib/observability";
+import { legalPublished } from "@/content/legal/version";
 
 /**
  * Self-serve signup, off by default.
@@ -17,7 +18,10 @@ import { logInfo } from "@/lib/observability";
  * step, and there is no password hash to leak.
  */
 export function signupsOpen(): boolean {
-  return process.env.SIGNUPS_OPEN === "1";
+  // Also requires LEGAL_PUBLISHED=1: strangers must not be able to create an
+  // account while the privacy policy and terms are still the draft. One flag
+  // flipped early in Vercel should not be enough to open the doors.
+  return process.env.SIGNUPS_OPEN === "1" && legalPublished();
 }
 
 /**

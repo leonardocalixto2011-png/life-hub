@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { blobUrlSchema } from "@/lib/blob-url";
 import { deleteBlobIfUnreferenced } from "@/lib/blob-delete";
-import { rateLimit } from "@/lib/rate-limit";
+import { hashedKey, rateLimit } from "@/lib/rate-limit";
 import { isCurrency } from "@/lib/locales";
 import { revalidateContent } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
@@ -88,7 +88,13 @@ export async function inviteMember(hubId: string, formData: FormData) {
 
   // Every invite sends an email from our domain to an address the inviter
   // chose — without a cap, an owner account is a free spam relay.
-  if (!(await rateLimit(`invite:${user.id}`, 20, 3600)).ok) {
+  // Hourly and daily per inviter, plus per recipient across all inviters, so
+  // one address can't be flooded by several accounts taking turns.
+  if (
+    !(await rateLimit(`invite:${user.id}`, 20, 3600)).ok ||
+    !(await rateLimit(`invite-day:${user.id}`, 50, 86400)).ok ||
+    !(await rateLimit(`invite-to:${hashedKey(email)}`, 5, 86400)).ok
+  ) {
     throw new Error("You've sent a lot of invites this hour. Try again later.");
   }
 
