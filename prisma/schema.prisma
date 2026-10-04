@@ -839,6 +839,9 @@ model TripItem {
   kind         TripItemKind @default(TODO)
   title        String
   costCents    Int?
+  /// What it really cost, entered once it's booked or paid. `costCents` stays
+  /// the plan's estimate, so the page can show both and the difference.
+  paidCents    Int?
   /// The day an activity happens, or the date a booking / deposit is due.
   date         DateTime?
   /// Only for STOP: the day you leave.

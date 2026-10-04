@@ -286,6 +286,38 @@ export async function toggleTripItem(fd: FormData) {
   revalidateContent(`/trips/${tripId}`, "/trips");
 }
 
+/**
+ * Records what an item really cost, next to the plan's estimate. A blank
+ * amount clears it. Entering a price on a booking also ticks it: you only
+ * know the real price once it's booked.
+ */
+export async function setTripItemPaid(fd: FormData): Promise<ActionResult> {
+  return formResult(async () => {
+    const { user, hub } = await requireHub();
+    const id = z.string().cuid().parse(fd.get("id"));
+    const paidCents = optionalCents(
+      (fd.get("paid") as string | null) ?? null,
+      "The amount can't be negative.",
+    );
+    const tripId = await withHub(user.id, async (tx) => {
+      const item = await tx.tripItem.findFirst({
+        where: { id, trip: visibleTrip(hub.id, user.id) },
+        select: { tripId: true, kind: true, done: true },
+      });
+      if (!item) throw new Error("Item not found");
+      await tx.tripItem.update({
+        where: { id },
+        data: {
+          paidCents,
+          ...(paidCents != null && item.kind === "BOOK" && !item.done ? { done: true } : {}),
+        },
+      });
+      return item.tripId;
+    });
+    revalidateContent(`/trips/${tripId}`, "/trips");
+  });
+}
+
 export async function deleteTripItem(fd: FormData) {
   const { user, hub } = await requireHub();
   const id = z.string().cuid().parse(fd.get("id"));
