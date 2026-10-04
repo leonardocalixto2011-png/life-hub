@@ -27,7 +27,15 @@ import { centsToInput } from "@/lib/money";
 import { noon, planShiftDays, planStartDay, planTripPatch, TRIP_TEMPLATES } from "@/lib/trip-plan";
 import { Figure } from "@/components/Figure";
 import { TripForm } from "../TripForm";
-import { addTripItem, addTripSavings, deleteTrip, deleteTripItem, importTripPlan, toggleTripItem } from "../actions";
+import {
+  addTripItem,
+  addTripSavings,
+  deleteTrip,
+  deleteTripItem,
+  importTripPlan,
+  setTripItemPaid,
+  toggleTripItem,
+} from "../actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ActionForm } from "@/components/ActionForm";
 import { DangerZone, FormSection } from "@/components/Form";
@@ -62,6 +70,7 @@ type Item = {
   kind: string;
   title: string;
   costCents: number | null;
+  paidCents: number | null;
   date: Date | null;
   endDate: Date | null;
   done: boolean;
@@ -70,6 +79,9 @@ type Item = {
 };
 
 const dayKey = (d: Date) => format(d, "yyyy-MM-dd");
+
+/** What an item really cost once entered, else the plan's estimate. */
+const realCost = (i: Item) => i.paidCents ?? i.costCents;
 
 export default async function TripPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -152,7 +164,12 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
   // below, from rows saved before negative amounts were rejected), and a bar
   // width of Infinity% or a label of NaN% is worse than an empty bar.
   const shareOf = (c: number) => (planned > 0 ? Math.max(0, (c / planned) * 100) : 0);
-  const booked = tasks.filter((i) => i.done).reduce((n, i) => n + (i.costCents ?? 0), 0);
+  // The real price once one is entered, else the plan's estimate.
+  const booked = tasks.filter((i) => i.done).reduce((n, i) => n + (realCost(i) ?? 0), 0);
+  // Items with a real price, against what the plan expected for those same items.
+  const priced = items.filter((i) => i.paidCents != null);
+  const paidTotal = priced.reduce((n, i) => n + i.paidCents!, 0);
+  const paidVsPlan = paidTotal - priced.reduce((n, i) => n + (i.costCents ?? i.paidCents!), 0);
   const saved = trip.savedCents + deposits.filter((d) => d.done).reduce((n, d) => n + (d.costCents ?? 0), 0);
   const savedPct =
     trip.budgetCents && trip.budgetCents > 0 ? Math.min(100, Math.round((saved / trip.budgetCents) * 100)) : null;
@@ -282,8 +299,48 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
             {initials(who.name, who.email)}
           </span>
         )}
-        {i.costCents != null && (
-          <span className="shrink-0 text-xs tabular-nums text-[var(--color-text-dim)]">{cash(i.costCents)}</span>
+        {i.kind !== "SAVE" && (i.kind === "BOOK" || i.kind === "TODO" || i.kind === "ACTIVITY" || i.costCents != null) && (
+          <details className="shrink-0 text-right">
+            <summary
+              className="cursor-pointer list-none text-xs tabular-nums [&::-webkit-details-marker]:hidden"
+              aria-label={t("Enter the real price")}
+            >
+              {i.paidCents != null ? (
+                <span className="font-semibold text-[var(--color-ok)]">
+                  {cash(i.paidCents)}
+                  <span className="block text-[0.6rem] font-normal uppercase tracking-wide">{t("paid")}</span>
+                </span>
+              ) : i.costCents != null ? (
+                <span className="text-[var(--color-text-dim)]">
+                  {cash(i.costCents)}
+                  <span className="block text-[0.6rem] uppercase tracking-wide">{t("estimate")}</span>
+                </span>
+              ) : (
+                <span className="text-[0.7rem] font-semibold text-[var(--color-primary)]">{t("+ price")}</span>
+              )}
+            </summary>
+            <ActionForm
+              action={setTripItemPaid}
+              className="mt-2 grid w-36 gap-2 text-left"
+            >
+              <input type="hidden" name="id" value={i.id} />
+              <label className="field-label">
+                {t("Real price")}
+                <input
+                  name="paid"
+                  type="text"
+                  inputMode="decimal"
+                  defaultValue={i.paidCents != null ? centsToInput(i.paidCents) : ""}
+                  placeholder={i.costCents != null ? centsToInput(i.costCents) : ""}
+                  className="field"
+                />
+              </label>
+              <p className="text-[0.65rem] leading-snug text-[var(--color-text-dim)]">
+                {t("Leave blank to clear it.")}
+              </p>
+              <SubmitButton className="btn btn-primary">{t("Save")}</SubmitButton>
+            </ActionForm>
+          </details>
         )}
         <form action={deleteTripItem}>
           <input type="hidden" name="id" value={i.id} />
@@ -637,6 +694,21 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
               <Figure cents={booked} currency={currency} locale={locale} label={t("booked")} tone="ok" />
             </div>
           </div>
+          {priced.length > 0 && (
+            <p className="text-[0.7rem] text-[var(--color-text-dim)]">
+              {t("Real prices entered: {paid}.", { paid: cash(paidTotal) })}{" "}
+              {paidVsPlan !== 0 && (
+                <span
+                  className="font-semibold"
+                  style={{ color: paidVsPlan > 0 ? "var(--color-danger)" : "var(--color-ok)" }}
+                >
+                  {paidVsPlan > 0
+                    ? t("{n} more than planned for those.", { n: cash(paidVsPlan) })
+                    : t("{n} less than planned for those.", { n: cash(-paidVsPlan) })}
+                </span>
+              )}
+            </p>
+          )}
           {trip.budgetCents != null && planned > trip.budgetCents && (
             <p className="text-[0.7rem] font-semibold text-[var(--color-danger)]">
               {t("Planned is {n} over budget.", {
@@ -950,7 +1022,7 @@ function SavingsChart({
   lang: "en" | "fr";
   short: (cents: number) => string;
 }) {
-  const payments = dated.filter((i) => i.kind !== "SAVE" && i.costCents);
+  const payments = dated.filter((i) => i.kind !== "SAVE" && realCost(i));
   const all = [...deposits, ...payments].filter((i) => i.date);
   if (all.length === 0) return null;
 
@@ -961,7 +1033,7 @@ function SavingsChart({
   if (months.length < 2) return null;
 
   const upTo = (list: Item[], m: Date) =>
-    list.filter((i) => i.date && startOfMonth(i.date) <= m).reduce((n, i) => n + (i.costCents ?? 0), 0);
+    list.filter((i) => i.date && startOfMonth(i.date) <= m).reduce((n, i) => n + (realCost(i) ?? 0), 0);
   const savedLine = months.map((m) => upTo(deposits, m));
   const paidLine = months.map((m) => upTo(payments, m));
   const max = Math.max(...savedLine, ...paidLine, 1);
