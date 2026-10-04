@@ -52,6 +52,23 @@ function budget(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_BUDGET;
 }
 
+/**
+ * Tokens per 30 days across EVERY subject together. The per-subject budget
+ * alone has no upper bound in total: each new account, and each new hub (mail
+ * classification is charged to the hub), arrives with a fresh allowance. With
+ * public signup that makes the monthly bill grow with whoever turns up. This is
+ * the ceiling on the whole bill. 20M tokens is a few hundred dollars at most on
+ * a premium model and far less on Haiku; set AI_GLOBAL_TOKEN_BUDGET from the
+ * Anthropic console once real usage is known.
+ */
+const DEFAULT_GLOBAL_BUDGET = 20_000_000;
+const GLOBAL_KEY = "ai-tokens:__global__";
+
+function globalBudget(): number {
+  const raw = Number(process.env.AI_GLOBAL_TOKEN_BUDGET);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_GLOBAL_BUDGET;
+}
+
 function windowFor(now = new Date()) {
   const ms = WINDOW_SECONDS * 1000;
   const windowStart = new Date(Math.floor(now.getTime() / ms) * ms);
@@ -68,11 +85,16 @@ function windowFor(now = new Date()) {
 export async function overAiBudget(subject: string): Promise<boolean> {
   const { windowStart } = windowFor();
   try {
-    const row = await prisma.rateLimit.findUnique({
-      where: { key_windowStart: { key: `ai-tokens:${subject}`, windowStart } },
-      select: { count: true },
+    const rows = await prisma.rateLimit.findMany({
+      where: { key: { in: [`ai-tokens:${subject}`, GLOBAL_KEY] }, windowStart },
+      select: { key: true, count: true },
     });
-    return (row?.count ?? 0) >= budget();
+    const used = (key: string) => rows.find((r) => r.key === key)?.count ?? 0;
+    if (used(GLOBAL_KEY) >= globalBudget()) {
+      logWarn("ai.global_budget_reached", { limit: globalBudget() });
+      return true;
+    }
+    return used(`ai-tokens:${subject}`) >= budget();
   } catch {
     return false; // fail open — see the header comment
   }
@@ -89,6 +111,17 @@ export async function recordAiSpend(
   const key = `ai-tokens:${subject}`;
   const { windowStart, expiresAt } = windowFor();
   try {
+    const all = await prisma.rateLimit.upsert({
+      where: { key_windowStart: { key: GLOBAL_KEY, windowStart } },
+      update: { count: { increment: tokens } },
+      create: { key: GLOBAL_KEY, windowStart, expiresAt, count: tokens },
+      select: { count: true },
+    });
+    const cap = globalBudget();
+    if (all.count >= cap * 0.8 && all.count - tokens < cap * 0.8) {
+      logWarn("ai.global_budget_80_percent", { used: all.count, limit: cap });
+    }
+
     const row = await prisma.rateLimit.upsert({
       where: { key_windowStart: { key, windowStart } },
       update: { count: { increment: tokens } },

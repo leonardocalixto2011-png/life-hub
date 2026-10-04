@@ -47,3 +47,13 @@ export async function pruneReviewItems(
   });
   return { expired: expired.count, deleted: deleted.count };
 }
+
+/**
+ * Unused sign-in links. Auth.js deletes a token when it is used, but one that
+ * was never clicked stays forever, and its `identifier` is an email address.
+ * Expired tokens can't sign anyone in, so they go at the next daily sweep.
+ */
+export async function pruneExpiredSignInTokens(now: Date = new Date()): Promise<number> {
+  const { count } = await prisma.verificationToken.deleteMany({ where: { expires: { lt: now } } });
+  return count;
+}

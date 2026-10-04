@@ -6,7 +6,7 @@
  * guarantees the bytes differ, and skipWaiting + clients.claim below make the
  * new worker take over immediately instead of after every tab closes.
  */
-const SW_VERSION = "2026-10-01.1-push-actions";
+const SW_VERSION = "2026-10-04.1-nav-preload";
 
 /** Shared photos wait here between the POST and the /share page reading them. */
 const SHARE_CACHE = "lifehub-share-v1";
@@ -25,6 +25,13 @@ self.addEventListener("install", () => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
+      // Having a fetch listener at all means every navigation waits for this
+      // worker to boot before the request goes out. Navigation preload starts
+      // the network request in parallel with the boot; the handler below
+      // hands the page that already-running response.
+      if (self.registration.navigationPreload) {
+        await self.registration.navigationPreload.enable();
+      }
       // Drop any share cache from an older worker version.
       const names = await caches.keys();
       await Promise.all(
@@ -39,9 +46,17 @@ self.addEventListener("activate", (event) => {
 // manifest.ts declares a POST multipart share_target at /share/receive. A page
 // can't be the target of a POST, so the worker takes the request, stores the
 // images, and answers with a 303 to the /share page, which reads them back.
-// Every other request is left alone (no respondWith → normal network).
+// GET navigations are answered from the navigation preload; every other
+// request is left alone (no respondWith → normal network).
 self.addEventListener("fetch", (event) => {
   const req = event.request;
+  if (req.mode === "navigate" && req.method === "GET") {
+    // Use the preloaded response (see activate); plain network otherwise.
+    event.respondWith(
+      (async () => (await event.preloadResponse) || fetch(req))(),
+    );
+    return;
+  }
   if (req.method !== "POST") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin || url.pathname !== "/share/receive") return;

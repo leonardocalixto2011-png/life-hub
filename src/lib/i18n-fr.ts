@@ -1159,6 +1159,8 @@ export const FR: Record<string, string> = {
   "Pick one of the colours.": "Choisis une des couleurs.",
   "Only the hub's owner can rename it.": "Seul·e le ou la propriétaire du hub peut le renommer.",
   "Too many hubs created — try again in an hour.": "Trop de hubs créés — réessaie dans une heure.",
+  "Too many attempts. Try again in an hour.": "Trop de tentatives. Réessaie dans une heure.",
+  "You can own up to 10 hubs. Delete one you no longer use first.": "Tu peux posséder jusqu'à 10 hubs. Supprimes-en un que tu n'utilises plus d'abord.",
   "Unknown language.": "Langue inconnue.",
   "Invalid.": "Invalide.",
   "What do you want to keep track of?": "Ce que tu veux suivre",
