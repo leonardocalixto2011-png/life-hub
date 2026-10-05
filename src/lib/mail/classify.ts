@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { overAiBudget, recordAiSpend } from "@/lib/ai-budget";
+import { chargeAi, creditBlock } from "@/lib/credits";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 import { ai, aiEnabled, fastEffort, AI_MODEL_FAST } from "@/lib/ai";
@@ -38,6 +39,8 @@ export type ClassifyInput = {
    * same as an interactive call.
    */
   budgetSubject?: string;
+  /** The mailbox owner, whose Claude credit pays for the call. */
+  payerId?: string;
 };
 
 export type ClassifyResult = {
@@ -97,6 +100,9 @@ export async function classifyEmail(input: ClassifyInput): Promise<ClassifyResul
   // arrives unclassified. Running out of budget degrades the feature rather
   // than losing mail.
   if (input.budgetSubject && (await overAiBudget(input.budgetSubject))) return null;
+  // The mailbox owner pays, from their own Claude credit. Out of credit
+  // degrades exactly like out of budget: the mail still lands, unclassified.
+  if (input.payerId && (await creditBlock(input.payerId))) return null;
 
   const system = [
     "Classify one email for a shared life/business admin app into exactly one category:",
@@ -127,6 +133,7 @@ export async function classifyEmail(input: ClassifyInput): Promise<ClassifyResul
       messages: [{ role: "user", content: message }],
     });
     if (input.budgetSubject) await recordAiSpend(input.budgetSubject, res.usage);
+    if (input.payerId) await chargeAi(input.payerId, res.model, res.usage, "mail", input.budgetSubject);
     const parsed = res.parsed_output;
     if (!parsed) return null;
 

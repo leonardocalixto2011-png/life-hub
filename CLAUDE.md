@@ -1384,3 +1384,51 @@ request → owner approves → username invite → address change).
   (`trips/colors.ts` `tripGradient`, shared with the trip page's day strip).
 - **Launch screens stay indigo on purpose**: they show the icon the person just
   tapped. Per-theme versions would be 144 images for a half-second screen.
+
+### Assistant that drives the app, chats, Claude credit (2026-10-05)
+
+Owner asked: the in-app AI should handle every part of the app by
+conversation; add AI chat, one-to-one and group chats; each person pays for
+and manages their own Claude credit.
+
+- **The assistant is a tool-using agent** (`src/lib/assistant/`). `tools.ts`
+  has ~38 strict tools, each calling the **same server action** a screen
+  calls (built `FormData`, redirects treated as success), so validation, RLS,
+  consents (debts need `DEBTS_SENSITIVE`), activity lines and revalidation
+  are exactly the UI's. A new feature becomes reachable by conversation by
+  adding one tool there. `agent.ts` runs the manual loop: ≤10 steps, 48s
+  budget (Hobby stops at 60s), history append-only so caching keeps working,
+  a dangling `tool_use` is repaired with an error `tool_result`. **Deleting
+  and messaging another person never run directly**: those tools return a
+  pending card the person taps (Confirm / Cancel → `resolvePending`).
+  Streams NDJSON from `POST /api/assistant`. `/assistant` opens a fresh
+  conversation; earlier ones live under `/chats`.
+- **Chats** (`lib/chat.ts`, `/chats`): `Conversation` kinds AI / DIRECT /
+  GROUP / HUB (one per hub, everyone ACTIVE in it, no seats needed). You can
+  only message people you share an ACTIVE hub with. Polling every 4s (no
+  websockets on Hobby). One push per message, `tag` per chat.
+  RLS (migration `20261005150000_credits_and_chats`): `chat_can_see()` /
+  `chat_is_my_ai()` are SECURITY DEFINER so the policies don't recurse.
+  **There is no INSERT policy on `Conversation`**: `INSERT … RETURNING` must
+  also pass SELECT, which a brand-new row with no seats can't, so
+  conversations are created with the trusted client after the app-level
+  checks. An ASSISTANT message can only be written into your own AI chat.
+- **Claude credit** (`lib/credits.ts`, `/credits`). Every AI call is charged
+  to a person: interactive calls to whoever made them, mail sorting to the
+  mailbox owner, inbound mail to the hub creator. CAD millicents.
+  `CreditEntry` stores `rawCostMillicents` (Anthropic list price) **and** the
+  billed amount (`× AI_CREDIT_MARKUP`, default 2, the finance decision), so
+  margin is auditable per call. Welcome credit once (default 2 $), optional
+  monthly limit, low-balance push under 50¢. `creditBlock` fails **closed**
+  (unlike the rate limiter). **`addCredit()` is the only top-up hook**,
+  idempotent on `externalRef`; the finance thread's Stripe webhook / Plus
+  plan calls it. Until then admins grant credit on `/credits`.
+  `aiGate` / `meterAi` (`lib/ai-gate.ts`) are the one gate and meter every
+  interactive AI path goes through.
+- `CreditWallet` / `CreditEntry`: RLS on, no policy, no grant (server-only).
+  ⚠️ Re-running `create-app-role.sql` re-grants them too; also re-run
+  `REVOKE ALL ON "CreditWallet", "CreditEntry" FROM app_user` (see Launch
+  hardening). `verify:isolation` 68/68.
+- Default `ANTHROPIC_MODEL` is now `claude-opus-5-5`; effort is skipped on
+  Haiku. Tested end-to-end against a local mock of the Messages API (tool
+  call, confirm card, billing rows), **not yet against the real API**.

@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { Inbox } from "lucide-react";
+import { Inbox, MessageCircle } from "lucide-react";
 
 import { redirect } from "next/navigation";
 
 import { requireHub, requireUser, listMyHubs, listPendingInvites } from "@/lib/session";
 import { getT } from "@/lib/i18n-server";
 import { hubChrome } from "@/lib/data";
+import { unreadChatCount } from "@/lib/chat";
 import { money } from "@/lib/format";
 import { ComposerHost } from "@/components/ComposerHost";
 import { LiveRefresh } from "@/components/LiveRefresh";
@@ -31,10 +32,11 @@ export default async function AppLayout({
   if (!me.onboardedAt) redirect("/welcome");
   const { user, hub } = await requireHub();
   const t = await getT();
-  const [{ ventures, members, reviewCount, favorites }, hubs, invites] = await Promise.all([
+  const [{ ventures, members, reviewCount, favorites }, hubs, invites, unreadChats] = await Promise.all([
     hubChrome(user.id, hub.id),
     listMyHubs(user.id),
     listPendingInvites(user.id),
+    unreadChatCount(user.id),
   ]);
 
   return (
@@ -98,6 +100,18 @@ export default async function AppLayout({
         <HubSwitcher hubs={hubs} currentHubId={hub.id} pendingInvites={invites.length} />
         <div className="flex items-center gap-1">
           <SearchButton />
+          <Link
+            href="/chats"
+            aria-label={unreadChats > 0 ? `${t("Chats")} · ${unreadChats}` : t("Chats")}
+            className="icon-btn"
+          >
+            <MessageCircle size={22} strokeWidth={1.9} aria-hidden />
+            {unreadChats > 0 && (
+              <span className="badge" aria-hidden>
+                {unreadChats > 9 ? "9+" : unreadChats}
+              </span>
+            )}
+          </Link>
           <Link
             href="/inbox"
             aria-label={

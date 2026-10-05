@@ -79,6 +79,7 @@ async function main() {
     data: { title: "task in B", hubId: hubB.id, createdById: userB1.id, visibility: "SHARED" },
   });
 
+  const chatIds = [];
   try {
     // --- assertions (app_user role) -------------------------------------------
     const asA1 = await asAppUser(userA1.id, (tx) => tx.task.findMany({ orderBy: { title: "asc" } }));
@@ -567,8 +568,138 @@ async function main() {
       "A2 cannot delete A1's activity line (0 rows, still there)",
       a2DeleteAct.count === 0 && actStillThere !== null,
     );
+
+    // --- chats: direct, group, hub, assistant ---------------------------------
+    const direct = await db.conversation.create({
+      data: {
+        kind: "DIRECT",
+        uniqueKey: `verify-direct-${stamp}`,
+        createdById: userA1.id,
+        members: { create: [{ userId: userA1.id }, { userId: userA2.id }] },
+        messages: { create: [{ authorId: userA1.id, role: "USER", body: "hi A2" }] },
+      },
+    });
+    const aiChat = await db.conversation.create({
+      data: {
+        kind: "AI",
+        createdById: userA1.id,
+        members: { create: [{ userId: userA1.id }] },
+        messages: {
+          create: [
+            { authorId: userA1.id, role: "USER", body: "my private question" },
+            { authorId: null, role: "ASSISTANT", body: "my private answer" },
+          ],
+        },
+      },
+    });
+    const hubChat = await db.conversation.create({
+      data: {
+        kind: "HUB",
+        hubId: hubA.id,
+        uniqueKey: `verify-hub-${stamp}`,
+        messages: { create: [{ authorId: userA2.id, role: "USER", body: "hello hub" }] },
+      },
+    });
+    chatIds.push(direct.id, aiChat.id, hubChat.id);
+
+    const convIds = (rows) => new Set(rows.map((r) => r.id));
+    const a2Convs = convIds(await asAppUser(userA2.id, (tx) => tx.conversation.findMany()));
+    const b1Convs = convIds(await asAppUser(userB1.id, (tx) => tx.conversation.findMany()));
+    check("A2 sees the direct chat with A1 and Hub A's chat", a2Convs.has(direct.id) && a2Convs.has(hubChat.id));
+    check("A2 cannot see A1's assistant conversation", !a2Convs.has(aiChat.id));
+    check(
+      "B1 (other hub) sees none of the three chats",
+      !b1Convs.has(direct.id) && !b1Convs.has(hubChat.id) && !b1Convs.has(aiChat.id),
+    );
+
+    const a2AiMsgs = await asAppUser(userA2.id, (tx) =>
+      tx.chatMessage.findMany({ where: { conversationId: aiChat.id } }),
+    );
+    const b1Msgs = await asAppUser(userB1.id, (tx) =>
+      tx.chatMessage.findMany({ where: { conversationId: { in: [direct.id, hubChat.id] } } }),
+    );
+    check("A2 reads none of A1's assistant messages", a2AiMsgs.length === 0);
+    check("B1 reads no messages from Hub A's chats", b1Msgs.length === 0);
+
+    const blocked = async (fn) => {
+      try {
+        await fn();
+        return false;
+      } catch {
+        return true;
+      }
+    };
+    check(
+      "A2 cannot post a message signed as A1",
+      await blocked(() =>
+        asAppUser(userA2.id, (tx) =>
+          tx.chatMessage.create({ data: { conversationId: direct.id, authorId: userA1.id, role: "USER", body: "forged" } }),
+        ),
+      ),
+    );
+    check(
+      "B1 cannot post into the A1–A2 chat",
+      await blocked(() =>
+        asAppUser(userB1.id, (tx) =>
+          tx.chatMessage.create({ data: { conversationId: direct.id, authorId: userB1.id, role: "USER", body: "intruder" } }),
+        ),
+      ),
+    );
+    check(
+      "Nobody can forge an assistant reply outside their own assistant chat",
+      (await blocked(() =>
+        asAppUser(userA1.id, (tx) =>
+          tx.chatMessage.create({ data: { conversationId: direct.id, authorId: null, role: "ASSISTANT", body: "fake bot" } }),
+        ),
+      )) &&
+        (await blocked(() =>
+          asAppUser(userA2.id, (tx) =>
+            tx.chatMessage.create({ data: { conversationId: aiChat.id, authorId: null, role: "ASSISTANT", body: "fake bot" } }),
+          ),
+        )),
+    );
+    check(
+      "B1 cannot seat themselves in the A1–A2 chat",
+      await blocked(() =>
+        asAppUser(userB1.id, (tx) => tx.conversationMember.create({ data: { conversationId: direct.id, userId: userB1.id } })),
+      ),
+    );
+    check(
+      "app_user cannot create a conversation at all (server-only)",
+      await blocked(() =>
+        asAppUser(userA1.id, (tx) =>
+          tx.conversation.create({ data: { kind: "DIRECT", uniqueKey: `verify-forged-${stamp}`, createdById: userA1.id } }),
+        ),
+      ),
+    );
+    const a2DeletesA1Msg = await asAppUser(userA2.id, (tx) =>
+      tx.chatMessage.deleteMany({ where: { conversationId: direct.id, authorId: userA1.id } }),
+    );
+    check("A2 cannot delete A1's message (0 rows)", a2DeletesA1Msg.count === 0);
+    check(
+      "A2 CAN post in the A1–A2 chat as themselves",
+      !(await blocked(() =>
+        asAppUser(userA2.id, (tx) =>
+          tx.chatMessage.create({ data: { conversationId: direct.id, authorId: userA2.id, role: "USER", body: "hi A1" } }),
+        ),
+      )),
+    );
+
+    // --- Claude credit: server-only ledger -----------------------------------
+    await db.creditWallet.create({ data: { userId: userA1.id, balanceMillicents: 100_000 } });
+    check(
+      "app_user cannot read any credit wallet",
+      await blocked(() => asAppUser(userA1.id, (tx) => tx.creditWallet.findMany())),
+    );
+    check(
+      "app_user cannot write a credit entry, even for themselves",
+      await blocked(() =>
+        asAppUser(userA1.id, (tx) => tx.creditEntry.create({ data: { userId: userA1.id, kind: "TOPUP", amountMillicents: 1 } })),
+      ),
+    );
   } finally {
     // --- teardown (owner role) ------------------------------------------------
+    await db.conversation.deleteMany({ where: { id: { in: chatIds } } });
     await db.debtShare.deleteMany({ where: { ownerId: { in: [userA1.id, userA2.id, userB1.id] } } });
     await db.debt.deleteMany({ where: { ownerId: { in: [userA1.id, userA2.id, userB1.id] } } });
     await db.task.deleteMany({ where: { id: { in: [sharedTaskA.id, privateTaskA.id, taskB.id] } } });
