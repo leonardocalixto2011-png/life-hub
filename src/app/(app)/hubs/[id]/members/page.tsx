@@ -1,4 +1,4 @@
-import { Eye, EyeOff, LogOut, Send, UserMinus, UserPlus } from "lucide-react";
+import { AtSign, Check, Crown, Eye, EyeOff, LogOut, Send, UserMinus, UserPlus, X } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { requireHub } from "@/lib/session";
@@ -10,12 +10,22 @@ import { prisma } from "@/lib/prisma";
 import { Avatar } from "@/components/Avatar";
 import {
   addKnownMember,
+  approveJoinRequest,
+  declineJoinRequest,
+  inviteByUsername,
   inviteMember,
   leaveHub,
+  makeOwner,
   removeMember,
+  revokeHubAppInvite,
+  setJoinCode,
   setShowEmail,
   setShowOccasions,
 } from "../../actions";
+import { ActionForm } from "@/components/ActionForm";
+import { CopyField } from "@/components/CopyField";
+import { appUrl, maskEmail } from "@/lib/app-invites";
+import { formatJoinCode } from "@/lib/join-codes";
 import { listHubRoster } from "@/lib/data";
 import { personName } from "@/lib/people";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -47,7 +57,8 @@ export default async function HubMembersPage({
 
   const isOwner = membership.role === "OWNER";
 
-  const [hub, members, known] = await Promise.all([
+  const now = new Date();
+  const [hub, members, known, requests, pendingAppInvites, ownerCount] = await Promise.all([
     prisma.hub.findUniqueOrThrow({
       where: { id: hubId },
       include: { coverBy: { select: { name: true } } },
@@ -99,6 +110,30 @@ export default async function HubMembersPage({
           orderBy: { name: "asc" },
         })
       : Promise.resolve([]),
+    // Join requests, owners only. Name, @username, photo and their note —
+    // never the address: they asked with a code, not by giving it out.
+    isOwner
+      ? prisma.hubMembership.findMany({
+          where: { hubId, status: "REQUESTED" },
+          select: {
+            createdAt: true,
+            requestNote: true,
+            user: { select: { id: true, name: true, username: true, avatarUrl: true } },
+          },
+          orderBy: { createdAt: "asc" },
+        })
+      : Promise.resolve([]),
+    // Invitations to people with no account yet. The owner typed these
+    // addresses; shown masked anyway, since the page can be open on a shared
+    // screen and the full address adds nothing to recognising it.
+    isOwner
+      ? prisma.appInvite.findMany({
+          where: { hubId, usedAt: null, revokedAt: null, expiresAt: { gt: now } },
+          select: { id: true, email: true, expiresAt: true },
+          orderBy: { createdAt: "desc" },
+        })
+      : Promise.resolve([]),
+    prisma.hubMembership.count({ where: { hubId, role: "OWNER", status: "ACTIVE" } }),
   ]);
 
   // First name only — the credit is a friendly touch, not a directory entry.
@@ -133,10 +168,11 @@ export default async function HubMembersPage({
         <div className="list">
           {members.map((m) => (
             <div key={m.membershipId} className="row pr-2">
-              <Avatar name={m.name} email={m.email} size={32} />
+              <Avatar name={m.name} email={m.email} src={m.avatarUrl} size={32} />
               <div className="row-main">
-                <span className="row-title">{personName(m, t("Member"))}</span>
+                <span className="row-title">{personName(m, m.username ? `@${m.username}` : t("Member"))}</span>
                 <span className="row-sub">
+                  {m.username && m.name ? `@${m.username} · ` : ""}
                   {m.hubRole === "OWNER" ? t("Owner") : t("Member")}
                   {m.status === "INVITED" ? ` · ${t("invited")}` : ""}
                   {m.id === user.id ? ` · ${t("you")}` : ""}
@@ -145,7 +181,19 @@ export default async function HubMembersPage({
                     second copy of a name that is already the address. */}
                 {m.email && m.name && <span className="row-sub break-all">{m.email}</span>}
               </div>
-              {isOwner && m.id !== user.id && (
+              {isOwner && m.id !== user.id && m.status === "ACTIVE" && m.hubRole === "MEMBER" && (
+                <form action={makeOwner.bind(null, hubId, m.id)}>
+                  <SubmitButton
+                    className="btn btn-ghost btn-sm text-[var(--color-text-dim)]"
+                    pendingLabel="…"
+                    aria-label={t("Make {name} an owner", { name: personName(m, t("Member")) })}
+                  >
+                    <Crown size={14} strokeWidth={2} aria-hidden />
+                    {t("owner")}
+                  </SubmitButton>
+                </form>
+              )}
+              {isOwner && m.id !== user.id && m.hubRole !== "OWNER" && (
                 <form action={removeMember.bind(null, hubId, m.id)}>
                   <SubmitButton
                     className="btn btn-ghost btn-sm text-[var(--color-text-dim)]"
@@ -153,14 +201,64 @@ export default async function HubMembersPage({
                     aria-label={t("Remove {name}", { name: personName(m, t("Member")) })}
                   >
                     <UserMinus size={14} strokeWidth={2} aria-hidden />
-                    {t("remove")}
+                    {m.status === "INVITED" ? t("cancel") : t("remove")}
                   </SubmitButton>
                 </form>
               )}
             </div>
           ))}
+          {pendingAppInvites.map((inv) => (
+            <div key={inv.id} className="row pr-2">
+              <Avatar name={null} email={inv.email} size={32} />
+              <div className="row-main">
+                <span className="row-title break-all">{inv.email ? maskEmail(inv.email) : t("Invitation link")}</span>
+                <span className="row-sub">{t("invited · no account yet")}</span>
+              </div>
+              <form action={revokeHubAppInvite.bind(null, hubId, inv.id)}>
+                <SubmitButton className="btn btn-ghost btn-sm text-[var(--color-text-dim)]" pendingLabel="…">
+                  <X size={14} strokeWidth={2} aria-hidden />
+                  {t("cancel")}
+                </SubmitButton>
+              </form>
+            </div>
+          ))}
         </div>
       </section>
+
+      {isOwner && requests.length > 0 && (
+        <section>
+          <SectionHeader title={t("Asking to join")} />
+          <div className="list">
+            {requests.map((r) => (
+              <div key={r.user.id} className="row items-start pr-2">
+                <Avatar name={r.user.name} src={r.user.avatarUrl} size={32} />
+                <div className="row-main">
+                  <span className="row-title">{r.user.name ?? (r.user.username ? `@${r.user.username}` : t("Someone"))}</span>
+                  {r.user.username && r.user.name && <span className="row-sub">@{r.user.username}</span>}
+                  {r.requestNote && <span className="row-sub italic">“{r.requestNote}”</span>}
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <form action={approveJoinRequest.bind(null, hubId, r.user.id)}>
+                    <SubmitButton className="btn btn-primary btn-sm" pendingLabel="…">
+                      <Check size={14} strokeWidth={2.4} aria-hidden />
+                      {t("Let in")}
+                    </SubmitButton>
+                  </form>
+                  <form action={declineJoinRequest.bind(null, hubId, r.user.id)}>
+                    <SubmitButton
+                      className="btn btn-ghost btn-sm"
+                      pendingLabel="…"
+                      aria-label={t("Decline")}
+                    >
+                      <X size={14} strokeWidth={2} aria-hidden />
+                    </SubmitButton>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {me && (
         <FormSection title={t("Your email in this hub")}>
@@ -219,7 +317,29 @@ export default async function HubMembersPage({
             </form>
           )}
 
-          <form action={inviteMember.bind(null, hubId)} className="form-stack">
+          <ActionForm action={inviteByUsername.bind(null, hubId)} className="form-stack border-b border-[var(--color-border)] pb-4">
+            <label className="field-label">
+              {t("Invite by username")}
+              <div className="flex gap-2">
+                <input
+                  name="username"
+                  required
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  placeholder="@marie"
+                  className="field min-w-0 flex-1"
+                />
+                <SubmitButton className="btn btn-secondary shrink-0" pendingLabel="…">
+                  <AtSign size={16} strokeWidth={2} aria-hidden />
+                  {t("Invite")}
+                </SubmitButton>
+              </div>
+              <span className="field-hint">{t("For someone already on Life Hub — no email address needed.")}</span>
+            </label>
+          </ActionForm>
+
+          <ActionForm action={inviteMember.bind(null, hubId)} className="form-stack">
             <label className="field-label">
               {t("Invite someone new by email")}
               <input
@@ -231,14 +351,47 @@ export default async function HubMembersPage({
                 className="field"
               />
               <span className="field-hint">
-                {t("They'll get an email to sign in and accept — works even if they've never used Life Hub before.")}
+                {t("Someone new gets an invitation to create their account first; joining stays their choice.")}
               </span>
             </label>
             <SubmitButton className="btn btn-primary w-full" pendingLabel="…">
               <Send size={16} strokeWidth={2} aria-hidden />
               {t("Send invite")}
             </SubmitButton>
-          </form>
+          </ActionForm>
+        </FormSection>
+      )}
+
+      {isOwner && (
+        <FormSection title={t("Code to ask to join")}>
+          <p className="field-hint mt-0">
+            {t("Share a code or a link: people who have it can ask to join, and you let them in or not. Nobody can find this hub without it.")}
+          </p>
+          {hub.joinCode ? (
+            <>
+              <CopyField value={formatJoinCode(hub.joinCode)} label={t("Hub code")} mono />
+              <CopyField value={`${appUrl()}/hubs/join/${hub.joinCode}`} label={t("Link to ask to join")} />
+              <div className="flex gap-2">
+                <form action={setJoinCode.bind(null, hubId, true)} className="flex-1">
+                  <SubmitButton className="btn btn-ghost btn-sm w-full" pendingLabel="…">
+                    {t("New code")}
+                  </SubmitButton>
+                </form>
+                <form action={setJoinCode.bind(null, hubId, false)} className="flex-1">
+                  <SubmitButton className="btn btn-ghost btn-sm w-full" pendingLabel="…">
+                    {t("Turn off")}
+                  </SubmitButton>
+                </form>
+              </div>
+              <p className="field-hint mt-0">{t("A new code stops the old one from working.")}</p>
+            </>
+          ) : (
+            <form action={setJoinCode.bind(null, hubId, true)}>
+              <SubmitButton className="btn btn-secondary w-full" pendingLabel="…">
+                {t("Create a code")}
+              </SubmitButton>
+            </form>
+          )}
         </FormSection>
       )}
 
@@ -266,7 +419,7 @@ export default async function HubMembersPage({
         </FormSection>
       )}
 
-      {!isOwner && (
+      {(!isOwner || ownerCount > 1) && (
         <DangerZone>
           <form action={leaveHub.bind(null, hubId)}>
             <SubmitButton className="btn btn-quiet-danger w-full" pendingLabel="…">

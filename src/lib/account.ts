@@ -1,6 +1,7 @@
 import { del } from "@vercel/blob";
 
 import { prisma } from "@/lib/prisma";
+import { deleteBlobIfUnreferenced } from "@/lib/blob-delete";
 
 /**
  * Account export and erasure — the technical half of GDPR Articles 15/20
@@ -67,12 +68,18 @@ export async function exportUserData(userId: string) {
         id: true, name: true, email: true, emailVerified: true, role: true,
         themeId: true, backgroundImageUrl: true, createdAt: true,
         locale: true, onboardedAt: true, interests: true, aiNoticeAt: true,
+        username: true, avatarUrl: true, invitedBy: { select: { name: true } },
+        // Invitations they sent: when and whether used. The addresses they
+        // typed are left out — those are other people's.
+        appInvitesSent: {
+          select: { createdAt: true, expiresAt: true, usedAt: true, revokedAt: true, hub: { select: { name: true } } },
+        },
       },
     }),
     prisma.hubMembership.findMany({
       where: { userId },
       select: {
-        role: true, status: true, joinedAt: true, createdAt: true, showEmail: true,
+        role: true, status: true, joinedAt: true, createdAt: true, showEmail: true, requestNote: true,
         hub: { select: { name: true } },
       },
     }),
@@ -173,14 +180,15 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
   // image in public storage is a leak.
   const me = await prisma.user.findUnique({
     where: { id: userId },
-    select: { backgroundImageUrl: true },
+    select: { backgroundImageUrl: true, avatarUrl: true },
   });
-  if (me?.backgroundImageUrl) {
-    try {
-      await del(me.backgroundImageUrl);
-    } catch {
-      // Already gone or unreachable — not worth failing the erasure over.
-    }
+  // Cleared on the row first, then each file deleted only if nothing else
+  // points at it: a stored URL is any file on our Blob host, so a blind del()
+  // could take someone else's photo with it (see lib/blob-delete.ts).
+  if (me?.backgroundImageUrl || me?.avatarUrl) {
+    await prisma.user.update({ where: { id: userId }, data: { backgroundImageUrl: null, avatarUrl: null } });
+    await deleteBlobIfUnreferenced(me.backgroundImageUrl);
+    await deleteBlobIfUnreferenced(me.avatarUrl);
   }
 
   // Their PRIVATE items. Nobody else can see them, so handing them to the
@@ -282,9 +290,12 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
     t.count + d.count + e.count + b.count + sd.count + tr.count + h.count +
     paid.count + shifts.count + tripTasks.count + travellers;
 
-  // Everything else — memberships, debts, debt shares, mail accounts, push
-  // subscriptions, notification prefs, sessions, auth accounts, and the
-  // consent ledger — is onDelete: Cascade from User, so this removes them. Subscriptions and
+  // Everything else — memberships (and join requests), debts, debt shares,
+  // mail accounts, push subscriptions, notification prefs, sessions, auth
+  // accounts, the consent ledger, invitations they sent and pending address
+  // changes — is onDelete: Cascade from User, so this removes them. Who
+  // invited whom (User.invitedById, HubMembership.invitedById,
+  // AppInvite.usedById) is SetNull: the other person's account stays. Subscriptions and
   // assigned tasks are SetNull, which is what we want: the row survives in
   // the hub without pointing at a person.
   await prisma.user.delete({ where: { id: userId } });

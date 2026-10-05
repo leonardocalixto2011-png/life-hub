@@ -1299,4 +1299,61 @@ Pre-signup audit; full launch plan in the project thread's artifact.
 - ⚠️ Running `prisma/create-app-role.sql` **after** migrations re-grants
   DELETE on `Consent` and UPDATE on `Activity` (its blanket GRANT undoes the
   per-table REVOKEs) — `verify:isolation` fails 2 checks if you do. Re-run the
-  latest migrations' REVOKE lines after re-running that file.
+  latest migrations' REVOKE lines after re-running that file, **and** the
+  column grant `GRANT UPDATE ("thankedById") ON "Activity" TO app_user`
+  (activity_feed migration), or thanking breaks. It also re-grants the two
+  account tables below, which RLS-with-no-policy still keeps empty.
+
+### Accounts: app invitations, usernames, join requests (2026-10-05)
+
+Owner asked: invite people to the **app** rather than straight into a hub,
+let them create their own account (name, username…), and let people ask to
+join a hub or be invited. Audit + build in one pass; `verify:isolation` 54/54,
+full flow driven in a browser (invite link → account → welcome → join
+request → owner approves → username invite → address change).
+
+- **App invitations** (`AppInvite`, `lib/app-invites.ts`, `/invitations`,
+  public `/invite/<token>`). By email (bound to it) or by link (bound to the
+  first address entered, re-bindable until used). Single-use, 14 days, only a
+  SHA-256 of the token is stored. **The account is still created only when
+  the sign-in link is clicked** (`findOrCreateUser`): the invite just lets an
+  unknown address through `maySendLink` while signups are closed. 10 per
+  person per 30 days (`APP_INVITES_PER_MONTH`), ADMIN unlimited — this is the
+  cost control now that any member can bring people in. `User.invitedById`.
+- **Hub email invite to an unknown address no longer creates a User row** (an
+  account the person never agreed to, which never expired). It creates an
+  `AppInvite` carrying `hubId`; signing up turns it into an INVITED
+  membership, still answered at /welcome.
+- **Usernames** (`User.username`, lowercase, unique, `lib/username.ts`
+  rules + reserved list). Asked in the welcome's "you" step (shown again to
+  anyone without one), editable on /account. Owners invite by `@username`
+  on the members page. A handle is semi-public on purpose; addresses stay
+  hidden. Roster no longer hands an owner the address of an INVITED person
+  unless the invite predates `HubMembership.invitedById` (those were typed
+  addresses) — a username invite must not reveal an email.
+- **Join requests** = `MembershipStatus.REQUESTED`, the mirror of INVITED.
+  Hubs are never searchable: an owner mints `Hub.joinCode` (8 chars Crockford
+  base32, `lib/join-codes.ts`), shares code or `/hubs/join/<code>`; lookups
+  20/hr per person. Owners get a push, approve/decline on the members page
+  (`approveRequestRow`). Inviting someone who asked = approve; asking when
+  invited = accept. Every `status: "ACTIVE"` check already excluded REQUESTED;
+  `listHubRoster` explicitly lists ACTIVE+INVITED only.
+- **Co-owners**: `makeOwner`. The last owner can't leave; owners can't remove
+  each other. `declineInvite` now only deletes an INVITED row (it used to
+  delete any row, incl. an owner's ACTIVE one, skipping cleanup).
+- **Profile photo** `User.avatarUrl` (Blob, via the task-photo uploader);
+  `Avatar` takes `src`. **Address change** (`EmailChange`, link to the NEW
+  address, 1h, confirm is a button so mail scanners can't trigger it; old
+  address notified, its pending sign-in tokens deleted). `getUser` now looks
+  up by the JWT's user **id**, not its email — required for this, since the
+  token keeps the old address.
+- `AppInvite`/`EmailChange`: RLS on, **no policy, no grant** for app_user —
+  server-only tables.
+- Login honours `callbackUrl` (same-site paths only, `safeNext`) so a join
+  link opened signed-out comes back to it.
+- Retention (`pruneAccountLeftovers`, daily cron): dead invitations after 30
+  days, expired address changes, INVITED/REQUESTED rows unanswered for 60
+  days, and never-used accounts left by the old invite flow after 30 days
+  (never verified, never onboarded, nothing authored).
+- Not built: a hub-switcher badge for pending requests (owners get a push and
+  see them on the members page); per-member removal of a co-owner.

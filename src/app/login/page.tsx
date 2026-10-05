@@ -8,13 +8,21 @@ import { signupsOpen } from "@/lib/signup";
 import { getT } from "@/lib/i18n-server";
 import { LegalLinks } from "@/components/LegalPage";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ callbackUrl?: string }>;
+}) {
+  const { callbackUrl } = await searchParams;
   // The database, not the cookie, decides. `auth()` alone only proves the
   // browser holds a signed JWT; every page behind the login needs the user
   // row as well (`requireUser`). Redirecting on the JWT sent a deleted or
   // reseeded account to /today, which sent it straight back here, forever.
   const [session, user] = await Promise.all([auth(), getUser()]);
   if (user) redirect("/today");
+  // Auth.js sends people here with the page they were trying to open; it is
+  // checked again server-side (safeNext) before it is used.
+  const next = typeof callbackUrl === "string" ? callbackUrl.slice(0, 500) : undefined;
   const stale = Boolean(session?.user);
   const t = await getT();
 
@@ -38,7 +46,7 @@ export default async function LoginPage() {
           </p>
         </>
       )}
-      <LoginForm open={signupsOpen()} />
+      <LoginForm open={signupsOpen()} next={next} />
       {/* Bilingual on purpose: nobody is signed in yet, so there is no chosen
           language — and French comes first in Québec. */}
       <footer>

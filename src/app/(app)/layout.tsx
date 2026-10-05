@@ -112,7 +112,7 @@ export default async function AppLayout({
               </span>
             )}
           </Link>
-          <AccountMenu name={user.name} email={user.email} />
+          <AccountMenu name={user.name} email={user.email} username={user.username} avatarUrl={user.avatarUrl} />
         </div>
       </header>
 

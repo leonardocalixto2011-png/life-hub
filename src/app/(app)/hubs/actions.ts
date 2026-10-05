@@ -13,9 +13,15 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { withHub } from "@/lib/hub-context";
 import { CURRENT_HUB_COOKIE, listMyHubs, requireHub, requireUser } from "@/lib/session";
-import { sendEmail } from "@/lib/email";
 import { sendPushToUser } from "@/lib/push";
 import { acceptInviteFor, createHubFor, setCurrentHub } from "@/lib/hub-setup";
+import { formResult, type ActionResult } from "@/lib/action-result";
+import { INVITE_TTL_DAYS, InviteLimitError, createAppInvite, inviteUrl } from "@/lib/app-invites";
+import { sendAppInviteEmail, sendHubInviteEmail } from "@/lib/account-emails";
+import { newJoinCode } from "@/lib/join-codes";
+import { normalizeUsername } from "@/lib/username";
+import { langOf, translate } from "@/lib/i18n";
+import { logActivity } from "@/lib/activity";
 
 /**
  * Hub creation itself runs on the owner-role client (bypasses RLS), same as
@@ -74,88 +80,225 @@ async function requireHubOwner(hubId: string, userId: string, action: string) {
   }
 }
 
+/** Push in the recipient's own language — they may not share the sender's. */
+async function pushTo(
+  userId: string,
+  msg: { title: string; body: string; vars: Record<string, string>; url: string; tag: string },
+) {
+  try {
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { locale: true } });
+    const lang = langOf(target?.locale);
+    await sendPushToUser(userId, {
+      title: translate(lang, msg.title, msg.vars),
+      body: translate(lang, msg.body, msg.vars),
+      url: msg.url,
+      tag: msg.tag,
+    });
+  } catch {
+    // No devices is the normal case for someone new; a push is a nudge, never
+    // the thing that makes an invite or an approval real.
+  }
+}
+
 /**
- * Owner-only. Invite creation writes a HubMembership row for someone else, so
- * it runs on the owner-role client — RLS's self-only HubMembership policy
- * would reject it under app_user regardless of who's asking (documented gap,
- * enforced by the OWNER-role check below instead of the database).
+ * Turns a REQUESTED membership into an ACTIVE one. Owner-checked by every
+ * caller. Trusted client: the row is someone else's, which the self-only
+ * HubMembership policy would refuse — same as inviting. The feed line is
+ * written as the person who joined, like accepting an invite.
  */
-export async function inviteMember(hubId: string, formData: FormData) {
-  const user = await requireUser();
-  const email = emailSchema.parse(formData.get("email"));
-
-  await requireHubOwner(hubId, user.id, "invite people");
-
-  // Every invite sends an email from our domain to an address the inviter
-  // chose — without a cap, an owner account is a free spam relay.
-  // Hourly and daily per inviter, plus per recipient across all inviters, so
-  // one address can't be flooded by several accounts taking turns.
-  if (
-    !(await rateLimit(`invite:${user.id}`, 20, 3600)).ok ||
-    !(await rateLimit(`invite-day:${user.id}`, 50, 86400)).ok ||
-    !(await rateLimit(`invite-to:${hashedKey(email)}`, 5, 86400)).ok
-  ) {
-    throw new Error("You've sent a lot of invites this hour. Try again later.");
-  }
-
-  const hub = await prisma.hub.findUniqueOrThrow({ where: { id: hubId } });
-
-  const invited = await prisma.$transaction(async (tx) => {
-    const target = await tx.user.upsert({
-      where: { email },
-      update: {},
-      create: { email, role: "MEMBER" },
+async function approveRequestRow(hubId: string, targetId: string): Promise<boolean> {
+  const approved = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.hubMembership.updateMany({
+      where: { hubId, userId: targetId, status: "REQUESTED" },
+      data: { status: "ACTIVE", joinedAt: new Date(), requestNote: null },
     });
-
-    const existing = await tx.hubMembership.findUnique({
-      where: { hubId_userId: { hubId, userId: target.id } },
+    if (count === 0) return false;
+    await logActivity(tx, {
+      hubId,
+      actorId: targetId,
+      verb: "MEMBER_JOINED",
+      entityType: "member",
+      entityId: targetId,
+      summary: "",
     });
-    if (existing) return { target, already: true };
-
-    await tx.hubMembership.create({
-      data: { hubId, userId: target.id, role: "MEMBER", status: "INVITED" },
-    });
-    return { target, already: false };
+    return true;
   });
+  if (approved) {
+    const hub = await prisma.hub.findUnique({ where: { id: hubId }, select: { name: true } });
+    await pushTo(targetId, {
+      title: "You're in \"{hub}\"",
+      body: "Your request was approved. Tap to open it.",
+      vars: { hub: hub?.name ?? "" },
+      url: "/today",
+      tag: `hub-request-${hubId}`,
+    });
+  }
+  return approved;
+}
 
-  if (!invited.already) {
-    // Someone already using the app gets a push too — the email alone was
-    // easy to miss, and the invite then sat unanswered.
-    try {
-      await sendPushToUser(invited.target.id, {
-        title: `Invited to "${hub.name}"`,
-        body: `${inviterName(user)} invited you. Tap to join.`,
-        url: "/hubs/invites",
-        tag: `hub-invite-${hubId}`,
-      });
-    } catch {
-      // No devices yet is the normal case for a brand-new address.
-    }
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    // Hub and display names are free text chosen by the inviter; unescaped they
-    // could inject markup/links into an email that arrives from our domain.
-    const hubNameHtml = escapeHtml(hub.name);
-    const inviterHtml = escapeHtml(inviterName(user));
-    await sendEmail({
-      to: email,
-      subject: `You're invited to "${hub.name}" on Life Hub`,
-      text: `${inviterName(user)} invited you to join "${hub.name}" on Life Hub. Sign in at ${appUrl}/login with this email address, then open ${appUrl}/hubs/invites to accept.`,
-      html: `
-        <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-          <h1 style="font-size:18px;margin:0 0 12px">You're invited to "${hubNameHtml}"</h1>
-          <p style="color:#444;font-size:14px;line-height:1.5;margin:0 0 20px">
-            ${inviterHtml} invited you to join their Life Hub. Sign in with this email address, then accept the invite.
-          </p>
-          <p style="margin:0 0 12px">
-            <a href="${appUrl}/login" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:600">
-              Sign in
-            </a>
-          </p>
-        </div>
-      `,
+type Placed = "invited" | "reinvited" | "active" | "approved";
+
+/**
+ * Invites an existing account into a hub, whichever way the owner picked them
+ * (email, username, someone they know). Someone already in stays as they are;
+ * someone who had ASKED to join is simply let in — both sides now want it.
+ * An unanswered invite is refreshed, not duplicated.
+ */
+async function placeInvite(hubId: string, targetId: string, inviter: { id: string; name: string | null }): Promise<Placed> {
+  const existing = await prisma.hubMembership.findUnique({
+    where: { hubId_userId: { hubId, userId: targetId } },
+    select: { status: true },
+  });
+  if (existing?.status === "ACTIVE") return "active";
+  if (existing?.status === "REQUESTED") {
+    await approveRequestRow(hubId, targetId);
+    return "approved";
+  }
+  if (existing?.status === "INVITED") {
+    await prisma.hubMembership.update({
+      where: { hubId_userId: { hubId, userId: targetId } },
+      data: { invitedById: inviter.id },
+    });
+  } else {
+    await prisma.hubMembership.create({
+      data: { hubId, userId: targetId, role: "MEMBER", status: "INVITED", invitedById: inviter.id },
     });
   }
 
+  // Re-inviting re-sends the push, which is the point of re-inviting — but a
+  // few a day at most, so an owner can't buzz someone's phone on repeat.
+  if ((await rateLimit(`hub-invite-push:${hubId}:${targetId}`, 3, 86400)).ok) {
+    const hub = await prisma.hub.findUnique({ where: { id: hubId }, select: { name: true } });
+    await pushTo(targetId, {
+      title: "Invited to \"{hub}\"",
+      body: "{name} invited you. Tap to answer.",
+      vars: { hub: hub?.name ?? "", name: inviterName(inviter) },
+      url: "/hubs/invites",
+      tag: `hub-invite-${hubId}`,
+    });
+  }
+  return existing ? "reinvited" : "invited";
+}
+
+const PLACED_NOTICE: Record<Placed, string> = {
+  invited: "Invitation sent to {who}.",
+  reinvited: "Invitation sent to {who} again.",
+  active: "{who} is already in this hub.",
+  approved: "{who} had asked to join — they're in now.",
+};
+
+/** The three invite paths each cap themselves; these are the shared caps. */
+async function inviteLimitsOk(userId: string): Promise<boolean> {
+  return (
+    (await rateLimit(`invite:${userId}`, 20, 3600)).ok &&
+    (await rateLimit(`invite-day:${userId}`, 50, 86400)).ok
+  );
+}
+
+/**
+ * Owner-only. Invites by email address.
+ *
+ * An address with an account gets an INVITED membership, as before. An
+ * address with NO account no longer gets a User row made for it on the spot
+ * (an account the person never agreed to, which never expired): it gets an
+ * app invitation carrying this hub (lib/app-invites.ts). Their account exists
+ * only once they open the link and sign in, and the hub invitation then
+ * waits for their yes like any other.
+ */
+export async function inviteMember(hubId: string, formData: FormData): Promise<ActionResult> {
+  return formResult(async () => {
+    const user = await requireUser();
+    const parsed = emailSchema.safeParse(formData.get("email"));
+    if (!parsed.success) throw new Error("Enter a valid email address.");
+    const email = parsed.data;
+
+    await requireHubOwner(hubId, user.id, "invite people");
+
+    // Every invite can send an email from our domain to an address the
+    // inviter chose — without a cap, an owner account is a free spam relay.
+    // Per inviter, plus per recipient across all inviters, so one address
+    // can't be flooded by several accounts taking turns.
+    if (!(await inviteLimitsOk(user.id)) || !(await rateLimit(`invite-to:${hashedKey(email)}`, 5, 86400)).ok) {
+      throw new Error("You've sent a lot of invites this hour. Try again later.");
+    }
+
+    const [hub, target] = await Promise.all([
+      prisma.hub.findUniqueOrThrow({ where: { id: hubId }, select: { name: true } }),
+      prisma.user.findUnique({ where: { email }, select: { id: true } }),
+    ]);
+
+    if (!target) {
+      let token: string;
+      try {
+        ({ token } = await createAppInvite({ createdById: user.id, role: user.role, email, hubId }));
+      } catch (e) {
+        if (e instanceof InviteLimitError) throw new Error(e.message);
+        throw e;
+      }
+      await sendAppInviteEmail({
+        to: email,
+        inviter: inviterName(user),
+        url: inviteUrl(token),
+        hubName: hub.name,
+        days: INVITE_TTL_DAYS,
+      });
+      revalidatePath(`/hubs/${hubId}/members`);
+      return { notice: "Invitation sent to {who}.", noticeVars: { who: email } };
+    }
+
+    if (target.id === user.id) throw new Error("That's you.");
+    const placed = await placeInvite(hubId, target.id, user);
+    if (placed === "invited") {
+      await sendHubInviteEmail({
+        to: email,
+        inviter: inviterName(user),
+        hubName: hub.name,
+        url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/hubs/invites`,
+      });
+    }
+    revalidatePath(`/hubs/${hubId}/members`);
+    return { notice: PLACED_NOTICE[placed], noticeVars: { who: email } };
+  });
+}
+
+/**
+ * Owner-only. Invites someone by their @username — no address needed. The
+ * answer says whether the username exists: a handle is something people
+ * choose to give out, so confirming one is not leaking anything private, and
+ * the lookups are rate-limited so it can't be used to walk the user list.
+ */
+export async function inviteByUsername(hubId: string, formData: FormData): Promise<ActionResult> {
+  return formResult(async () => {
+    const user = await requireUser();
+    z.string().cuid().parse(hubId);
+    const username = normalizeUsername(String(formData.get("username") ?? ""));
+    if (!username) throw new Error("Type a username.");
+
+    await requireHubOwner(hubId, user.id, "invite people");
+    if (!(await inviteLimitsOk(user.id)) || !(await rateLimit(`invite-username:${user.id}`, 30, 3600)).ok) {
+      throw new Error("You've sent a lot of invites this hour. Try again later.");
+    }
+
+    const target = await prisma.user.findUnique({ where: { username }, select: { id: true } });
+    if (!target) throw new Error("Nobody has that username. Check the spelling.");
+    if (target.id === user.id) throw new Error("That's you.");
+
+    const placed = await placeInvite(hubId, target.id, user);
+    revalidatePath(`/hubs/${hubId}/members`);
+    return { notice: PLACED_NOTICE[placed], noticeVars: { who: `@${username}` } };
+  });
+}
+
+/** Owner-only: withdraws an invitation sent to an address with no account yet. */
+export async function revokeHubAppInvite(hubId: string, inviteId: string) {
+  const user = await requireUser();
+  z.string().cuid().parse(hubId);
+  z.string().cuid().parse(inviteId);
+  await requireHubOwner(hubId, user.id, "cancel invitations");
+  await prisma.appInvite.updateMany({
+    where: { id: inviteId, hubId, usedAt: null, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
   revalidatePath(`/hubs/${hubId}/members`);
 }
 
@@ -163,15 +306,21 @@ export async function inviteMember(hubId: string, formData: FormData) {
 export async function acceptInvite(hubId: string) {
   const user = await requireUser();
   await acceptInviteFor(user.id, hubId);
+  await setCurrentHub(hubId);
   revalidatePath("/hubs/invites");
   redirect("/today");
 }
 
-/** Self-scoped — RLS allows this straight through app_user. */
+/**
+ * Self-scoped — RLS allows this straight through app_user. Only ever an
+ * INVITED row: this used to delete whatever membership the person had in
+ * that hub, so a crafted call could drop an ACTIVE membership without the
+ * departure cleanup, or leave a hub without an owner.
+ */
 export async function declineInvite(hubId: string) {
   const user = await requireUser();
   await withHub(user.id, (tx) =>
-    tx.hubMembership.delete({ where: { hubId_userId: { hubId, userId: user.id } } }),
+    tx.hubMembership.deleteMany({ where: { hubId, userId: user.id, status: "INVITED" } }),
   );
   revalidatePath("/hubs/invites");
 }
@@ -223,6 +372,19 @@ async function cleanupDepartingMember(hubId: string, subjectUserId: string) {
 /** Self-removal. The membership delete is self-scoped, so it goes through app_user/RLS. */
 export async function leaveHub(hubId: string) {
   const user = await requireUser();
+  const me = await prisma.hubMembership.findUnique({
+    where: { hubId_userId: { hubId, userId: user.id } },
+    select: { role: true, status: true },
+  });
+  if (!me || me.status !== "ACTIVE") throw new Error("Not a member of that hub.");
+  // A hub must keep an owner: nobody else can invite, approve or change its
+  // settings. An owner leaves only once someone else is one too.
+  if (me.role === "OWNER") {
+    const otherOwners = await prisma.hubMembership.count({
+      where: { hubId, role: "OWNER", status: "ACTIVE", userId: { not: user.id } },
+    });
+    if (otherOwners === 0) throw new Error("Make someone else an owner before you leave.");
+  }
   await cleanupDepartingMember(hubId, user.id);
   await withHub(user.id, (tx) =>
     tx.hubMembership.delete({ where: { hubId_userId: { hubId, userId: user.id } } }),
@@ -242,6 +404,14 @@ export async function removeMember(hubId: string, targetUserId: string) {
   if (targetUserId === user.id) {
     throw new Error("Use \"Leave hub\" to remove yourself.");
   }
+  // Co-owners can't remove each other: either could otherwise lock the other
+  // out of a hub they both run. An owner who wants out leaves.
+  const target = await prisma.hubMembership.findUnique({
+    where: { hubId_userId: { hubId, userId: targetUserId } },
+    select: { role: true },
+  });
+  if (!target) return;
+  if (target.role === "OWNER") throw new Error("An owner can't be removed. They can leave on their own.");
 
   await cleanupDepartingMember(hubId, targetUserId);
   await prisma.hubMembership.delete({ where: { hubId_userId: { hubId, userId: targetUserId } } });
@@ -331,30 +501,7 @@ export async function addKnownMember(hubId: string, formData: FormData) {
         });
   if (!known) throw new Error("You can only add people you already share a hub with.");
 
-  const hub = await prisma.hub.findUniqueOrThrow({ where: { id: hubId }, select: { name: true } });
-  const existing = await prisma.hubMembership.findUnique({
-    where: { hubId_userId: { hubId, userId: targetId } },
-    select: { status: true },
-  });
-  if (existing?.status === "ACTIVE") return;
-  if (!existing) {
-    await prisma.hubMembership.create({
-      data: { hubId, userId: targetId, role: "MEMBER", status: "INVITED" },
-    });
-  }
-
-  // Sent again for a stalled invite too — that's the point of picking them.
-  try {
-    await sendPushToUser(targetId, {
-      title: `Invited to "${hub.name}"`,
-      body: `${inviterName(user)} invited you. Tap to join.`,
-      url: "/hubs/invites",
-      tag: `hub-invite-${hubId}`,
-    });
-  } catch {
-    // A missing push setup must not undo the invite that was just created.
-  }
-
+  await placeInvite(hubId, targetId, user);
   revalidatePath(`/hubs/${hubId}/members`);
 }
 
@@ -403,12 +550,65 @@ async function replaceCover(hubId: string, next: string | null, coverById: strin
   }
 }
 
-/** Anything a person typed (hub name, display name) before it goes into email HTML. */
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+/**
+ * Owner-only. Makes an active member a co-owner — the way an owner can hand
+ * a hub over, or share running it, and then leave if they want to.
+ */
+export async function makeOwner(hubId: string, targetUserId: string) {
+  const user = await requireUser();
+  z.string().cuid().parse(hubId);
+  await requireHubOwner(hubId, user.id, "change roles");
+  const { count } = await prisma.hubMembership.updateMany({
+    where: { hubId, userId: targetUserId, status: "ACTIVE", role: "MEMBER" },
+    data: { role: "OWNER" },
+  });
+  if (count === 0) throw new Error("That person isn't a member of this hub.");
+  revalidatePath(`/hubs/${hubId}/members`);
+}
+
+/** Owner-only: lets in someone who asked to join. */
+export async function approveJoinRequest(hubId: string, targetUserId: string) {
+  const user = await requireUser();
+  z.string().cuid().parse(hubId);
+  await requireHubOwner(hubId, user.id, "approve requests");
+  await approveRequestRow(hubId, targetUserId);
+  revalidatePath(`/hubs/${hubId}/members`);
+}
+
+/**
+ * Owner-only: turns a request down. Quietly — the request just disappears
+ * from the person's list; no notification saying no.
+ */
+export async function declineJoinRequest(hubId: string, targetUserId: string) {
+  const user = await requireUser();
+  z.string().cuid().parse(hubId);
+  await requireHubOwner(hubId, user.id, "decline requests");
+  await prisma.hubMembership.deleteMany({ where: { hubId, userId: targetUserId, status: "REQUESTED" } });
+  revalidatePath(`/hubs/${hubId}/members`);
+}
+
+/**
+ * Owner-only. Turns "ask to join" on with a fresh code, or off. A new code
+ * replaces the old one at once, so a code that travelled too far stops
+ * working. Requests already sent are kept either way: the owner still
+ * decides each one.
+ */
+export async function setJoinCode(hubId: string, on: boolean) {
+  const user = await requireUser();
+  z.string().cuid().parse(hubId);
+  await requireHubOwner(hubId, user.id, "change the join code");
+  if (!on) {
+    await prisma.hub.update({ where: { id: hubId }, data: { joinCode: null } });
+  } else {
+    // A collision on the unique index is astronomically unlikely; retry anyway.
+    for (let i = 0; ; i++) {
+      try {
+        await prisma.hub.update({ where: { id: hubId }, data: { joinCode: newJoinCode() } });
+        break;
+      } catch (e) {
+        if (i >= 2) throw e;
+      }
+    }
+  }
+  revalidatePath(`/hubs/${hubId}/members`);
 }

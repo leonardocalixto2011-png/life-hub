@@ -57,3 +57,66 @@ export async function pruneExpiredSignInTokens(now: Date = new Date()): Promise<
   const { count } = await prisma.verificationToken.deleteMany({ where: { expires: { lt: now } } });
   return count;
 }
+
+/**
+ * Account-system leftovers (DATA-INVENTORY.md §5), all holding an email
+ * address or a person's link to a hub they never joined:
+ *
+ *   - app invitations: deleted 30 days after they stopped being usable
+ *     (used, cancelled or expired). The account they created keeps
+ *     `invitedById`; the address typed into the invitation has no further use;
+ *   - pending address changes past their hour;
+ *   - hub invitations and join requests nobody answered in 60 days — the
+ *     owner can invite again, the person can ask again;
+ *   - accounts made by the old hub-invite flow for an address that never
+ *     signed in, after 30 days: a User row was created the moment an owner
+ *     typed an address, before that person agreed to anything. Only rows that
+ *     provably never got used: never verified, never onboarded, no hub they
+ *     are active in, nothing they authored.
+ */
+export const UNANSWERED_MEMBERSHIP_DAYS = 60;
+
+export async function pruneAccountLeftovers(now: Date = new Date()) {
+  const day = 864e5;
+  const inviteCutoff = new Date(now.getTime() - 30 * day);
+  const invites = await prisma.appInvite.deleteMany({
+    where: {
+      OR: [
+        { usedAt: { lt: inviteCutoff } },
+        { revokedAt: { lt: inviteCutoff } },
+        { expiresAt: { lt: inviteCutoff } },
+      ],
+    },
+  });
+  const emailChanges = await prisma.emailChange.deleteMany({ where: { expiresAt: { lt: now } } });
+  const memberships = await prisma.hubMembership.deleteMany({
+    where: {
+      status: { in: ["INVITED", "REQUESTED"] },
+      createdAt: { lt: new Date(now.getTime() - UNANSWERED_MEMBERSHIP_DAYS * day) },
+    },
+  });
+  const ghosts = await prisma.user.deleteMany({
+    where: {
+      email: { not: null },
+      role: "MEMBER",
+      emailVerified: null,
+      onboardedAt: null,
+      createdAt: { lt: inviteCutoff },
+      accounts: { none: {} },
+      hubMemberships: { none: { status: "ACTIVE" } },
+      createdHubs: { none: {} },
+      createdTasks: { none: {} },
+      createdDeadlines: { none: {} },
+      createdEvents: { none: {} },
+      budgetEntries: { none: {} },
+      specialDates: { none: {} },
+      trips: { none: {} },
+    },
+  });
+  return {
+    invites: invites.count,
+    emailChanges: emailChanges.count,
+    memberships: memberships.count,
+    neverUsedAccounts: ghosts.count,
+  };
+}

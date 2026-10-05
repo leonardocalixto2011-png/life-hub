@@ -14,6 +14,7 @@ import {
   Settings,
   Sparkles,
   Star,
+  UserPlus,
   type LucideIcon,
 } from "lucide-react";
 
@@ -37,6 +38,7 @@ const LINKS: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/notifications", label: "Notifications", Icon: Bell },
   { href: "/appearance", label: "Appearance", Icon: Palette },
   { href: "/account", label: "Your account", Icon: Settings },
+  { href: "/invitations", label: "Invite to Life Hub", Icon: UserPlus },
 ];
 
 /**
@@ -83,7 +85,11 @@ function LanguageSwitch() {
 export function AccountMenu({
   name,
   email,
+  username = null,
+  avatarUrl = null,
 }: {
+  username?: string | null;
+  avatarUrl?: string | null;
   name: string | null;
   email: string | null;
 }) {
@@ -99,7 +105,7 @@ export function AccountMenu({
         aria-expanded={open}
         className="icon-btn"
       >
-        <Avatar name={name} email={email} size={32} />
+        <Avatar name={name} email={email} src={avatarUrl} size={32} />
       </button>
 
       {open && (
@@ -107,9 +113,12 @@ export function AccountMenu({
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="menu absolute right-0 top-full z-40 mt-1 max-h-[calc(100dvh-5rem)] w-60 overflow-y-auto" style={{ transformOrigin: "top right" }}>
             <div className="flex items-center gap-3 px-3 py-2.5">
-              <Avatar name={name} email={email} size={36} />
+              <Avatar name={name} email={email} src={avatarUrl} size={36} />
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold">{name ?? t("You")}</div>
+                {username && (
+                  <div className="truncate text-xs text-[var(--color-text-dim)]">@{username}</div>
+                )}
                 {email && (
                   <div className="truncate text-xs text-[var(--color-text-dim)]">{email}</div>
                 )}

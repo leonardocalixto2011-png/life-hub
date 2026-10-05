@@ -8,6 +8,29 @@ import { getUser } from "@/lib/session";
 
 const schema = z.object({ email: z.string().email() });
 
+/**
+ * Where to land after the link is clicked: the page that sent them to log in
+ * (a hub's join link, an address confirmation), when it is one of ours.
+ * Only a same-site path is accepted — never another origin, never "//host",
+ * which browsers read as one — so this can't become an open redirect.
+ */
+function safeNext(value: FormDataEntryValue | null): string {
+  if (typeof value !== "string" || !value) return "/today";
+  let path = value;
+  try {
+    const url = new URL(value, "http://local.invalid");
+    const app = new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000");
+    if (url.host !== "local.invalid" && url.host !== app.host) return "/today";
+    path = url.pathname + url.search;
+  } catch {
+    return "/today";
+  }
+  if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("/login") || path.startsWith("/api/")) {
+    return "/today";
+  }
+  return path;
+}
+
 export type LoginState = { sent: boolean; error?: string };
 
 export async function requestMagicLink(
@@ -26,7 +49,7 @@ export async function requestMagicLink(
   // direct POST to /api/auth/signin/resend are held to the same rules. The
   // response is identical whatever happens there.
   try {
-    await signIn("resend", { email, redirect: false, redirectTo: "/today" });
+    await signIn("resend", { email, redirect: false, redirectTo: safeNext(formData.get("next")) });
   } catch (err) {
     if (err instanceof AuthError && err.type !== "AccessDenied") {
       return { sent: false, error: "Something went wrong. Try again." };

@@ -4,7 +4,7 @@ import Resend from "next-auth/providers/resend";
 
 import { authConfig } from "@/auth.config";
 import { prisma } from "@/lib/prisma";
-import { findOrCreateUser, signupsOpen } from "@/lib/signup";
+import { findOrCreateUser, mayCreateAccount } from "@/lib/signup";
 import { sendMagicLinkEmail } from "@/lib/email";
 import { hashedKey, rateLimit } from "@/lib/rate-limit";
 
@@ -22,7 +22,7 @@ function clientIp(request: Request | undefined): string | null {
  *
  * Two limits for two abuses: per address (3/hr) stops one inbox being flooded,
  * per IP (10/hr) stops one script walking a list of addresses. When either
- * trips, or the address has no account while signups are closed, nothing is
+ * trips, or the address has no account, signups are closed and nobody invited it, nothing is
  * sent and nothing different is returned, so the endpoint is not an oracle for
  * which addresses are registered.
  */
@@ -31,9 +31,10 @@ async function maySendLink(email: string, request: Request | undefined): Promise
   if (!(await rateLimit(`magic-link:${hashedKey(address)}`, 3, 3600)).ok) return false;
   const ip = clientIp(request);
   if (ip !== null && !(await rateLimit(`magic-link-ip:${hashedKey(ip)}`, 10, 3600)).ok) return false;
-  if (signupsOpen()) return true;
   const known = await prisma.user.findUnique({ where: { email: address }, select: { id: true } });
-  return known !== null;
+  if (known) return true;
+  // No account yet: only with open signups or an invitation for this address.
+  return mayCreateAccount(address);
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({

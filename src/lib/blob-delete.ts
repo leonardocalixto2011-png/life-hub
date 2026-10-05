@@ -18,7 +18,7 @@ import { prisma } from "@/lib/prisma";
 export async function deleteBlobIfUnreferenced(url: string | null | undefined): Promise<void> {
   if (!url) return;
   const [users, hubs, tasks, trips, tripItems] = await Promise.all([
-    prisma.user.count({ where: { backgroundImageUrl: url } }),
+    prisma.user.count({ where: { OR: [{ backgroundImageUrl: url }, { avatarUrl: url }] } }),
     prisma.hub.count({ where: { coverImageUrl: url } }),
     // One photo can be pinned to several tasks (every task drafted from it),
     // so deleting one of them only frees the file once the last is gone.
