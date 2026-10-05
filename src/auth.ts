@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { findOrCreateUser, mayCreateAccount } from "@/lib/signup";
 import { sendMagicLinkEmail } from "@/lib/email";
 import { hashedKey, rateLimit } from "@/lib/rate-limit";
+import { logWarn } from "@/lib/observability";
 
 /** Left-most x-forwarded-for entry is the client on Vercel; absent = no IP limit. */
 function clientIp(request: Request | undefined): string | null {
@@ -28,13 +29,20 @@ function clientIp(request: Request | undefined): string | null {
  */
 async function maySendLink(email: string, request: Request | undefined): Promise<boolean> {
   const address = email.toLowerCase().trim();
-  if (!(await rateLimit(`magic-link:${hashedKey(address)}`, 3, 3600)).ok) return false;
+  // Each refusal is logged with its reason (never the address): the screen
+  // says "check your email" either way, so the log is the only place that
+  // tells "never sent" apart from "sent, but lost in junk".
+  const refuse = (reason: string) => {
+    logWarn("magic_link.not_sent", { reason, domain: address.split("@")[1] ?? null });
+    return false;
+  };
+  if (!(await rateLimit(`magic-link:${hashedKey(address)}`, 3, 3600)).ok) return refuse("address_limit");
   const ip = clientIp(request);
-  if (ip !== null && !(await rateLimit(`magic-link-ip:${hashedKey(ip)}`, 10, 3600)).ok) return false;
+  if (ip !== null && !(await rateLimit(`magic-link-ip:${hashedKey(ip)}`, 10, 3600)).ok) return refuse("ip_limit");
   const known = await prisma.user.findUnique({ where: { email: address }, select: { id: true } });
   if (known) return true;
   // No account yet: only with open signups or an invitation for this address.
-  return mayCreateAccount(address);
+  return (await mayCreateAccount(address)) || refuse("no_account_or_invite");
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
