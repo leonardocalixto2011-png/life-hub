@@ -32,7 +32,7 @@ export default async function SpecialDatesPage() {
       </Link>
       <div>
         <h1 className="page-title">{t("Special dates")}</h1>
-        <p className="text-[0.68rem] text-[var(--color-text-dim)]">
+        <p className="page-sub">
           {t("Birthdays and anniversaries come back every year, with reminders. Holidays already show on the calendar")}
           {hub.showOccasions ? "." : ` — ${t("turned off for this hub (members page)")}.`}
         </p>

@@ -64,10 +64,15 @@ function Row({ s, t, lang, locale }: { s: SubscriptionWithRefs; t: T; lang: Lang
         <div className="mt-0.5 text-[0.6875rem] text-[var(--color-text-dim)]">
           {t(BILLING_LABEL[s.billingCycle])}
         </div>
-        <form action={setSubscriptionStatus} className="mt-1">
+        {/* A quiet pill rather than an underlined link: repeated on every
+            row, the underline made the list read like a page of hyperlinks. */}
+        <form action={setSubscriptionStatus} className="-mr-2 mt-0.5">
           <input type="hidden" name="id" value={s.id} />
           <input type="hidden" name="status" value={cancelled ? "ACTIVE" : "CANCELLED"} />
-          <SubmitButton className="text-[0.62rem] font-semibold text-[var(--color-text-dim)] underline" pendingLabel="…">
+          <SubmitButton
+            className="rounded-full px-2 py-1 text-[0.6875rem] font-medium text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-2)] active:bg-[var(--color-surface-2)]"
+            pendingLabel="…"
+          >
             {cancelled ? t("reactivate") : t("mark cancelled")}
           </SubmitButton>
         </form>

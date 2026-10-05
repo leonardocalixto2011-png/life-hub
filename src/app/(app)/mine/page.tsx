@@ -17,7 +17,7 @@ const KIND_ICON: Record<MyItem["kind"], LucideIcon> = {
   deadline: CalendarClock,
 };
 
-function Row({ item }: { item: MyItem }) {
+function Row({ item, showHub }: { item: MyItem; showHub: boolean }) {
   const Icon = KIND_ICON[item.kind];
   return (
     <Link href={item.href} className="row">
@@ -26,15 +26,17 @@ function Row({ item }: { item: MyItem }) {
       </span>
       <div className="row-main">
         <span className="row-title">{item.title}</span>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          <span
-            className="chip"
-            style={{ borderColor: item.hub.color, color: item.hub.color }}
-          >
-            {item.hub.name}
-          </span>
-          {item.venture && <VentureChip name={item.venture.name} color={item.venture.color} />}
-        </div>
+        {/* The hub chip only tells items apart when there's more than one hub. */}
+        {(showHub || item.venture) && (
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            {showHub && (
+              <span className="chip" style={{ borderColor: item.hub.color, color: item.hub.color }}>
+                {item.hub.name}
+              </span>
+            )}
+            {item.venture && <VentureChip name={item.venture.name} color={item.venture.color} />}
+          </div>
+        )}
       </div>
     </Link>
   );
@@ -69,7 +71,9 @@ export default async function MinePage() {
       <div className="px-1">
         <h1 className="page-title">{t("Mine")}</h1>
         <p className="page-sub">
-          {t("Assigned to you, across all {n} of your hubs.", { n: hubs.length })}
+          {hubs.length === 1
+            ? t("Assigned to you in this hub.")
+            : t("Assigned to you, across all {n} of your hubs.", { n: hubs.length })}
         </p>
       </div>
 
@@ -86,7 +90,7 @@ export default async function MinePage() {
           </h2>
           <div className="list">
             {overdue.map((i) => (
-              <Row key={`${i.hub.id}-${i.kind}-${i.id}`} item={i} />
+              <Row key={`${i.hub.id}-${i.kind}-${i.id}`} item={i} showHub={hubs.length > 1} />
             ))}
           </div>
         </section>
@@ -99,7 +103,7 @@ export default async function MinePage() {
           </h2>
           <div className="list">
             {dayItems.map((i) => (
-              <Row key={`${i.hub.id}-${i.kind}-${i.id}`} item={i} />
+              <Row key={`${i.hub.id}-${i.kind}-${i.id}`} item={i} showHub={hubs.length > 1} />
             ))}
           </div>
         </section>

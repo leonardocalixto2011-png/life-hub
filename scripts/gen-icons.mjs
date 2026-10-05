@@ -123,7 +123,9 @@ for (const [w, h, r] of SPLASH_SIZES) {
   for (const [scheme, bg] of Object.entries(SURFACES)) {
     const buf = await sharp({ create: { width: W, height: H, channels: 3, background: bg } })
       .composite([{ input: tile, left: Math.round((W - icon) / 2), top: Math.round((H - icon) / 2 - H * 0.04) }])
-      .png({ compressionLevel: 9 })
+      // Palette PNG: a flat ground and one small tile quantise without visible
+      // loss, at about a fifth of the size.
+      .png({ compressionLevel: 9, palette: true, quality: 90 })
       .toBuffer();
     await write(join(SPLASH, `${scheme}-${W}x${H}.png`), buf);
   }
