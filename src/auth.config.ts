@@ -47,10 +47,15 @@ export const authConfig = {
       if (isPublic) return true;
       return isLoggedIn;
     },
-    jwt({ token, user }) {
+    jwt({ token, user, account }) {
       if (user) {
         token.role = (user as { role?: string }).role ?? "MEMBER";
         token.uid = user.id;
+        // How and when this session began. Setting a password without the
+        // current one is allowed only right after an emailed link proved
+        // the address ((app)/account/actions.ts) — that is the reset path.
+        token.via = account?.provider ?? null;
+        token.authAt = Date.now();
       }
       return token;
     },
@@ -59,6 +64,8 @@ export const authConfig = {
         (session.user as { role?: string }).role = token.role as string;
         session.user.id = (token.uid as string) ?? session.user.id;
       }
+      (session as { via?: string | null; authAt?: number | null }).via = (token.via as string | null) ?? null;
+      (session as { via?: string | null; authAt?: number | null }).authAt = (token.authAt as number | null) ?? null;
       return session;
     },
   },

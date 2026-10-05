@@ -11,6 +11,8 @@ import { money } from "@/lib/format";
 import { ComposerHost } from "@/components/ComposerHost";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { BottomNav } from "@/components/BottomNav";
+import { ConfirmAddressBanner } from "@/components/ConfirmAddressBanner";
+import { hasPassword } from "@/lib/password";
 import { AccountMenu } from "@/components/AccountMenu";
 import { HubSwitcher } from "@/components/HubSwitcher";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
@@ -32,10 +34,13 @@ export default async function AppLayout({
   if (!me.onboardedAt) redirect("/welcome");
   const { user, hub } = await requireHub();
   const t = await getT();
-  const [{ ventures, members, reviewCount, favorites }, hubs, invites, unreadChats] = await Promise.all([
+  const [{ ventures, members, reviewCount, favorites }, hubs, invites, unconfirmed, unreadChats] = await Promise.all([
     hubChrome(user.id, hub.id),
     listMyHubs(user.id),
     listPendingInvites(user.id),
+    // Only an account made with a password on an invitation can be signed in
+    // with an address nobody has proven yet; everyone else has opened a link.
+    me.emailVerified ? false : hasPassword(user.id),
     unreadChatCount(user.id),
   ]);
 
@@ -171,6 +176,8 @@ export default async function AppLayout({
             <span className="shrink-0 font-semibold text-[var(--color-primary)]">{t("Join")} →</span>
           </Link>
         )}
+
+        {unconfirmed && <ConfirmAddressBanner email={me.email} />}
 
         <main className="page-fade flex-1 overflow-y-auto">{children}</main>
       </div>

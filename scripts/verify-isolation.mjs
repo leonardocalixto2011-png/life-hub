@@ -418,6 +418,17 @@ async function main() {
       "app_user cannot read pending address changes (no grant / RLS)",
       ownChangeRead === null || ownChangeRead.length === 0,
     );
+    await db.userPassword.create({ data: { userId: userA1.id, hash: `scrypt$verify-${stamp}` } });
+    let ownPasswordRead = null;
+    try {
+      ownPasswordRead = await asAppUser(userA1.id, (tx) => tx.userPassword.findMany({ where: { userId: userA1.id } }));
+    } catch {
+      ownPasswordRead = null;
+    }
+    check(
+      "app_user cannot read password hashes, not even its own (no grant / RLS)",
+      ownPasswordRead === null || ownPasswordRead.length === 0,
+    );
 
     // A join request is the requester's own row: other people — even the
     // hub's members — don't see it through the app role, and it can't be

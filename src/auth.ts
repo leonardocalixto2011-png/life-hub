@@ -1,11 +1,13 @@
 import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import Resend from "next-auth/providers/resend";
+import Credentials from "next-auth/providers/credentials";
 
 import { authConfig } from "@/auth.config";
 import { prisma } from "@/lib/prisma";
 import { findOrCreateUser, mayCreateAccount } from "@/lib/signup";
-import { sendMagicLinkEmail } from "@/lib/email";
+import { sendConfirmAddressEmail, sendMagicLinkEmail } from "@/lib/email";
+import { verifyAgainstNothing, verifyPassword } from "@/lib/password";
 import { hashedKey, rateLimit } from "@/lib/rate-limit";
 import { logWarn } from "@/lib/observability";
 
@@ -55,7 +57,49 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       maxAge: 60 * 60 * 24, // magic link valid 24h
       async sendVerificationRequest({ identifier, url, request }) {
         if (!(await maySendLink(identifier, request))) return;
+        // Someone who made their account with a password on an invitation
+        // and hasn't opened a link yet: this link is what confirms the
+        // address, so the email says that rather than "sign in".
+        const pending = await prisma.user.findUnique({
+          where: { email: identifier.toLowerCase().trim() },
+          select: { emailVerified: true, password: { select: { userId: true } } },
+        });
+        if (pending && !pending.emailVerified && pending.password) {
+          await sendConfirmAddressEmail(identifier, url);
+          return;
+        }
         await sendMagicLinkEmail(identifier, url);
+      },
+    }),
+    /**
+     * Email + password, for accounts that set one. Every failure looks the
+     * same — no account, no password on it, wrong password, too many tries —
+     * and takes the same time, so this can't be used to learn who has an
+     * account. Limits: 10 tries per address per 15 minutes, 30 per IP per
+     * hour: plenty for typos, useless for guessing.
+     */
+    Credentials({
+      id: "password",
+      name: "Password",
+      credentials: { email: {}, password: {} },
+      async authorize(credentials, request) {
+        const email = String(credentials?.email ?? "").toLowerCase().trim();
+        const password = String(credentials?.password ?? "");
+        if (!email || !password || password.length > 256) return null;
+        const ip = clientIp(request);
+        const limited =
+          !(await rateLimit(`pw-login:${hashedKey(email)}`, 10, 900)).ok ||
+          (ip !== null && !(await rateLimit(`pw-login-ip:${hashedKey(ip)}`, 30, 3600)).ok);
+        const user = await prisma.user.findUnique({
+          where: { email },
+          select: { id: true, email: true, name: true, role: true, password: { select: { hash: true } } },
+        });
+        if (limited || !user?.password) {
+          await verifyAgainstNothing(password);
+          return null;
+        }
+        if (!(await verifyPassword(password, user.password.hash))) return null;
+        return { id: user.id, email: user.email, name: user.name, role: user.role };
       },
     }),
   ],
@@ -75,8 +119,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
      * means the address provably received a link, so there is no separate
      * verification step. With SIGNUPS_OPEN unset an unknown address is refused.
      */
-    async signIn({ user, email }) {
+    async signIn({ user, email, account }) {
       if (!user?.email) return false;
+      // A password only exists on an account that already exists, and
+      // `authorize` above already checked it.
+      if (account?.provider === "password") return true;
       if (email?.verificationRequest) return true;
       return findOrCreateUser(user.email, user.name);
     },

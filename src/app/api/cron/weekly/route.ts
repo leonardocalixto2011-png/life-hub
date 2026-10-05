@@ -31,6 +31,8 @@ export async function GET(req: Request) {
       email: true,
       locale: true,
       notificationPref: true,
+      emailVerified: true,
+      password: { select: { userId: true } },
       _count: { select: { pushSubscriptions: true } },
     },
   });
@@ -60,7 +62,10 @@ export async function GET(req: Request) {
       });
       if (r.sent > 0) pushed++;
     }
-    if ((pref?.emailDigestEnabled ?? true) && u.email) {
+    // No digest to an address nobody has proven yet (an account made with a
+    // password on an invitation, before its confirmation link is opened).
+    const unproven = !u.emailVerified && u.password !== null;
+    if ((pref?.emailDigestEnabled ?? true) && u.email && !unproven) {
       await sendEmail({ to: u.email, subject, html, text, kind: "weekly" });
       emailed++;
     }

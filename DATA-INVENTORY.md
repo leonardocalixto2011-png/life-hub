@@ -34,6 +34,7 @@ Last reviewed: 2026-10-01 (Québec Law 25 pass). Re-check whenever a new model o
 | Who invited whom | `User.invitedById`, `HubMembership.invitedById` | Shown on invite cards; set to null if the inviter deletes their account |
 | Join requests | `HubMembership` (status `REQUESTED`), `.requestNote` | Optional ≤140-char note to the hub's owners; email addresses refused in it |
 | Pending address change | `EmailChange.newEmail` | Token hashed; valid 1 hour. Server-only table |
+| Optional password | `UserPassword.hash` | scrypt hash with per-user salt; the password itself is never stored. Server-only table (no app-role grant); not included in the data export |
 | AI-notice flag | `User.aiNoticeAt` | When the one-time "who processes AI input" notice was dismissed |
 
 **Sensitivity note.** Debt balances and default status, plus parsed email
@@ -119,6 +120,7 @@ dictation is done by the browser/phone vendor: `User.aiNoticeAt`.
    | Consent ledger (`Consent`) | Life of the account, revoked rows included | Deleted with the account |
    | App invitations (`AppInvite`) | 14 days usable | Deleted 30 days after used, cancelled or expired (`pruneAccountLeftovers`) |
    | Pending address changes (`EmailChange`) | 1 hour | Deleted at the next daily sweep |
+   | Password hash (`UserPassword`) | Until the person removes it or deletes their account | Deleted (cascade with the account) |
    | Unanswered hub invites and join requests | 60 days | Deleted |
    | Accounts created by the old hub-invite flow and never used (never signed in or onboarded, nothing authored) | 30 days | Deleted |
    | Everything else (tasks, budget, debts, …) | Until the person deletes it or their account | Deleted / anonymised per §4 |

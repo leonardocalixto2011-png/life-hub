@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { Download, Mail, Save, Sparkles, Trash2, UserPlus } from "lucide-react";
+import { Download, KeyRound, Mail, Save, Sparkles, Trash2, UserPlus } from "lucide-react";
 
 import { requireUser } from "@/lib/session";
 import { getT } from "@/lib/i18n-server";
-import { deleteMyAccount, requestEmailChange, setDisplayName, setUsername } from "./actions";
+import { deleteMyAccount, removePassword, requestEmailChange, setDisplayName, setPassword, setUsername } from "./actions";
+import { signedInByFreshLink } from "@/lib/fresh-link";
 import { AvatarUpload } from "./AvatarUpload";
 import { UsernameField } from "./UsernameField";
 import { ActionForm } from "@/components/ActionForm";
@@ -28,13 +29,18 @@ export default async function AccountPage({
   const sp = await searchParams;
   const user = await requireUser();
   const t = await getT();
-  const [invitedBy, pendingChange] = await Promise.all([
+  const [invitedBy, pendingChange, pw, freshLink] = await Promise.all([
     prisma.user.findUnique({ where: { id: user.id }, select: { invitedBy: { select: { name: true } } } }),
     prisma.emailChange.findFirst({
       where: { userId: user.id, expiresAt: { gt: new Date() } },
       select: { newEmail: true },
     }),
+    prisma.userPassword.findUnique({ where: { userId: user.id }, select: { updatedAt: true } }),
+    signedInByFreshLink(),
   ]);
+  // Right after an emailed link, a new password needs no current one (the
+  // "forgot it" path; checked again in ./actions).
+  const askCurrent = Boolean(pw) && !freshLink;
 
   return (
     <div className="page">
@@ -117,6 +123,51 @@ export default async function AccountPage({
           </SubmitButton>
         </FormSection>
       </ActionForm>
+
+      <FormSection title={t("Password")}>
+        <p className="field-hint mt-0">
+          {pw
+            ? t("You can sign in with your email and password, or with an emailed link — both work.")
+            : t("Optional. With a password you sign in right away instead of waiting for an email. Emailed links keep working.")}
+        </p>
+        <ActionForm action={setPassword} className="form-stack">
+          {/* For password managers: which account this password belongs to. */}
+          <input type="email" name="username" autoComplete="username" value={user.email} readOnly hidden />
+          {askCurrent && (
+            <label className="field-label">
+              {t("Current password")}
+              <input name="current" type="password" autoComplete="current-password" required maxLength={128} className="field" />
+            </label>
+          )}
+          <label className="field-label">
+            {pw ? t("New password") : t("Choose a password")}
+            <input name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={128} className="field" />
+            <span className="field-hint">{t("At least 8 characters. Your phone can save it for you.")}</span>
+          </label>
+          <SubmitButton className="btn btn-secondary w-full" pendingLabel={t("Saving…")}>
+            <KeyRound size={16} strokeWidth={2} aria-hidden />
+            {pw ? t("Change the password") : t("Save the password")}
+          </SubmitButton>
+        </ActionForm>
+        {pw && (
+          <ActionForm action={removePassword} className="form-stack">
+            {askCurrent && (
+              <label className="field-label">
+                {t("Current password, to remove it")}
+                <input name="current" type="password" autoComplete="current-password" required maxLength={128} className="field" />
+              </label>
+            )}
+            <SubmitButton className="btn btn-ghost w-full" pendingLabel={t("Saving…")}>
+              {t("Remove the password (links only)")}
+            </SubmitButton>
+          </ActionForm>
+        )}
+        {pw && askCurrent && (
+          <p className="field-hint mt-0">
+            {t("Forgot it? Sign out, sign back in with an emailed link, then set a new one here within 15 minutes.")}
+          </p>
+        )}
+      </FormSection>
 
       <FormSection title={t("Invite to Life Hub")}>
         <p className="field-hint mt-0">
