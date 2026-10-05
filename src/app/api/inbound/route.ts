@@ -8,6 +8,7 @@ import { secretMatches } from "@/lib/bearer";
 import { resolveHubFromRecipient } from "@/lib/inbound-address";
 import { hubHasMailAiConsent } from "@/lib/consent";
 import { overAiBudget } from "@/lib/ai-budget";
+import { hubHasPlus } from "@/lib/billing/plan";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -187,7 +188,8 @@ export async function POST(req: Request) {
   // was not read. Covers every address handed out before the consent existed.
   // The hub's AI allowance (and the global ceiling) apply here too; over it,
   // the mail is still recorded, just not analysed.
-  const aiAllowed = (await hubHasMailAiConsent(hubId)) && !(await overAiBudget(hubId));
+  const aiAllowed =
+    (await hubHasMailAiConsent(hubId)) && (await hubHasPlus(hubId)) && !(await overAiBudget(hubId));
 
   // Charged to the hub, not a user: forwarded mail arrives with no session.
   // `hubId` is resolved above and is non-null by this point.

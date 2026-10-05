@@ -10,6 +10,7 @@ import { hubChrome } from "@/lib/data";
 import { requireHub } from "@/lib/session";
 import { rateLimit } from "@/lib/rate-limit";
 import { overAiBudget, AI_BUDGET_MESSAGE } from "@/lib/ai-budget";
+import { QUICK_ADD_CAP_MESSAGE, consumeQuickAdd } from "@/lib/billing/plan";
 import {
   parseText,
   parseImage as parseImageCore,
@@ -40,6 +41,7 @@ export async function parseQuickAdd(text: string): Promise<ParseResult> {
     return { ok: false, error: "Keep it under 2000 characters." };
   }
   if (await overAiBudget(user.id)) return { ok: false, error: AI_BUDGET_MESSAGE };
+  if (!(await consumeQuickAdd(user.id, hub.id))) return { ok: false, error: QUICK_ADD_CAP_MESSAGE };
   const { ventures } = await hubChrome(user.id, hub.id);
   return parseText(text, ventures, 25, user.id);
 }
@@ -79,6 +81,7 @@ export async function parseImage(input: {
     return { ok: false, error: "That photo couldn't be read." };
   }
   if (await overAiBudget(user.id)) return { ok: false, error: AI_BUDGET_MESSAGE };
+  if (!(await consumeQuickAdd(user.id, hub.id))) return { ok: false, error: QUICK_ADD_CAP_MESSAGE };
   const { ventures } = await hubChrome(user.id, hub.id);
   return parseImageCore(
     { data, mediaType: mediaType as ImageMediaType },

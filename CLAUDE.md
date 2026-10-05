@@ -1411,3 +1411,23 @@ verification.
   (JWT); passkeys not built (iOS Keychain + Face ID already fills passwords).
 - Remember the `create-app-role.sql` gotcha: re-running it grants
   `UserPassword` too; re-run the migration's REVOKE.
+
+### Finance department: plans and Stripe (2026-10-05)
+
+Owner asked for "the finance department": audit how the app makes money, then
+build it. Strategy page https://claude.ai/artifact/V8njD2XtNnmZnddCK2PesS;
+the model, unit economics, file map and the switch-on checklist are in
+**MONETIZATION.md** — read it before touching anything billing.
+
+- Free / **Plus 5,99 $ mo · 59 $ yr per household** (a subscriber's 3 oldest
+  owned hubs, all members) / per-person **AI credits** at 2× API cost.
+- **`BILLING_ENABLED` unset = beta = everyone is Plus.** Every gate in
+  `lib/billing/plan.ts` returns "allowed" then. Don't add a gate that ignores it.
+- `PlanAccount` / `BillingEvent` are server-only (RLS on, no policy, no grant),
+  like `UserPassword`.
+- Stripe via plain `fetch` (`lib/billing/stripe.ts`), no SDK. Its errors become
+  a generic plain `Error` (shown inline by `formResult`); details go to logs.
+- Never hold data hostage: limits only block *new* hubs/members/AI calls and
+  pause mail sorting. Cancel is one tap with no confirmation page (Bill 10).
+- AI credits are sold only once the assistant's wallet is plugged into
+  `lib/billing/credits-hook.ts` (`CREDITS_WIRED`).

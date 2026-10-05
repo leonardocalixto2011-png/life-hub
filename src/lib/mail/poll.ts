@@ -10,6 +10,7 @@ import { fetchMicrosoftBatch } from "./microsoft";
 import { isMuted, isTrusted } from "./trust";
 import { RUN_TIME_BUDGET_MS, type MailBatchItem } from "./types";
 import { allMailAiConsentKeys } from "@/lib/consent";
+import { plusHubIds } from "@/lib/billing/plan";
 
 const MIN_AUTO_FILE_CONFIDENCE = 0.6;
 const MIN_AUTO_FILE_CONFIDENCE_UNTRUSTED_EVENT = 0.85; // "high-confidence, low-stakes" per the prompt
@@ -204,13 +205,17 @@ export async function pollAllMailAccounts(
   // /mail, and any mailbox whose owner later switched analysis off. When they
   // consent, polling resumes from the saved checkpoint.
   const consented = await allMailAiConsentKeys();
+  // Mail sorting is a Plus feature (lib/billing/plan.ts). A hub whose plan
+  // lapsed keeps its mailbox connected but paused, checkpoint untouched, so it
+  // resumes where it left off if Plus comes back.
+  const plusHubs = await plusHubIds();
   let errors = 0;
   let processed = 0;
   let skipped = 0;
   let paused = 0;
 
   for (const account of accounts) {
-    if (!consented.has(`${account.userId}:${account.hubId}`)) {
+    if (!consented.has(`${account.userId}:${account.hubId}`) || (plusHubs !== "all" && !plusHubs.has(account.hubId))) {
       paused++;
       continue;
     }

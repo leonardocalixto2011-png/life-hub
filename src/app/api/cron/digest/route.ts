@@ -18,6 +18,7 @@ import {
   digestText,
 } from "@/lib/digest";
 import { langOf } from "@/lib/i18n";
+import { sendTrialNotices } from "@/lib/billing/notices";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -138,8 +139,17 @@ export async function GET(req: Request) {
     await reportError("cron.digest.account_retention_failed", err, {});
   }
 
+  let trialNotices: number | { error: true };
+  try {
+    trialNotices = await sendTrialNotices();
+  } catch (err) {
+    trialNotices = { error: true };
+    await reportError("cron.digest.trial_notices_failed", err, {});
+  }
+
   return NextResponse.json({
     ok: true,
+    trialNotices,
     prunedAccounts,
     count: totalCount,
     prunedRateLimits,

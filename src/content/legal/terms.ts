@@ -9,9 +9,10 @@ import type { LegalDoc } from "./types";
  *   - No clause may exclude or limit our liability for our own act or our
  *     representatives' (LPC s. 10). Clauses that would be void in Québec are
  *     either rewritten or labelled as such (LPC s. 19.1).
- *   - Paid plans are not covered yet. Before charging anyone, the "prix"
- *     section needs the full distance-contract disclosures and the
- *     cancellation rules; have the lawyer write that section.
+ *   - The "forfait" section is the paid-plan contract (LPC distance-contract
+ *     disclosures, Bill 10 cancellation and trial notice). Its prices must
+ *     match lib/billing/plans.ts and the Stripe prices; it was drafted by
+ *     Claude on 2026-10-05 and still needs the lawyer's read.
  */
 export const TERMS: LegalDoc = {
   slug: "conditions",
@@ -33,11 +34,43 @@ export const TERMS: LegalDoc = {
       body: {
         fr: [
           "Life Hub est un outil d'organisation personnelle et familiale : tâches, calendrier, budget, abonnements, dettes, voyages, rappels. Ce n'est pas un conseiller financier, juridique ou fiscal, ni un service bancaire ou de recouvrement. Les calculs et suggestions sont indicatifs et ne remplacent pas un professionnel.",
-          "Le service est gratuit pendant la période de lancement.",
+          "Le forfait gratuit est gratuit, sans limite de durée. Le forfait Plus et les crédits IA sont payants (voir « Forfait Plus et paiements »). Pendant la bêta, toutes les fonctions sont offertes gratuitement.",
         ],
         en: [
           "Life Hub is a personal and family organisation tool: tasks, calendar, budget, subscriptions, debts, trips, reminders. It is not a financial, legal or tax adviser, nor a banking or collection service. Calculations and suggestions are indicative and do not replace a professional.",
-          "The service is free during the launch period.",
+          "The free plan is free, with no time limit. The Plus plan and AI credits are paid (see “Plus plan and payments”). During the beta, every feature is offered free of charge.",
+        ],
+      },
+    },
+    {
+      id: "forfait",
+      heading: { fr: "Forfait Plus et paiements", en: "Plus plan and payments" },
+      body: {
+        fr: [
+          "- Ce qui est inclus : la page Forfait et paiement décrit le forfait gratuit et le forfait Plus avant tout paiement. Plus est acheté par une personne et couvre jusqu'à trois groupes dont elle est propriétaire, pour tous leurs membres.",
+          "- Prix : 5,99 $ par mois ou 59 $ par année, en dollars canadiens, plus les taxes applicables. Le montant affiché juste avant le paiement est celui qui est facturé. Le paiement par carte est traité par Stripe : nous ne voyons ni ne gardons ton numéro de carte.",
+          "- Essai : 14 jours gratuits, une fois par personne, sans carte. À la fin de l'essai, tu reviens au forfait gratuit et rien n'est facturé. Nous t'écrivons de 2 à 10 jours avant la fin de l'essai pour t'en rappeler la date et le prix de Plus.",
+          "- Renouvellement : l'abonnement se renouvelle automatiquement à la fin de chaque période (mois ou année) jusqu'à ce que tu l'annules. Un reçu t'est envoyé par courriel à chaque paiement.",
+          "- Annulation : en tout temps, sans frais ni pénalité, avec le bouton « Annuler » de la page Forfait et paiement, sans autre démarche. Plus reste actif jusqu'à la fin de la période déjà payée, puis tu reviens au forfait gratuit. Tu peux aussi nous écrire pour annuler.",
+          "- Remboursement : si tu annules dans les 14 jours suivant ton premier paiement, nous te le remboursons en entier sur demande. Sinon, la période en cours n'est pas remboursée, sous réserve des droits que la loi te donne. Si nous fermons le service, la partie non utilisée de ta période t'est remboursée.",
+          "- Paiement refusé : si un paiement échoue, Stripe réessaie pendant environ deux semaines et Plus reste actif pendant ce temps. Ensuite, tu reviens au forfait gratuit.",
+          "- Tes données ne sont jamais retenues contre paiement : au forfait gratuit, tu gardes l'accès à tout ce que tu as entré. Seules les fonctions de Plus s'arrêtent (par exemple, le tri des boîtes courriel est mis en pause).",
+          "- Crédits IA : achetés à l'unité pour l'assistant, sans renouvellement automatique. Ils n'expirent pas. À la fermeture de ton compte, le solde non utilisé t'est remboursé sur demande.",
+          "- Le prix et la durée d'un abonnement en cours ne changent qu'avec l'avis de 30 jours et le droit de refuser décrits à la section « Modifications ».",
+          "- Le forfait payant et les crédits sont réservés aux personnes de 18 ans et plus.",
+        ],
+        en: [
+          "- What's included: the Plan & billing page describes the free plan and the Plus plan before any payment. Plus is bought by one person and covers up to three hubs that person owns, for all their members.",
+          "- Price: $5.99 a month or $59 a year, in Canadian dollars, plus applicable taxes. The amount shown just before payment is the amount charged. Card payment is processed by Stripe: we never see or keep your card number.",
+          "- Trial: 14 days free, once per person, with no card. When the trial ends you return to the free plan and nothing is charged. We email you 2 to 10 days before the trial ends to remind you of the date and of Plus's price.",
+          "- Renewal: the subscription renews automatically at the end of each period (month or year) until you cancel it. A receipt is emailed to you for every payment.",
+          "- Cancellation: at any time, at no cost or penalty, with the “Cancel” button on the Plan & billing page, with no other step. Plus stays active until the end of the period already paid, then you return to the free plan. You can also write to us to cancel.",
+          "- Refunds: if you cancel within 14 days of your first payment, we refund it in full on request. Otherwise the current period is not refunded, subject to your rights under the law. If we close the service, the unused part of your period is refunded.",
+          "- Failed payment: if a payment fails, Stripe retries for about two weeks and Plus stays active meanwhile. After that you return to the free plan.",
+          "- Your data is never held back for payment: on the free plan you keep access to everything you entered. Only Plus features stop (for example, mailbox sorting is paused).",
+          "- AI credits: bought one pack at a time for the assistant, with no automatic reload. They do not expire. When you close your account, any unused balance is refunded on request.",
+          "- The price and term of a subscription in progress change only with the 30-day notice and the right to refuse described under “Changes”.",
+          "- The paid plan and credits are for people aged 18 and over.",
         ],
       },
     },

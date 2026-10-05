@@ -2,6 +2,7 @@ import { del } from "@vercel/blob";
 
 import { prisma } from "@/lib/prisma";
 import { deleteBlobIfUnreferenced } from "@/lib/blob-delete";
+import { endPaidPlan } from "@/lib/billing/stripe-plan";
 
 /**
  * Account export and erasure — the technical half of GDPR Articles 15/20
@@ -61,6 +62,8 @@ export async function exportUserData(userId: string) {
     quickFavorites,
     consents,
     activity,
+    plan,
+    payments,
   ] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
@@ -127,6 +130,18 @@ export async function exportUserData(userId: string) {
       },
       orderBy: { createdAt: "asc" },
     }),
+    prisma.planAccount.findUnique({
+      where: { userId },
+      select: {
+        status: true, interval: true, currentPeriodEnd: true, cancelAtPeriodEnd: true,
+        trialEndsAt: true, trialUsedAt: true, compUntil: true, createdAt: true,
+      },
+    }),
+    prisma.billingEvent.findMany({
+      where: { userId },
+      select: { kind: true, amountCents: true, currency: true, occurredAt: true },
+      orderBy: { occurredAt: "asc" },
+    }),
   ]);
 
   return {
@@ -152,6 +167,8 @@ export async function exportUserData(userId: string) {
     quickFavorites,
     consents,
     activity,
+    plan,
+    payments,
   };
 }
 
@@ -174,6 +191,14 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
 
   const ghostId = await tombstone();
   if (userId === ghostId) throw new Error("Refusing to delete the tombstone user.");
+
+  // A paid plan stops now, not at the end of the period: there is no account
+  // left to use it, and Stripe would otherwise keep charging the card. Before
+  // anything else, so a Stripe error stops the deletion rather than leaving a
+  // deleted person still billed. The revenue ledger keeps its rows (tax
+  // records) but loses the link to the person.
+  await endPaidPlan(userId);
+  await prisma.billingEvent.updateMany({ where: { userId }, data: { userId: null } });
 
   // Best-effort: the blob lives outside Postgres, so it can't join the
   // transaction. Do it first — an orphaned row is recoverable, an orphaned
