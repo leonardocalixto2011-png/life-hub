@@ -61,6 +61,7 @@ export async function sendAppInviteEmail(opts: {
     : `<p style="margin:0 0 8px"><strong>${who}</strong> invited you to create a Life Hub account: tasks, deadlines, budget and calendar, alone or together.</p>
        <p style="margin:0">You pick your name, username and language. The link works for ${opts.days} days.</p>`;
   await sendEmail({
+    kind: "app-invite",
     to: opts.to,
     subject,
     text: `${opts.inviter} t'invite sur Life Hub${opts.hubName ? ` (« ${opts.hubName} »)` : ""}. Crée ton compte : ${opts.url}\n\n${opts.inviter} invited you to Life Hub. Create your account: ${opts.url}\n\nValide ${opts.days} jours · Works for ${opts.days} days.`,
@@ -73,6 +74,7 @@ export async function sendHubInviteEmail(opts: { to: string; inviter: string; hu
   const who = escapeHtml(opts.inviter);
   const hub = escapeHtml(opts.hubName);
   await sendEmail({
+    kind: "hub-invite",
     to: opts.to,
     subject: `${opts.inviter} t'invite dans « ${opts.hubName} » · invites you to "${opts.hubName}"`,
     text: `${opts.inviter} t'invite dans « ${opts.hubName} » sur Life Hub : ${opts.url}\n\n${opts.inviter} invited you to "${opts.hubName}" on Life Hub: ${opts.url}`,
@@ -89,6 +91,7 @@ export async function sendHubInviteEmail(opts: { to: string; inviter: string; hu
 /** Sent to the NEW address: the link that makes the change. */
 export async function sendEmailChangeConfirm(opts: { to: string; url: string }) {
   await sendEmail({
+    kind: "email-change",
     to: opts.to,
     subject: "Confirme ta nouvelle adresse Life Hub · Confirm your new Life Hub address",
     text: `Pour te connecter à Life Hub avec cette adresse, ouvre ce lien (valide 1 heure) : ${opts.url}\nSi tu n'as rien demandé, ignore ce courriel.\n\nTo sign in to Life Hub with this address, open this link (works for 1 hour): ${opts.url}\nIf you didn't ask for this, ignore this email.`,
@@ -107,6 +110,7 @@ export async function sendEmailChangedNotice(opts: { to: string; newEmail: strin
   const masked = escapeHtml(opts.newEmail);
   const link = escapeHtml(opts.privacyUrl);
   await sendEmail({
+    kind: "email-changed",
     to: opts.to,
     subject: "Ton adresse Life Hub a changé · Your Life Hub address changed",
     text: `Ton compte Life Hub se connecte maintenant avec ${opts.newEmail}. Si ce n'est pas toi, écris-nous à l'adresse indiquée ici : ${opts.privacyUrl}\n\nYour Life Hub account now signs in with ${opts.newEmail}. If this wasn't you, write to the address given here: ${opts.privacyUrl}`,

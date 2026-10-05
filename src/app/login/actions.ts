@@ -34,7 +34,7 @@ function safeNext(value: FormDataEntryValue | null): string {
   return path;
 }
 
-export type LoginState = { sent: boolean; error?: string };
+export type LoginState = { sent: boolean; error?: string; email?: string; resent?: boolean };
 
 export async function requestMagicLink(
   _prev: LoginState,
@@ -59,7 +59,7 @@ export async function requestMagicLink(
     }
   }
 
-  return { sent: true };
+  return { sent: true, email, resent: formData.get("resend") === "1" };
 }
 
 /**

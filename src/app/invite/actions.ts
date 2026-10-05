@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { hashedKey, rateLimit } from "@/lib/rate-limit";
 import { findInviteByToken, looksLikeToken } from "@/lib/app-invites";
 
-export type ClaimState = { sent: boolean; error?: string };
+export type ClaimState = { sent: boolean; error?: string; email?: string; resent?: boolean };
 
 /**
  * Someone opened an invitation and entered their address. Ties the
@@ -58,5 +58,5 @@ export async function claimInvite(token: string, _prev: ClaimState, formData: Fo
       return { sent: false, error: "Something went wrong. Try again." };
     }
   }
-  return { sent: true };
+  return { sent: true, email, resent: formData.get("resend") === "1" };
 }

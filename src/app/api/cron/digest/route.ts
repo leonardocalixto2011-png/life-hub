@@ -85,7 +85,7 @@ export async function GET(req: Request) {
     }
 
     if ((pref?.emailDigestEnabled ?? true) && u.email) {
-      await sendEmail({ to: u.email, subject, html, text });
+      await sendEmail({ to: u.email, subject, html, text, kind: "digest" });
       emailed++;
     }
     } catch (err) {

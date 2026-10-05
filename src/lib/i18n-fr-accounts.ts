@@ -188,4 +188,12 @@ export const FR_ACCOUNTS: Record<string, string> = {
   // ---- small shared bits -------------------------------------------------------
   "Copy": "Copier",
   "Copied": "Copié",
+  "Sent again": "Renvoyé",
+  "Sent to {email}.": "Envoyé à {email}.",
+  "We sent a link to {email}. Opening it creates your account and signs you in.":
+    "On a envoyé un lien à {email}. En l'ouvrant, tu crées ton compte et tu te connectes.",
+  "Nothing after a few minutes? Look in junk or promotions for “Life Hub”, check the address above, then send it again.":
+    "Rien après quelques minutes ? Cherche « Life Hub » dans les indésirables ou les promotions, vérifie l'adresse ci-dessus, puis renvoie le lien.",
+  "Send the link again": "Renvoyer le lien",
+  "Use another address": "Utiliser une autre adresse",
 };

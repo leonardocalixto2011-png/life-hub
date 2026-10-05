@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
+import { RotateCw } from "lucide-react";
 
 import { requestMagicLink, type LoginState } from "./actions";
 import { useT } from "@/components/I18nProvider";
@@ -10,8 +11,9 @@ const initial: LoginState = { sent: false };
 export function LoginForm({ open, next }: { open: boolean; next?: string }) {
   const [state, formAction, pending] = useActionState(requestMagicLink, initial);
   const t = useT();
+  const [editing, setEditing] = useState(false);
 
-  if (state.sent) {
+  if (state.sent && !editing) {
     return (
       <div className="card p-5 text-sm">
         <p className="font-semibold">{t("Check your email")}</p>
@@ -20,15 +22,30 @@ export function LoginForm({ open, next }: { open: boolean; next?: string }) {
             ? t("A sign-in link is on its way. It expires in 24 hours — clicking it both verifies your address and signs you in, so there is no password to set.")
             : t("If that address has an account or an invitation, a sign-in link is on its way. It expires in 24 hours.")}
         </p>
-        <p className="mt-3 text-xs text-[var(--color-text-dim)]">
-          {t("Running locally with no email key? The link is printed in the dev server console.")}
+        {state.email && (
+          <p className="mt-2 text-[var(--color-text-dim)]">{t("Sent to {email}.", { email: state.email })}</p>
+        )}
+        <p className="mt-2 text-xs text-[var(--color-text-dim)]">
+          {t("Nothing after a few minutes? Look in junk or promotions for “Life Hub”, check the address above, then send it again.")}
         </p>
+        <form action={formAction} className="mt-3">
+          {next && <input type="hidden" name="next" value={next} />}
+          <input type="hidden" name="email" value={state.email ?? ""} />
+          <input type="hidden" name="resend" value="1" />
+          <button type="submit" disabled={pending} className="btn btn-secondary w-full">
+            <RotateCw size={16} strokeWidth={2} aria-hidden />
+            {pending ? t("Sending…") : state.resent ? t("Sent again") : t("Send the link again")}
+          </button>
+        </form>
+        <button type="button" onClick={() => setEditing(true)} className="btn btn-ghost mt-1 w-full">
+          {t("Use another address")}
+        </button>
       </div>
     );
   }
 
   return (
-    <form action={formAction} className="card p-5">
+    <form action={formAction} onSubmit={() => setEditing(false)} className="card p-5">
       {next && <input type="hidden" name="next" value={next} />}
       <label htmlFor="email" className="text-sm font-semibold">
         {t("Email")}
