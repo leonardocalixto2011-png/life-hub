@@ -8,9 +8,7 @@ import { requireUser } from "@/lib/session";
 import { withHub } from "@/lib/hub-context";
 import { hubChrome } from "@/lib/data";
 import { requireHub } from "@/lib/session";
-import { rateLimit } from "@/lib/rate-limit";
-import { overAiBudget, AI_BUDGET_MESSAGE } from "@/lib/ai-budget";
-import { QUICK_ADD_CAP_MESSAGE, consumeQuickAdd } from "@/lib/billing/plan";
+import { aiGate } from "@/lib/ai-gate";
 import {
   parseText,
   parseImage as parseImageCore,
@@ -32,18 +30,15 @@ export type ParseResult = ParseOutcome;
 export async function parseQuickAdd(text: string): Promise<ParseResult> {
   const { user, hub } = await requireHub();
 
-  // Each parse is a paid Anthropic call. Authentication alone is not a cost
-  // control once signup is self-serve: one account can burn the whole budget.
-  if (!(await rateLimit(`ai:${user.id}`, 60, 3600)).ok) {
-    return { ok: false, error: "You have hit the hourly limit for AI parsing. Try again shortly." };
-  }
   if (text.trim().length > 2000) {
     return { ok: false, error: "Keep it under 2000 characters." };
   }
-  if (await overAiBudget(user.id)) return { ok: false, error: AI_BUDGET_MESSAGE };
-  if (!(await consumeQuickAdd(user.id, hub.id))) return { ok: false, error: QUICK_ADD_CAP_MESSAGE };
+  // Each parse is a paid Anthropic call, paid from the person's own Claude
+  // credit; aiGate also applies the hourly limit and the token budget.
+  const blocked = await aiGate(user.id);
+  if (blocked) return { ok: false, error: blocked };
   const { ventures } = await hubChrome(user.id, hub.id);
-  return parseText(text, ventures, 25, user.id);
+  return parseText(text, ventures, 25, user.id, { userId: user.id, feature: "quick_add", hubId: hub.id });
 }
 
 /**
@@ -66,9 +61,6 @@ export async function parseImage(input: {
 }): Promise<ParseResult> {
   const { user, hub } = await requireHub();
 
-  if (!(await rateLimit(`ai:${user.id}`, 60, 3600)).ok) {
-    return { ok: false, error: "You have hit the hourly limit for AI parsing. Try again shortly." };
-  }
   const mediaType = input?.mediaType;
   if (!(IMAGE_MEDIA_TYPES as readonly string[]).includes(mediaType)) {
     return { ok: false, error: "That photo format isn't supported." };
@@ -80,8 +72,8 @@ export async function parseImage(input: {
   if (!data || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
     return { ok: false, error: "That photo couldn't be read." };
   }
-  if (await overAiBudget(user.id)) return { ok: false, error: AI_BUDGET_MESSAGE };
-  if (!(await consumeQuickAdd(user.id, hub.id))) return { ok: false, error: QUICK_ADD_CAP_MESSAGE };
+  const blocked = await aiGate(user.id);
+  if (blocked) return { ok: false, error: blocked };
   const { ventures } = await hubChrome(user.id, hub.id);
   return parseImageCore(
     { data, mediaType: mediaType as ImageMediaType },
@@ -89,6 +81,7 @@ export async function parseImage(input: {
     user.id,
     10,
     langOf(user.locale),
+    { userId: user.id, feature: "photo", hubId: hub.id },
   );
 }
 

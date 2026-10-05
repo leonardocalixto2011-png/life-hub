@@ -34,11 +34,11 @@ export const TERMS: LegalDoc = {
       body: {
         fr: [
           "Life Hub est un outil d'organisation personnelle et familiale : tâches, calendrier, budget, abonnements, dettes, voyages, rappels. Ce n'est pas un conseiller financier, juridique ou fiscal, ni un service bancaire ou de recouvrement. Les calculs et suggestions sont indicatifs et ne remplacent pas un professionnel.",
-          "Le forfait gratuit est gratuit, sans limite de durée. Le forfait Plus et les crédits IA sont payants (voir « Forfait Plus et paiements »). Pendant la bêta, toutes les fonctions sont offertes gratuitement.",
+          "Le forfait gratuit est gratuit, sans limite de durée. Le forfait Plus et le crédit Claude sont payants (voir « Forfait Plus et paiements »). Pendant la bêta, le forfait Plus est offert gratuitement ; les fonctions IA utilisent ton crédit Claude.",
         ],
         en: [
           "Life Hub is a personal and family organisation tool: tasks, calendar, budget, subscriptions, debts, trips, reminders. It is not a financial, legal or tax adviser, nor a banking or collection service. Calculations and suggestions are indicative and do not replace a professional.",
-          "The free plan is free, with no time limit. The Plus plan and AI credits are paid (see “Plus plan and payments”). During the beta, every feature is offered free of charge.",
+          "The free plan is free, with no time limit. The Plus plan and Claude credit are paid (see “Plus plan and payments”). During the beta, the Plus plan is offered free of charge; the AI features use your Claude credit.",
         ],
       },
     },
@@ -55,7 +55,7 @@ export const TERMS: LegalDoc = {
           "- Remboursement : si tu annules dans les 14 jours suivant ton premier paiement, nous te le remboursons en entier sur demande. Sinon, la période en cours n'est pas remboursée, sous réserve des droits que la loi te donne. Si nous fermons le service, la partie non utilisée de ta période t'est remboursée.",
           "- Paiement refusé : si un paiement échoue, Stripe réessaie pendant environ deux semaines et Plus reste actif pendant ce temps. Ensuite, tu reviens au forfait gratuit.",
           "- Tes données ne sont jamais retenues contre paiement : au forfait gratuit, tu gardes l'accès à tout ce que tu as entré. Seules les fonctions de Plus s'arrêtent (par exemple, le tri des boîtes courriel est mis en pause).",
-          "- Crédits IA : achetés à l'unité pour l'assistant, sans renouvellement automatique. Ils n'expirent pas. À la fermeture de ton compte, le solde non utilisé t'est remboursé sur demande.",
+          "- Crédit Claude : chaque personne paie sa propre utilisation des fonctions IA (assistant, ajout rapide, lecture de photos, tri du courriel) avec son crédit Claude. Chaque requête est facturée selon la quantité de texte traitée, au tarif affiché sur la page Crédit Claude. Un crédit de bienvenue est offert à l'ouverture du compte, et Plus ajoute 2 $ de crédit chaque mois. Le crédit acheté se recharge à l'unité, sans renouvellement automatique, et n'expire pas. À la fermeture de ton compte, la partie achetée et non utilisée t'est remboursée sur demande.",
           "- Le prix et la durée d'un abonnement en cours ne changent qu'avec l'avis de 30 jours et le droit de refuser décrits à la section « Modifications ».",
           "- Le forfait payant et les crédits sont réservés aux personnes de 18 ans et plus.",
         ],
@@ -68,7 +68,7 @@ export const TERMS: LegalDoc = {
           "- Refunds: if you cancel within 14 days of your first payment, we refund it in full on request. Otherwise the current period is not refunded, subject to your rights under the law. If we close the service, the unused part of your period is refunded.",
           "- Failed payment: if a payment fails, Stripe retries for about two weeks and Plus stays active meanwhile. After that you return to the free plan.",
           "- Your data is never held back for payment: on the free plan you keep access to everything you entered. Only Plus features stop (for example, mailbox sorting is paused).",
-          "- AI credits: bought one pack at a time for the assistant, with no automatic reload. They do not expire. When you close your account, any unused balance is refunded on request.",
+          "- Claude credit: each person pays for their own use of the AI features (assistant, quick add, photo reading, mail sorting) from their Claude credit. Each request is charged by the amount of text processed, at the rate shown on the Claude credit page. A welcome credit is given when the account opens, and Plus adds $2 of credit each month. Bought credit is topped up one pack at a time, with no automatic reload, and does not expire. When you close your account, the bought and unused part is refunded on request.",
           "- The price and term of a subscription in progress change only with the 30-day notice and the right to refuse described under “Changes”.",
           "- The paid plan and credits are for people aged 18 and over.",
         ],

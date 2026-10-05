@@ -30,12 +30,11 @@ export const FR_BILLING: Record<string, string> = {
   "Free plan": "Forfait gratuit",
   "Tasks, calendar, budget, debts and trips, unlimited": "Tâches, calendrier, budget, dettes et voyages, sans limite",
   "{n} hub you own, up to {m} members": "{n} hub à toi, jusqu'à {m} membres",
-  "{n} AI quick-adds a month": "{n} ajouts rapides par IA par mois",
+  "AI features paid from your own Claude credit ({amount} to start)": "Fonctions IA payées avec ton propre crédit Claude ({amount} pour commencer)",
   "{month} a month or {year} a year": "{month} par mois ou {year} par année",
   "Covers up to {n} hubs you own, {m} members each": "Couvre jusqu'à {n} hubs à toi, {m} membres chacun",
   "Connected mailboxes with automatic sorting": "Boîtes courriel connectées, avec tri automatique",
-  "AI quick-add without the monthly cap": "Ajout rapide par IA sans plafond mensuel",
-  "{amount} of assistant credit each month": "{amount} de crédit d'assistant chaque mois",
+  "{amount} of Claude credit each month": "{amount} de crédit Claude chaque mois",
   "Try Plus free for {n} days": "Essaie Plus gratuitement pendant {n} jours",
   "No card asked. When the trial ends you're back on the free plan, unless you subscribe. We email you 3 days before.":
     "Aucune carte demandée. À la fin de l'essai, tu reviens au forfait gratuit, sauf si tu t'abonnes. On t'écrit 3 jours avant.",
@@ -50,11 +49,12 @@ export const FR_BILLING: Record<string, string> = {
   "Keep Plus": "Garder Plus",
   "End the trial": "Mettre fin à l'essai",
   "Card and invoices": "Carte et factures",
-  "AI credits": "Crédits IA",
-  "For the assistant you chat with. Each person pays for their own use, on any plan. Credits never expire and never reload on their own.":
-    "Pour l'assistant avec qui tu discutes. Chaque personne paie sa propre utilisation, peu importe le forfait. Les crédits n'expirent jamais et ne se rechargent jamais d'eux-mêmes.",
-  "Buy credits": "Acheter des crédits",
-  "Coming with the new assistant.": "Offert avec le nouvel assistant, bientôt.",
+  "For every AI feature: the assistant, quick add, photos and mail sorting. Each person pays for their own use, on any plan.":
+    "Pour toutes les fonctions IA : l'assistant, l'ajout rapide, les photos et le tri du courriel. Chaque personne paie sa propre utilisation, peu importe le forfait.",
+  "Buy credit": "Acheter du crédit",
+  "Your Claude credit": "Ton crédit Claude",
+  "Paid by card through Stripe, in Canadian dollars. Credit never expires and never reloads on its own; whatever is left is refunded on request if you close your account.":
+    "Payé par carte avec Stripe, en dollars canadiens. Le crédit n'expire jamais et ne se recharge jamais tout seul; ce qui reste t'est remboursé sur demande si tu fermes ton compte.",
   "Finance dashboard": "Tableau de bord financier",
 
   // ---- billing actions --------------------------------------------------------
@@ -86,8 +86,6 @@ export const FR_BILLING: Record<string, string> = {
   "This hub has reached the free plan's 6 members. The owner's Plus plan allows 10.":
     "Ce hub a atteint les 6 membres du forfait gratuit. Le forfait Plus du propriétaire en permet 10.",
   "This hub has reached its 10 members.": "Ce hub a atteint ses 10 membres.",
-  "You've used this month's 30 free AI quick-adds. Typing it in still works, and Plus removes the cap.":
-    "Tu as utilisé tes 30 ajouts rapides par IA gratuits ce mois-ci. Tu peux toujours l'entrer à la main, et Plus enlève le plafond.",
 
   // ---- /admin/finance ---------------------------------------------------------
   "Finance": "Finances",
@@ -108,14 +106,14 @@ export const FR_BILLING: Record<string, string> = {
   "Cancelled, running to period end": "Annulés, actifs jusqu'à la fin de la période",
   "Last 30 days": "30 derniers jours",
   "Plus subscriptions": "Abonnements Plus",
-  "AI credits sold": "Crédits IA vendus",
+  "Claude credit sold": "Crédit Claude vendu",
   "Refunds": "Remboursements",
   "Stripe fees (est.)": "Frais Stripe (est.)",
-  "Claude API (est.)": "API Claude (est.)",
+  "Claude API": "API Claude",
   "Servers and services": "Serveurs et services",
   "Net": "Net",
-  "Claude: {tokens} tokens in the current 30-day window, at {usd} US$ per million and {fx} CAD per US$. Servers: {fixed} a month. Correct these with FIN_AI_USD_PER_MTOK, FIN_USD_CAD and FIN_FIXED_MONTHLY_CAD from the real invoices.":
-    "Claude : {tokens} jetons dans la fenêtre de 30 jours en cours, à {usd} $ US par million et {fx} $ CA par $ US. Serveurs : {fixed} par mois. Corrige ces valeurs avec FIN_AI_USD_PER_MTOK, FIN_USD_CAD et FIN_FIXED_MONTHLY_CAD à partir des vraies factures.",
+  "Claude: {calls} requests at Anthropic's price, from the credit ledger; people were charged {used} for them. Credit still held in wallets: {held}. Servers: {fixed} a month, set with FIN_FIXED_MONTHLY_CAD from the real invoices.":
+    "Claude : {calls} requêtes au prix d'Anthropic, selon le registre des crédits; les gens ont payé {used} pour celles-ci. Crédit encore dans les portefeuilles : {held}. Serveurs : {fixed} par mois, à ajuster avec FIN_FIXED_MONTHLY_CAD selon les vraies factures.",
   "Latest movements": "Derniers mouvements",
   "Plus payment": "Paiement Plus",
   "Refund": "Remboursement",

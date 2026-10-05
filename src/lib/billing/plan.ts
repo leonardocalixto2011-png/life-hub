@@ -1,7 +1,6 @@
 import type { PlanAccount } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { rateLimit } from "@/lib/rate-limit";
 import { LIMITS, PLUS_COVERED_HUBS, type PlanLimits, type PlanName } from "@/lib/billing/plans";
 
 /**
@@ -136,21 +135,6 @@ export async function assertMemberRoom(hubId: string): Promise<void> {
         : "This hub has reached its 10 members.",
     );
   }
-}
-
-export const QUICK_ADD_CAP_MESSAGE =
-  "You've used this month's 30 free AI quick-adds. Typing it in still works, and Plus removes the cap.";
-
-/**
- * Counts one AI quick-add against the free monthly cap. True when allowed.
- * Plus — the person's own plan or the hub's — has no cap here (the hourly
- * rate limit and the token budget in ai-budget.ts still apply to everyone).
- */
-export async function consumeQuickAdd(userId: string, hubId: string): Promise<boolean> {
-  if (!billingEnabled()) return true;
-  if ((await hubHasPlus(hubId)) || (await userHasPlus(userId))) return true;
-  const cap = LIMITS.FREE.aiQuickAddsPerMonth ?? Infinity;
-  return (await rateLimit(`ai-quickadd:${userId}`, cap, 60 * 60 * 24 * 30)).ok;
 }
 
 /** Names of the hubs a person's Plus covers, for their billing page. */

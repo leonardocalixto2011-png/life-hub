@@ -1,22 +1,15 @@
-import { logWarn } from "@/lib/observability";
+import { addCredit } from "@/lib/credits";
 
 /**
- * Where a paid AI-credit pack lands. The wallet itself (balance, metering of
- * each AI call) belongs to the assistant work; billing only has to hand it a
- * top-up once Stripe has confirmed the payment.
+ * Where a paid Claude-credit pack lands: the one wallet of lib/credits.ts,
+ * never a second balance. Called by the Stripe webhook once the payment is
+ * confirmed.
  *
- * Until the wallet exists this returns false and the purchase stays recorded
- * in the BillingEvent ledger (kind "credits", the Stripe checkout session id
- * as reference), so nothing paid is lost: the wallet can be credited from the
- * ledger once wired. The credit packs are hidden on /billing while
- * CREDITS_WIRED is false, so in practice nobody can buy before that.
- *
- * Contract for the replacement: idempotent on `ref` (Stripe retries webhooks),
- * `cents` is the pack's face value in cents of CAD, excluding any sales tax.
+ * Idempotent on `ref` (the Stripe checkout session id, stored as the ledger
+ * entry's externalRef): Stripe retries webhooks, and a replay returns false
+ * without adding anything. `cents` is the pack's face value in cents of CAD,
+ * excluding any sales tax.
  */
-export const CREDITS_WIRED: boolean = false;
-
 export async function creditWallet(userId: string, cents: number, ref: string): Promise<boolean> {
-  logWarn("billing.credits_not_wired", { userId, cents, ref });
-  return false;
+  return addCredit({ userId, cents, kind: "TOPUP", note: "Stripe", externalRef: ref });
 }

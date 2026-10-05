@@ -5,6 +5,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bell,
+  Coins,
+  MessageCircle,
   CalendarDays,
   Clock,
   CreditCard,
@@ -36,6 +38,8 @@ const LINKS: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/trips", label: "Trips", Icon: Plane },
   { href: "/favorites", label: "Favourites", Icon: Star },
   { href: "/assistant", label: "Assistant", Icon: Sparkles },
+  { href: "/chats", label: "Chats", Icon: MessageCircle },
+  { href: "/credits", label: "Claude credit", Icon: Coins },
   { href: "/notifications", label: "Notifications", Icon: Bell },
   { href: "/appearance", label: "Appearance", Icon: Palette },
   { href: "/account", label: "Your account", Icon: Settings },

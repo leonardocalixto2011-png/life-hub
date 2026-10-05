@@ -33,16 +33,16 @@ export default async function FinancePage() {
 
   const kindLabel: Record<string, string> = {
     plan: t("Plus payment"),
-    credits: t("AI credits"),
+    credits: t("Claude credit"),
     refund: t("Refund"),
     payment_failed: t("Failed payment"),
   };
   const rows: [string, number][] = [
     [t("Plus subscriptions"), l.planRevenue],
-    [t("AI credits sold"), l.creditRevenue],
+    [t("Claude credit sold"), l.creditRevenue],
     [t("Refunds"), l.refunds],
     [t("Stripe fees (est.)"), l.fees ? -l.fees : 0],
-    [t("Claude API (est.)"), l.aiCostCents ? -l.aiCostCents : 0],
+    [t("Claude API"), l.aiCostCents ? -l.aiCostCents : 0],
     [t("Servers and services"), -l.fixedCents],
   ];
 
@@ -110,10 +110,10 @@ export default async function FinancePage() {
           </div>
         </div>
         <p className="field-hint">
-          {t("Claude: {tokens} tokens in the current 30-day window, at {usd} US$ per million and {fx} CAD per US$. Servers: {fixed} a month. Correct these with FIN_AI_USD_PER_MTOK, FIN_USD_CAD and FIN_FIXED_MONTHLY_CAD from the real invoices.", {
-            tokens: l.aiTokens.toLocaleString(locale),
-            usd: s.assumptions.usdPerMTok,
-            fx: s.assumptions.usdCad,
+          {t("Claude: {calls} requests at Anthropic's price, from the credit ledger; people were charged {used} for them. Credit still held in wallets: {held}. Servers: {fixed} a month, set with FIN_FIXED_MONTHLY_CAD from the real invoices.", {
+            calls: l.aiCalls.toLocaleString(locale),
+            used: cad(l.creditUsedCents),
+            held: cad(s.creditOutstandingCents),
             fixed: cad(l.fixedCents),
           })}
         </p>

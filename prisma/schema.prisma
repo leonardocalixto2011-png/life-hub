@@ -88,6 +88,11 @@ model User {
   appInvitesUsed     AppInvite[]             @relation("AppInviteUsedBy")
   membershipsInvited HubMembership[]         @relation("MembershipInvitedBy")
   emailChanges       EmailChange[]
+  creditWallet       CreditWallet?
+  creditEntries      CreditEntry[]
+  conversationsMade  Conversation[]          @relation("ConversationCreatedBy")
+  conversationSeats  ConversationMember[]
+  chatMessages       ChatMessage[]           @relation("ChatMessageAuthor")
   password           UserPassword?
   plan               PlanAccount?
 }
@@ -260,6 +265,7 @@ model Hub {
   quickFavorites QuickFavorite[]
   activities     Activity[]
   appInvites     AppInvite[]
+  conversations  Conversation[]
 }
 
 model HubMembership {
@@ -1033,6 +1039,144 @@ model Activity {
   createdAt   DateTime     @default(now())
 
   @@index([hubId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Claude credits. Every AI call is paid from the signed-in person's own
+// prepaid balance (see lib/credits.ts). Amounts are in millicents of the
+// wallet currency (CAD): 1 cent = 1000. Fine enough that a one-sentence
+// quick-add (a fraction of a cent) is still recorded as what it cost.
+// Server-only tables: RLS on, no policy, no grant for app_user, like
+// AppInvite — read and written by trusted code keyed on the session's user.
+// ---------------------------------------------------------------------------
+
+model CreditWallet {
+  userId               String    @id
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balanceMillicents    Int       @default(0)
+  /// The one-time starter credit (AI_WELCOME_CREDIT_CENTS) was given.
+  welcomeGrantedAt     DateTime?
+  /// Optional ceiling the person sets on their own spending per calendar
+  /// month, in cents. Null = no ceiling beyond the balance.
+  monthlyLimitCents    Int?
+  /// Last time we pushed "your credit is running low", so it's said once.
+  lowBalanceNotifiedAt DateTime?
+  updatedAt            DateTime  @updatedAt
+  createdAt            DateTime  @default(now())
+}
+
+enum CreditEntryKind {
+  GRANT // starter credit or an admin gift
+  TOPUP // paid through Stripe Checkout
+  USAGE // one AI call
+  ADJUST // admin correction, either sign
+  REFUND
+}
+
+model CreditEntry {
+  id                String          @id @default(cuid())
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind              CreditEntryKind
+  /// Signed: positive adds to the balance, USAGE is negative.
+  amountMillicents  Int
+  /// USAGE: what the call cost at Anthropic's list price, in CAD millicents,
+  /// before the markup. Kept so the margin is auditable per call.
+  rawCostMillicents Int?
+  /// USAGE: which feature spent it (assistant, quick_add, photo, mail…).
+  feature           String?
+  model             String?
+  inputTokens       Int?
+  outputTokens      Int?
+  cacheReadTokens   Int?
+  cacheWriteTokens  Int?
+  hubId             String?
+  note              String?
+  /// Stripe Checkout session id for a TOPUP: unique, so a webhook delivered
+  /// twice credits once.
+  externalRef       String?         @unique
+  /// Admin who granted or adjusted, when it wasn't the person themselves.
+  createdById       String?
+  createdAt         DateTime        @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Chats: the AI assistant, one-to-one between people, groups, and one chat
+// per hub. See lib/chat.ts and the chat RLS migration.
+// ---------------------------------------------------------------------------
+
+enum ConversationKind {
+  AI // a person and their assistant; only they can read it
+  DIRECT // two people who share a hub
+  GROUP // people picked by its creator, from those they share a hub with
+  HUB // every ACTIVE member of one hub, membership implied by the hub
+}
+
+model Conversation {
+  id            String           @id @default(cuid())
+  kind          ConversationKind
+  title         String?
+  /// HUB: the hub. AI: the hub the assistant acts in when the chat started
+  /// (informational; each turn acts in the hub open at the time).
+  hubId         String?
+  hub           Hub?             @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  /// Null once the creator deletes their account: a group outlives them.
+  createdById   String?
+  createdBy     User?            @relation("ConversationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  /// DIRECT: the two user ids sorted and joined, so a pair has one chat.
+  /// HUB: "hub:<id>". Null otherwise.
+  uniqueKey     String?          @unique
+  lastMessageAt DateTime         @default(now())
+  createdAt     DateTime         @default(now())
+
+  members  ConversationMember[]
+  messages ChatMessage[]
+
+  @@index([createdById, kind, lastMessageAt])
+  @@index([hubId])
+}
+
+model ConversationMember {
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime?
+  mutedAt        DateTime?
+  joinedAt       DateTime     @default(now())
+
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
+model ChatMessage {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// The person who wrote it; null for the assistant.
+  authorId       String?
+  author         User?        @relation("ChatMessageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  role           ChatRole     @default(USER)
+  /// What people see.
+  body           String
+  /// AI chats only: the exact Anthropic content blocks of this turn (text,
+  /// tool calls, tool results, thinking), replayed verbatim on the next turn.
+  content        Json?
+  /// AI chats only: steps shown under a reply, a pending confirmation, cost.
+  meta           Json?
+  /// Hidden from the chat view (a tool-result turn, or a deleted message).
+  hidden         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  editedAt       DateTime?
+
+  @@index([conversationId, createdAt])
 }
 
 /// A password, for people who'd rather type one than wait for an emailed

@@ -1,5 +1,9 @@
 import { addDays, format } from "date-fns";
 import { recordAiSpend } from "@/lib/ai-budget";
+import { chargeAi } from "@/lib/credits";
+
+/** Who pays for a call in Claude credit, and what to call it on their statement. */
+export type Payer = { userId: string; feature: string; hubId?: string | null };
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
@@ -126,6 +130,8 @@ export async function parseText(
    * runs but nothing is metered, which is the pre-existing behaviour.
    */
   subject?: string,
+  /** Whose Claude credit pays for it (lib/credits.ts). Absent = not charged to a person. */
+  payer?: Payer,
 ): Promise<ParseOutcome> {
   const clean = text.trim();
   if (!clean) return { ok: false, error: "Nothing to parse." };
@@ -154,6 +160,7 @@ export async function parseText(
       messages: [{ role: "user", content: clean.slice(0, 6000) }],
     });
     if (subject) await recordAiSpend(subject, res.usage);
+    if (payer) await chargeAi(payer.userId, res.model, res.usage, payer.feature, payer.hubId);
     parsed = res.parsed_output;
     truncated = res.stop_reason === "max_tokens";
   } catch (err) {
@@ -268,6 +275,7 @@ export async function parseImage(
   /** The reader's language. A receipt rarely says which language it's in, so
    *  without this a French user got "Pharmacy — Pharmaprix". */
   lang?: "fr" | "en",
+  payer?: Payer,
 ): Promise<ParseOutcome> {
   if (!aiEnabled()) {
     return { ok: false, error: "Parsing needs ANTHROPIC_API_KEY set on the server." };
@@ -313,6 +321,7 @@ export async function parseImage(
       ],
     });
     await recordAiSpend(subject, res.usage);
+    if (payer) await chargeAi(payer.userId, res.model, res.usage, payer.feature, payer.hubId);
     parsed = res.parsed_output;
     truncated = res.stop_reason === "max_tokens";
   } catch (err) {

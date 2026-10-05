@@ -11,44 +11,21 @@ import { ActionForm } from "@/components/ActionForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { billingEnabled, coveredHubNames, getPlanRow, planIsPlus } from "@/lib/billing/plan";
 import { stripeConfigured } from "@/lib/billing/stripe";
-import { CREDITS_WIRED } from "@/lib/billing/credits-hook";
 import {
-  CREDIT_PACKS_CENTS,
   LIMITS,
   PLUS_COVERED_HUBS,
   PLUS_INCLUDED_ASSISTANT_CENTS,
   PLUS_PRICE_CENTS,
   TRIAL_DAYS,
 } from "@/lib/billing/plans";
-import { buyCredits, cancelPlan, checkoutPlus, openPortal, resumePlan, startTrial } from "./actions";
+import { Agree } from "./Agree";
+import { cancelPlan, checkoutPlus, openPortal, resumePlan, startTrial } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-/** The two boxes every paid action asks for (18+, paid-plan terms). */
-function Agree({ t, id }: { t: (k: string, v?: Record<string, string | number>) => string; id: string }) {
-  return (
-    <div className="flex flex-col gap-2 text-sm">
-      <label className="flex items-start gap-2" htmlFor={`${id}-adult`}>
-        <input id={`${id}-adult`} name="adult" type="checkbox" required className="mt-1" />
-        <span>{t("I am 18 or older.")}</span>
-      </label>
-      <label className="flex items-start gap-2" htmlFor={`${id}-terms`}>
-        <input id={`${id}-terms`} name="terms" type="checkbox" required className="mt-1" />
-        <span>
-          {t("I accept the plan terms")} (
-          <Link href="/conditions#forfait" className="underline" target="_blank">
-            {t("price, renewal, cancellation")}
-          </Link>
-          ).
-        </span>
-      </label>
-    </div>
-  );
-}
-
 /**
  * Plan & billing. Shows the plan, starts the trial, subscribes, cancels in one
- * tap, and sells AI credits. Before a payment it states who sells, the price
+ * tap, and points to the Claude credit page for AI top-ups. Before a payment it states who sells, the price
  * in CAD, taxes, renewal and how to cancel (LPC s. 54.4 — distance contracts).
  */
 export default async function BillingPage({ searchParams }: { searchParams: Promise<{ done?: string }> }) {
@@ -88,7 +65,6 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
       <PageHeader back={{ href: "/account", label: t("Your account") }} title={t("Plan & billing")} sub={status} />
 
       {done === "plus" && <p className="card p-4 text-sm">{t("Thank you! Plus is being switched on; it can take a few seconds.")}</p>}
-      {done === "credits" && <p className="card p-4 text-sm">{t("Thank you! Your credits will appear in a few seconds.")}</p>}
 
       {plus && enabled && hubs.length > 0 && (
         <p className="text-sm text-[var(--color-text-dim)]">
@@ -104,7 +80,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
             <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
               <li>{t("Tasks, calendar, budget, debts and trips, unlimited")}</li>
               <li>{t("{n} hub you own, up to {m} members", { n: LIMITS.FREE.ownedHubs, m: LIMITS.FREE.membersPerHub })}</li>
-              <li>{t("{n} AI quick-adds a month", { n: LIMITS.FREE.aiQuickAddsPerMonth ?? 0 })}</li>
+              <li>{t("AI features paid from your own Claude credit ({amount} to start)", { amount: cad(200) })}</li>
             </ul>
           </div>
           <div className="card flex flex-col gap-2 border-[var(--color-primary)] p-4">
@@ -117,8 +93,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
             <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
               <li>{t("Covers up to {n} hubs you own, {m} members each", { n: PLUS_COVERED_HUBS, m: LIMITS.PLUS.membersPerHub })}</li>
               <li>{t("Connected mailboxes with automatic sorting")}</li>
-              <li>{t("AI quick-add without the monthly cap")}</li>
-              <li>{t("{amount} of assistant credit each month", { amount: cad(PLUS_INCLUDED_ASSISTANT_CENTS) })}</li>
+              <li>{t("{amount} of Claude credit each month", { amount: cad(PLUS_INCLUDED_ASSISTANT_CENTS) })}</li>
             </ul>
           </div>
         </div>
@@ -199,28 +174,14 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
         </FormSection>
       )}
 
-      <FormSection title={t("AI credits")}>
+      <FormSection title={t("Claude credit")}>
         <p className="field-hint mt-0">
-          {t("For the assistant you chat with. Each person pays for their own use, on any plan. Credits never expire and never reload on their own.")}
+          {t("For every AI feature: the assistant, quick add, photos and mail sorting. Each person pays for their own use, on any plan.")}
         </p>
-        {CREDITS_WIRED && payable ? (
-          <ActionForm action={buyCredits} className="form-stack">
-            <fieldset className="flex flex-wrap gap-3 text-sm">
-              {CREDIT_PACKS_CENTS.map((c, i) => (
-                <label key={c} className="flex items-center gap-2" htmlFor={`pack-${c}`}>
-                  <input id={`pack-${c}`} type="radio" name="cents" value={c} defaultChecked={i === 1} />
-                  {cad(c)}
-                </label>
-              ))}
-            </fieldset>
-            <Agree t={t} id="credits" />
-            <SubmitButton className="btn btn-primary w-full" pendingLabel="…">
-              {t("Buy credits")}
-            </SubmitButton>
-          </ActionForm>
-        ) : (
-          <p className="text-sm">{t("Coming with the new assistant.")}</p>
-        )}
+        <Link href="/credits" className="btn btn-ghost w-full">
+          <Sparkles size={16} strokeWidth={2} aria-hidden />
+          {t("Your Claude credit")}
+        </Link>
       </FormSection>
 
       {user.role === "ADMIN" && (

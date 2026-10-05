@@ -7,15 +7,14 @@ Prices and fees checked October 2026 — re-check before acting, they move.
 
 ## 1. The model
 
-| | Free | Plus | AI credits |
+| | Free | Plus | Claude credit |
 |---|---|---|---|
-| Price (CAD) | 0 | **5,99 $/mo or 59 $/yr** + taxes | packs of 5 / 10 / 25 $ |
-| Who pays | — | one person; covers the **3 oldest hubs they own**, for every member | each person, for their own assistant use |
+| Price (CAD) | 0 | **5,99 $/mo or 59 $/yr** + taxes | top-ups of 5 / 10 / 20 / 50 $ |
+| Who pays | — | one person; covers the **3 oldest hubs they own**, for every member | each person, for their own AI use |
 | Hubs you own | 1 | 10 (3 covered) | — |
 | Members per hub | 6 | 10 | — |
-| AI quick-add | 30 / month | no monthly cap (hourly limit + token budget still apply) | — |
 | Mailbox connectors + AI mail sorting | — | ✅ | — |
-| Assistant | pay with credits | 2 $ of credit included each month | 2× Anthropic list cost |
+| AI features (assistant, quick-add, photos, mail) | paid from the person's credit (2 $ welcome) | + 2 $ of credit each month | 2× Anthropic list cost |
 | Trial | — | 14 days, **no card**, ends by itself, once per person | — |
 
 Rules that drove it:
@@ -33,7 +32,7 @@ Rules that drove it:
 ## 2. Unit economics (estimate, correct from /admin/finance after a month)
 
 Per Plus household per month, monthly plan: Stripe 0,52 $ (2,9 % + 0,30 $ +
-0,7 % Billing), mail + quick-add AI on Haiku ≈ 1,00 $, briefings + hosting ≈
+0,7 % Billing), mail sorting on Haiku ≈ 1,00 $ (paid from the mailbox owner's credit at ×2, so covered), briefings + hosting ≈
 0,18 $, included assistant credit ≤ 2,00 $ → **≈ 2,30–4,30 $ left**. Fixed
 costs at public launch ≈ 84 $/month (Vercel Pro, Resend Pro, Neon Launch,
 domain) → **≈ 28 paying households to break even.** A free user costs ≈ 0,10 $.
@@ -42,8 +41,8 @@ domain) → **≈ 28 paying households to break even.** A free user costs ≈ 0,
 
 - `src/lib/billing/plans.ts` — price list and limits (client-safe constants).
 - `src/lib/billing/plan.ts` — **every limit asks here, on the server**:
-  `hubHasPlus`, `userHasPlus`, `plusHubIds`, `consumeQuickAdd`,
-  `ownHubLimitMessage`, `assertMemberRoom`. Wired into quick-add, the three
+  `hubHasPlus`, `userHasPlus`, `plusHubIds`,
+  `ownHubLimitMessage`, `assertMemberRoom`. Wired into the three
   mailbox connect actions, the mail poller, `/api/inbound`, hub creation,
   invites and join approvals.
 - `src/lib/billing/stripe.ts` — fetch-only Stripe client + webhook signature check.
@@ -51,7 +50,7 @@ domain) → **≈ 28 paying households to break even.** A free user costs ≈ 0,
   `lib/billing/webhook.ts` syncs `PlanAccount` and books `BillingEvent`
   (idempotent on the Stripe event id; refunds keyed per charge).
 - `/billing` — plan, trial, checkout, **one-tap cancel (Bill 10)**, resume,
-  Stripe portal, credit packs. `/admin/finance` (ADMIN only) — MRR, revenue,
+  Stripe portal. `/credits` sells Claude credit top-ups. `/admin/finance` (ADMIN only) — MRR, revenue,
   fees, Claude cost, break-even, "offer Plus" (COMP) for one person or every
   hub owner.
 - `lib/billing/notices.ts` — Bill 10 email 2–4 days before a trial ends, from
@@ -61,13 +60,25 @@ domain) → **≈ 28 paying households to break even.** A free user costs ≈ 0,
 - Account deletion cancels a live subscription immediately and unlinks the
   ledger; the data export includes the plan and payments.
 
-### AI credits ↔ the assistant thread
+### Claude credit: one wallet
 
-The wallet (balance, metering) is built by the assistant work.
-`src/lib/billing/credits-hook.ts` is the seam: replace `creditWallet()` with
-the wallet's idempotent top-up and set `CREDITS_WIRED = true`; the packs then
-appear on /billing. Purchases before that are impossible (the packs are
-hidden) and would in any case stay in the `BillingEvent` ledger.
+There is one balance per person: the wallet in `src/lib/credits.ts` (built
+with the assistant: ledger, 2 $ welcome credit, ×2 markup, monthly limit,
+admin top-up). Billing only feeds it:
+- **Card top-ups** — `/credits` → Stripe Checkout (`buyCredits`) → webhook
+  `checkout.session.completed` → `lib/billing/credits-hook.ts` →
+  `addCredit({kind: "TOPUP", externalRef: <checkout session id>})`. The
+  unique externalRef makes a replayed webhook a no-op. Sold whenever Stripe is
+  configured, independent of `BILLING_ENABLED` (the wallet is enforced on its own).
+- **Plus's 2 $ a month** — `lib/billing/monthly-credit.ts`, from the daily
+  cron, to ACTIVE (paying) plans only, keyed `plus:<user>:<YYYY-MM>`. Not for
+  trials or COMP.
+- There is no separate quick-add cap any more: every AI call is metered in
+  the wallet, so the free plan's AI is bounded by the person's own credit.
+- A refunded credit purchase does **not** debit the wallet automatically;
+  adjust it on that person's /credits (admin) after refunding in Stripe.
+- `/admin/finance` reads the Claude cost from the ledger's `rawCostMillicents`
+  (Anthropic list price), not an estimate.
 
 ## 4. Turning it on (owner checklist)
 

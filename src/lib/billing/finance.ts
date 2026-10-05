@@ -8,8 +8,9 @@ import { PLUS_PRICE_CENTS } from "@/lib/billing/plans";
  *
  * Costs we can't read from an API are settings with defaults from the
  * monetization audit (MONETIZATION.md), meant to be corrected from the real
- * invoices: FIN_FIXED_MONTHLY_CAD (Vercel, Resend, Neon, domain),
- * FIN_AI_USD_PER_MTOK (blended Claude price across models), FIN_USD_CAD.
+ * invoices: FIN_FIXED_MONTHLY_CAD (Vercel, Resend, Neon, domain). The Claude
+ * cost is read from the credit ledger (lib/credits.ts): every metered call
+ * records its raw cost at Anthropic's list price before the markup.
  */
 
 function envNum(name: string, fallback: number): number {
@@ -25,7 +26,7 @@ export function stripeFeeCents(amountCents: number, subscription: boolean): numb
 
 export async function financeSnapshot(now = new Date()) {
   const since30 = new Date(now.getTime() - 30 * 86_400_000);
-  const [plans, events, aiRow, recent] = await Promise.all([
+  const [plans, events, usage, wallets, recent] = await Promise.all([
     prisma.planAccount.findMany({
       select: {
         status: true,
@@ -41,11 +42,12 @@ export async function financeSnapshot(now = new Date()) {
       where: { occurredAt: { gte: since30 } },
       select: { kind: true, amountCents: true, feeCents: true },
     }),
-    prisma.rateLimit.findFirst({
-      where: { key: "ai-tokens:__global__" },
-      orderBy: { windowStart: "desc" },
-      select: { count: true, windowStart: true },
+    prisma.creditEntry.aggregate({
+      where: { kind: "USAGE", createdAt: { gte: since30 } },
+      _sum: { rawCostMillicents: true, amountMillicents: true },
+      _count: true,
     }),
+    prisma.creditWallet.aggregate({ _sum: { balanceMillicents: true } }),
     prisma.billingEvent.findMany({
       orderBy: { occurredAt: "desc" },
       take: 15,
@@ -68,10 +70,14 @@ export async function financeSnapshot(now = new Date()) {
     0,
   );
 
-  const usdPerMTok = envNum("FIN_AI_USD_PER_MTOK", 2);
-  const usdCad = envNum("FIN_USD_CAD", 1.38);
-  const aiTokens = aiRow?.count ?? 0;
-  const aiCostCents = Math.round((aiTokens / 1_000_000) * usdPerMTok * usdCad * 100);
+  // Raw cost of every AI call in the window, whoever paid for it (bought
+  // credit, the welcome credit, Plus's monthly credit): all of it is our bill.
+  const aiCostCents = Math.round((usage._sum.rawCostMillicents ?? 0) / 1000);
+  const aiCalls = usage._count;
+  // What the same calls took from people's wallets, markup included.
+  const creditUsedCents = Math.round(-(usage._sum.amountMillicents ?? 0) / 1000);
+  // Credit people hold and could still spend or ask back (bought part).
+  const creditOutstandingCents = Math.round((wallets._sum.balanceMillicents ?? 0) / 1000);
   const fixedCents = Math.round(envNum("FIN_FIXED_MONTHLY_CAD", 84) * 100);
 
   const revenue = planRevenue + creditRevenue + refunds;
@@ -93,10 +99,10 @@ export async function financeSnapshot(now = new Date()) {
     },
     mrrCents,
     arrCents: mrrCents * 12,
-    last30: { planRevenue, creditRevenue, refunds, fees, aiCostCents, aiTokens, fixedCents, net },
-    aiWindowStart: aiRow?.windowStart ?? null,
+    last30: { planRevenue, creditRevenue, refunds, fees, aiCostCents, aiCalls, creditUsedCents, fixedCents, net },
+    creditOutstandingCents,
     breakEven,
     recent,
-    assumptions: { usdPerMTok, usdCad, fixedCad: fixedCents / 100 },
+    assumptions: { fixedCad: fixedCents / 100 },
   };
 }

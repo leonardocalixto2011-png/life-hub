@@ -13,7 +13,6 @@ import { formResult, type ActionResult } from "@/lib/action-result";
 import { langOf } from "@/lib/i18n";
 import { billingEnabled, getPlanRow, planIsPlus } from "@/lib/billing/plan";
 import { stripe, stripeConfigured } from "@/lib/billing/stripe";
-import { CREDITS_WIRED } from "@/lib/billing/credits-hook";
 import { CREDIT_PACKS_CENTS, TRIAL_DAYS } from "@/lib/billing/plans";
 
 /**
@@ -128,12 +127,15 @@ export async function checkoutPlus(fd: FormData): Promise<ActionResult> {
   return res;
 }
 
-/** A one-off AI credit pack. Only offered once the wallet is wired. */
+/**
+ * A one-off Claude credit top-up, sold from /credits. Works with or without
+ * BILLING_ENABLED: the wallet is enforced on its own (lib/credits.ts), so
+ * people need a way to refill it as soon as Stripe is configured.
+ */
 export async function buyCredits(fd: FormData): Promise<ActionResult> {
   let url: string | null = null;
   const res = await formResult(async () => {
     const user = await requireUser();
-    if (!CREDITS_WIRED) throw new Error("AI credits aren't on sale yet.");
     if (!stripeConfigured()) throw new Error(STRIPE_OFF);
     const cents = Number(fd.get("cents"));
     if (!(CREDIT_PACKS_CENTS as readonly number[]).includes(cents)) throw new Error("Pick one of the packs.");
@@ -141,7 +143,7 @@ export async function buyCredits(fd: FormData): Promise<ActionResult> {
     await agree(user.id, fd);
     const customer = await customerFor(user);
     const fr = langOf(user.locale) === "fr";
-    const label = `${fr ? "Crédits IA" : "AI credits"} ${(cents / 100).toFixed(0)} $`;
+    const label = `${fr ? "Crédit Claude" : "Claude credit"} ${(cents / 100).toFixed(0)} $`;
     const metadata = { kind: "ai_credits", userId: user.id, cents: String(cents) };
     const session = await stripe<{ url: string }>("POST", "/checkout/sessions", {
       mode: "payment",
@@ -151,8 +153,8 @@ export async function buyCredits(fd: FormData): Promise<ActionResult> {
       metadata,
       payment_intent_data: { metadata },
       locale: fr ? "fr-CA" : "en",
-      success_url: `${appUrl()}/billing?done=credits`,
-      cancel_url: `${appUrl()}/billing`,
+      success_url: `${appUrl()}/credits?done=credits`,
+      cancel_url: `${appUrl()}/credits`,
       ...taxParams(),
     });
     url = session.url;

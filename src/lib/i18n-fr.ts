@@ -14,6 +14,7 @@ import { FR_INTERACT } from "@/lib/i18n-fr-interact";
 import { FR_SHEETS } from "@/lib/i18n-fr-sheets";
 import { FR_ACCOUNTS } from "@/lib/i18n-fr-accounts";
 import { FR_BILLING } from "@/lib/i18n-fr-billing";
+import { FR_CHAT } from "@/lib/i18n-fr-chat";
 
 export const FR: Record<string, string> = {
   ...FR_SOCIAL,
@@ -22,6 +23,7 @@ export const FR: Record<string, string> = {
   ...FR_SHEETS,
   ...FR_ACCOUNTS,
   ...FR_BILLING,
+  ...FR_CHAT,
   // ---- navigation & chrome ------------------------------------------------
   "Today": "Aujourd'hui",
   "Tasks": "Tâches",

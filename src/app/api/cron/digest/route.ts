@@ -19,6 +19,7 @@ import {
 } from "@/lib/digest";
 import { langOf } from "@/lib/i18n";
 import { sendTrialNotices } from "@/lib/billing/notices";
+import { grantPlusMonthlyCredit } from "@/lib/billing/monthly-credit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -147,9 +148,18 @@ export async function GET(req: Request) {
     await reportError("cron.digest.trial_notices_failed", err, {});
   }
 
+  let plusCredits: number | { error: true };
+  try {
+    plusCredits = await grantPlusMonthlyCredit();
+  } catch (err) {
+    plusCredits = { error: true };
+    await reportError("cron.digest.plus_credit_failed", err, {});
+  }
+
   return NextResponse.json({
     ok: true,
     trialNotices,
+    plusCredits,
     prunedAccounts,
     count: totalCount,
     prunedRateLimits,
