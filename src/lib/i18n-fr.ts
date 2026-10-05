@@ -1267,4 +1267,6 @@ export const FR: Record<string, string> = {
   "Ocean": "Océan",
   "Sunset": "Couchant",
   "you@example.com": "toi@exemple.ca",
+  "Open it to add dates, bookings and a packing list.": "Ouvre-le pour ajouter les dates, les réservations et quoi apporter.",
+  "Assigned to you in this hub.": "Ce qui t'est assigné dans ce hub.",
 };

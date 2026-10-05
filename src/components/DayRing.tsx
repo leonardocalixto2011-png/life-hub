@@ -114,9 +114,12 @@ export function DayRing({ done, total }: { done: number; total: number }) {
               : t("{n} left — nice pace", { n: total - done })}
           </p>
         )}
-        <p className="mt-0.5 text-xs text-[var(--color-text-dim)]">
-          {complete ? t("Everything due today is done.") : t("{done} of {total} done today", { done, total })}
-        </p>
+        {/* Only once the day is done: before that, the ring already shows
+            "0/1" and the line above says how many are left — a third
+            "0 of 1 done today" just repeated them. */}
+        {complete && (
+          <p className="mt-0.5 text-xs text-[var(--color-text-dim)]">{t("Everything due today is done.")}</p>
+        )}
       </div>
     </div>
   );

@@ -48,12 +48,11 @@ import { ActionForm } from "@/components/ActionForm";
 import { DangerZone, FormSection } from "@/components/Form";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { personName } from "@/lib/people";
+import { STOP_COLORS } from "../colors";
 import { tripWeather, weatherKind, type DayWeather, type WeatherKind } from "@/lib/weather";
 
 export const dynamic = "force-dynamic";
 
-/** Stop colours, in itinerary order. Travel days (no stop) are neutral. */
-const STOP_COLORS = ["#D9821A", "#0E7C7B", "#C0392B", "#6D4FB3", "#2F7D4F", "#2563EB"];
 
 /** Budget breakdown segments: distinct, and readable on light and dark. */
 const MONEY_COLORS = ["#7C8B8C", "#0E7C7B", "#D9821A", "#C0392B", "#4B5B5C", "#6FB3AE", "#D8B07A", "#6D4FB3"];

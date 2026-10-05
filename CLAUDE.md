@@ -1380,3 +1380,7 @@ request → owner approves → username invite → address change).
   French unless the visitor taps "English" on the login screen (`lh_lang`
   cookie). Same Charter-of-the-French-language call as the legal pages — no
   Accept-Language sniffing.
+- **Trip postcards** (`/trips`): photo or the trip's stop colours on top
+  (`trips/colors.ts` `tripGradient`, shared with the trip page's day strip).
+- **Launch screens stay indigo on purpose**: they show the icon the person just
+  tapped. Per-theme versions would be 144 images for a half-second screen.
