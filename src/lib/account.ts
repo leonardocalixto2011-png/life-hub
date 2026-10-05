@@ -61,6 +61,9 @@ export async function exportUserData(userId: string) {
     quickFavorites,
     consents,
     activity,
+    chatMessages,
+    creditWallet,
+    creditEntries,
   ] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
@@ -127,6 +130,34 @@ export async function exportUserData(userId: string) {
       },
       orderBy: { createdAt: "asc" },
     }),
+    // What they wrote in chats, and their conversations with the assistant
+    // (both sides: the replies were written for them). Other people's
+    // messages in shared chats are theirs, not this person's.
+    prisma.chatMessage.findMany({
+      where: {
+        OR: [
+          { authorId: userId },
+          { role: "ASSISTANT", conversation: { kind: "AI", createdById: userId } },
+        ],
+      },
+      select: {
+        role: true, body: true, createdAt: true, editedAt: true, hidden: true,
+        conversation: { select: { kind: true, title: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.creditWallet.findUnique({
+      where: { userId },
+      select: { balanceMillicents: true, monthlyLimitCents: true, welcomeGrantedAt: true, createdAt: true },
+    }),
+    prisma.creditEntry.findMany({
+      where: { userId },
+      select: {
+        kind: true, amountMillicents: true, feature: true, model: true,
+        inputTokens: true, outputTokens: true, note: true, createdAt: true,
+      },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
 
   return {
@@ -152,6 +183,9 @@ export async function exportUserData(userId: string) {
     quickFavorites,
     consents,
     activity,
+    chatMessages,
+    creditWallet,
+    creditEntries,
   };
 }
 
@@ -210,6 +244,11 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
     prisma.event.deleteMany({ where: { createdById: userId, visibility: "PRIVATE" } }),
     prisma.specialDate.deleteMany({ where: { createdById: userId, visibility: "PRIVATE" } }),
     prisma.trip.deleteMany({ where: { createdById: userId, visibility: "PRIVATE" } }),
+    // Their assistant conversations (the replies go with them) and every
+    // message they wrote to other people. Like their activity lines, a
+    // message is theirs to erase, not to leave behind unsigned.
+    prisma.conversation.deleteMany({ where: { kind: "AI", createdById: userId } }),
+    prisma.chatMessage.deleteMany({ where: { authorId: userId } }),
   ]);
 
   const ownedHubs = await prisma.hubMembership.findMany({
@@ -292,7 +331,8 @@ export async function deleteAccount(userId: string): Promise<DeletionReport> {
 
   // Everything else — memberships (and join requests), debts, debt shares,
   // mail accounts, push subscriptions, notification prefs, sessions, auth
-  // accounts, the consent ledger, invitations they sent and pending address
+  // accounts, the consent ledger, their Claude credit wallet and ledger, chat
+  // seats, invitations they sent and pending address
   // changes — is onDelete: Cascade from User, so this removes them. Who
   // invited whom (User.invitedById, HubMembership.invitedById,
   // AppInvite.usedById) is SetNull: the other person's account stays. Subscriptions and

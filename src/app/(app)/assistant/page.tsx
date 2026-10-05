@@ -1,41 +1,39 @@
-import Link from "next/link";
-
-import { requireUser } from "@/lib/session";
+import { requireHub } from "@/lib/session";
 import { getT } from "@/lib/i18n-server";
-import { aiEnabled, AI_MODEL } from "@/lib/ai";
-import { AssistantPanel } from "./AssistantPanel";
+import { aiEnabled } from "@/lib/ai";
+import { getWallet } from "@/lib/credits";
+import { PageHeader } from "@/components/SectionHeader";
+import { AssistantChat } from "@/components/chat/AssistantChat";
 import { AiNotice } from "@/components/AiNotice";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * A fresh conversation with the assistant. The first message creates the
+ * chat (it then lives under /chats like any other); this page is the
+ * shortcut the header and home-screen icons open.
+ */
 export default async function AssistantPage() {
-  const user = await requireUser();
+  const { user, hub } = await requireHub();
   const t = await getT();
   const enabled = aiEnabled();
+  const wallet = enabled ? await getWallet(user.id) : null;
 
   return (
     <div className="page">
-      <div>
-        <Link href="/today" className="back-link">
-          {t("Today")}
-        </Link>
-        <h1 className="page-title">{t("Assistant")}</h1>
-        <p className="text-xs text-[var(--color-text-dim)]">{t("Powered by Claude ({model}).", { model: AI_MODEL })}</p>
-      </div>
+      <PageHeader back={{ href: "/chats", label: t("Chats") }} title={t("Assistant")} sub={t("Working in {hub}", { hub: hub.name })} />
 
       {enabled && !user.aiNoticeAt && <AiNotice />}
 
       {enabled ? (
-        <AssistantPanel />
+        <AssistantChat conversationId={null} initial={[]} enabled balanceMillicents={wallet?.balanceMillicents ?? 0} currency="CAD" />
       ) : (
         <div className="card p-4 text-sm">
           <p className="font-semibold">{t("Not set up yet")}</p>
-          {/* Setup notes for whoever runs the deployment; the env names and
-              model ids stay literal in either language. */}
           <p className="mt-1 text-[var(--color-text-dim)]">
             {t(
               "Add {key} to the environment (locally in .env, in production in the Vercel project). The model defaults to {model}; set {modelVar} to a smaller model to cut cost.",
-              { key: "ANTHROPIC_API_KEY", model: "claude-opus-5", modelVar: "ANTHROPIC_MODEL" },
+              { key: "ANTHROPIC_API_KEY", model: "claude-opus-5-5", modelVar: "ANTHROPIC_MODEL" },
             )}
           </p>
         </div>

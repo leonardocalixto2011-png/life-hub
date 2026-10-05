@@ -5,7 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
  * set ANTHROPIC_MODEL (e.g. "claude-haiku-4-5" or "claude-sonnet-5") to trade
  * capability for cost.
  */
-export const AI_MODEL = process.env.ANTHROPIC_MODEL ?? "claude-opus-5";
+export const AI_MODEL = process.env.ANTHROPIC_MODEL ?? "claude-opus-5-5";
 
 /**
  * The cheap model, for high-volume work that does not need a capable one.
