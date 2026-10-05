@@ -1,151 +1,100 @@
-# Monetization analysis
+# Monetization — the finance department
 
-Status: **analysis only — nothing implemented.** Queued behind the open
-public-launch blockers (see CLAUDE.md Phase 11). Prices verified Sept 2026;
-re-check before acting, they move.
+Status: **built, switched off.** Decided 2026-10-05 (strategy page:
+https://claude.ai/artifact/V8njD2XtNnmZnddCK2PesS). Billing code is merged;
+`BILLING_ENABLED` stays unset during the beta, so nobody is limited or charged.
+Prices and fees checked October 2026 — re-check before acting, they move.
 
----
+## 1. The model
 
-## 1. What the market actually charges
+| | Free | Plus | Claude credit |
+|---|---|---|---|
+| Price (CAD) | 0 | **5,99 $/mo or 59 $/yr** + taxes | top-ups of 5 / 10 / 20 / 50 $ |
+| Who pays | — | one person; covers the **3 oldest hubs they own**, for every member | each person, for their own AI use |
+| Hubs you own | 1 | 10 (3 covered) | — |
+| Members per hub | 6 | 10 | — |
+| Mailbox connectors + AI mail sorting | — | ✅ | — |
+| AI features (assistant, quick-add, photos, mail) | paid from the person's credit (2 $ welcome) | + 2 $ of credit each month | 2× Anthropic list cost |
+| Trial | — | 14 days, **no card**, ends by itself, once per person | — |
 
-| App | Monthly | Annual | Annual discount | Free tier |
-|---|---|---|---|---|
-| **Todoist Pro** | $7 | $60 | ~29% | 5 projects, no ads |
-| **TickTick Premium** | $3.99 | $35.99 | ~25% | Limited lists/reminders, no ads |
-| **Splitwise Pro** | $4.99 | ~$40–50 | ~17% | **4 expenses/day**, ad-supported |
-| **Honeydue** | — | — | — | **Everything free, ad-supported**, optional $1–10 tip |
-| **Zeta** | — | — | — | Everything free, no paid tier |
+Rules that drove it:
+- **Charge for what costs money** (AI, mailbox reading), **never for the
+  person's own data.** Tasks, calendar, budget, debts and trips stay free and
+  unlimited; a lapsed plan pauses Plus features, it never locks records.
+- **Per household, not per seat.** One subscriber covers their hubs; charging
+  each member would triple the price of one shared space and kill invites.
+- **No ads, no data sales.** The app holds debt default status; finance ad
+  inventory is payday lending and credit repair. Pennies per user, a consent
+  banner and a reputation risk. (Full argument in git history of this file.)
+- **Later, not built:** travel affiliate links in Trips (clearly labelled, never
+  near money pages); app-store distribution (15 % cut, 99 US$/yr).
 
-**The finding that matters: Life Hub straddles two categories with opposite
-economics.**
+## 2. Unit economics (estimate, correct from /admin/finance after a month)
 
-- The *task-management* half (Todoist, TickTick) sustains **$36–60/yr**.
-- The *couples-finance* half (Honeydue, Zeta) sustains **nothing**. Both are
-  entirely free. Honeydue — the closest analogue to our budget/debt side — has
-  no paid tier at all and runs on ads.
+Per Plus household per month, monthly plan: Stripe 0,52 $ (2,9 % + 0,30 $ +
+0,7 % Billing), mail sorting on Haiku ≈ 1,00 $ (paid from the mailbox owner's credit at ×2, so covered), briefings + hosting ≈
+0,18 $, included assistant credit ≤ 2,00 $ → **≈ 2,30–4,30 $ left**. Fixed
+costs at public launch ≈ 84 $/month (Vercel Pro, Resend Pro, Neon Launch,
+domain) → **≈ 28 paying households to break even.** A free user costs ≈ 0,10 $.
 
-So the comparable that most resembles our debt tracker has already tried and
-declined to charge. Pricing has to be justified by the task/organisation side,
-with finance as the differentiator rather than the thing being sold.
+## 3. Where it lives
 
-Typical annual discount across the category: **20–30%**.
+- `src/lib/billing/plans.ts` — price list and limits (client-safe constants).
+- `src/lib/billing/plan.ts` — **every limit asks here, on the server**:
+  `hubHasPlus`, `userHasPlus`, `plusHubIds`,
+  `ownHubLimitMessage`, `assertMemberRoom`. Wired into the three
+  mailbox connect actions, the mail poller, `/api/inbound`, hub creation,
+  invites and join approvals.
+- `src/lib/billing/stripe.ts` — fetch-only Stripe client + webhook signature check.
+- `src/app/api/billing/webhook` — fails closed without `STRIPE_WEBHOOK_SECRET`;
+  `lib/billing/webhook.ts` syncs `PlanAccount` and books `BillingEvent`
+  (idempotent on the Stripe event id; refunds keyed per charge).
+- `/billing` — plan, trial, checkout, **one-tap cancel (Bill 10)**, resume,
+  Stripe portal. `/credits` sells Claude credit top-ups. `/admin/finance` (ADMIN only) — MRR, revenue,
+  fees, Claude cost, break-even, "offer Plus" (COMP) for one person or every
+  hub owner.
+- `lib/billing/notices.ts` — Bill 10 email 2–4 days before a trial ends, from
+  the daily digest cron.
+- Terms: section `#forfait` in `src/content/legal/terms.ts`; Stripe added to
+  the privacy policy's providers. **Lawyer still to review.**
+- Account deletion cancels a live subscription immediately and unlinks the
+  ledger; the data export includes the plan and payments.
 
-## 2. Recommended price
+### Claude credit: one wallet
 
-**$4.99/month or $39/year — per hub, not per seat** (≈35% annual discount).
+There is one balance per person: the wallet in `src/lib/credits.ts` (built
+with the assistant: ledger, 2 $ welcome credit, ×2 markup, monthly limit,
+admin top-up). Billing only feeds it:
+- **Card top-ups** — `/credits` → Stripe Checkout (`buyCredits`) → webhook
+  `checkout.session.completed` → `lib/billing/credits-hook.ts` →
+  `addCredit({kind: "TOPUP", externalRef: <checkout session id>})`. The
+  unique externalRef makes a replayed webhook a no-op. Sold whenever Stripe is
+  configured, independent of `BILLING_ENABLED` (the wallet is enforced on its own).
+- **Plus's 2 $ a month** — `lib/billing/monthly-credit.ts`, from the daily
+  cron, to ACTIVE (paying) plans only, keyed `plus:<user>:<YYYY-MM>`. Not for
+  trials or COMP.
+- There is no separate quick-add cap any more: every AI call is metered in
+  the wallet, so the free plan's AI is bounded by the person's own credit.
+- A refunded credit purchase does **not** debit the wallet automatically;
+  adjust it on that person's /credits (admin) after refunding in Stripe.
+- `/admin/finance` reads the Claude cost from the ledger's `rawCostMillicents`
+  (Anthropic list price), not an estimate.
 
-Reasoning:
-- Sits between TickTick ($36) and Splitwise ($40–50); above TickTick is
-  defensible because this does more, but Todoist's $60 is a business-tool
-  price this doesn't earn.
-- **Per hub, not per user.** This is a household product. Charging three
-  family members separately triples the sticker price for one shared
-  workspace and is the single fastest way to kill conversion. Splitwise and
-  Honeydue are per-account precisely because their users are couples.
-- The annual discount is set slightly above category norm because annual
-  prepay is what makes the AI cost per user predictable.
+## 4. Turning it on (owner checklist)
 
-**Free trial: 14 days, no card up front.** The app's value only becomes
-visible once a hub has real data in it — a card-required trial gates people
-before they've reached that point.
+1. Stripe account in the business name (NEQ), currency CAD.
+2. Product "Life Hub Plus" with two recurring prices: 5,99 $ monthly, 59 $
+   yearly → `STRIPE_PRICE_PLUS_MONTH`, `STRIPE_PRICE_PLUS_YEAR`.
+3. Webhook endpoint `https://<domain>/api/billing/webhook` with the events
+   listed in `.env.example` → `STRIPE_WEBHOOK_SECRET`; `STRIPE_SECRET_KEY`.
+4. Customer portal: Settings → Billing → Customer portal → allow updating the
+   card and viewing invoices (cancellation stays in-app). Turn on Stripe's
+   emailed receipts.
+5. Optional: a promotion code for founders (40 % off forever) — checkout
+   accepts codes.
+6. `/admin/finance` → "Offer Plus to every hub owner" until launch + 3 months.
+7. Lawyer reads `#forfait`; then `BILLING_ENABLED=1`.
+8. Register for GST/QST past 30 000 $ over four quarters → `STRIPE_AUTOMATIC_TAX=1`.
 
-## 3. ⚠️ Recommendation against ads
-
-The brief asks for ads on the free tier. I'd push back, on three grounds.
-
-**a) The ad inventory is toxic in this specific app.** Life Hub knows a user's
-creditor names, balances, APR, and whether they are *in default*. Personal-finance
-ad inventory is dominated by debt consolidation, credit repair and payday
-lending. Serving those to someone whose own app records show three cards in
-default is a genuinely harmful outcome, and in some jurisdictions a regulated
-one (UK FCA financial-promotion rules; US UDAAP exposure). Honeydue can run ads
-because Honeydue does not track debt default status. We do.
-
-**b) It makes the legal blocker strictly worse.** Ads set identifiers and
-require consent under GDPR/ePrivacy *before* serving. We currently have no
-privacy policy, no consent mechanism, and no DPAs. Ads add a consent-management
-platform and a sub-processor to a compliance position that is already the
-thing blocking launch.
-
-**c) The economics probably don't clear.** A private admin app gets maybe
-5–15 pageviews per user per day. At $1–4 RPM that's roughly **$0.15–1.50 per
-user per month gross** — plausibly *less* than what that user costs in
-Anthropic API calls for quick-add parsing, mail classification and the
-assistant. Ads could be net-negative per free user while carrying all the risk
-in (a) and (b).
-
-**Better lever: usage limits.** This is where the category has already moved —
-Splitwise replaced generosity with a 4-expense/day cap. Limits convert better
-than ads, cost nothing to serve, and don't poison a financial product.
-
-**If ads ship anyway**, the minimum safe shape: contextual/non-personalised
-only, never on `/debts`, `/budget` or `/inbox`, a real consent gate first, and
-an advertiser category blocklist for lending and credit repair.
-
-## 4. Free vs paid — gate the thing that costs money
-
-The AI features have a real marginal cost per call. Gating them aligns price
-with cost, so heavy users fund themselves.
-
-| | Free | Paid |
-|---|---|---|
-| Tasks, deadlines, events, calendar | ✅ unlimited | ✅ |
-| Budget + subscriptions | ✅ | ✅ |
-| **Debt tracker** | ✅ 3 debts | ✅ unlimited |
-| **Debt sharing** (per-hub, summary/full) | ❌ | ✅ |
-| **Hub members** | 2 | 10 |
-| **Hubs per account** | 1 | unlimited |
-| **AI quick-add / assistant** | 20 parses/month | 500/month |
-| **Connected mailboxes** | ❌ | ✅ |
-| Digests + push | ✅ | ✅ |
-| Themes, background | ✅ | ✅ |
-| Support | community | priority |
-
-Deliberately *not* gated: anything already entered. Locking someone out of
-their own debt records to extract a payment is the kind of thing that earns a
-category-wide reputation, and this data is sensitive enough that it would be
-remembered.
-
-"Remove ads" alone is **not** a sufficient value proposition here — with no
-ads in the free tier there is nothing to remove, and even with ads the
-category (Honeydue) shows people simply tolerate them. The mailbox connectors
-and debt sharing are the real conversion drivers.
-
-## 5. Implementation plan (not started)
-
-**Billing: Stripe.** Stripe Checkout + Customer Portal covers upgrade,
-downgrade, cancel and card update without building any of those screens.
-
-Needed:
-1. `Subscription` model keyed to **`hubId`** (not user), with
-   `stripeCustomerId`, `stripeSubscriptionId`, `status`, `currentPeriodEnd`.
-2. Webhook endpoint (`/api/stripe/webhook`) handling
-   `checkout.session.completed`, `customer.subscription.updated|deleted`, and
-   `invoice.payment_failed`. **Must verify the Stripe signature** — the
-   `/api/inbound` hole we just closed is the same class of bug.
-3. A single server-side `hubPlan(hubId)` helper. Every limit checks it there,
-   never in a client component — a paywall enforced in the UI is not a paywall.
-4. Grace period on payment failure (Stripe dunning, ~2 weeks) before
-   downgrading, so a expired card doesn't instantly strip features.
-5. Downgrade behaviour: data is never deleted, only new writes past a limit
-   are blocked, and shared trackers revert to private.
-
-**Tax.** Digital subscriptions are taxable in most jurisdictions and the rules
-are per-country — EU VAT MOSS, UK VAT, Canadian GST/HST/QST (relevant: the
-owner is in Quebec), US state sales tax with economic nexus. **Use Stripe Tax**
-rather than hand-rolling this; the alternative is registering in each
-jurisdiction manually. Also required: invoices, and a refund/cancellation
-policy in the terms.
-
-**Hard prerequisite.** Taking money creates a contractual relationship and
-makes the missing terms of service and privacy policy non-optional. Billing
-cannot ship before the legal items in CLAUDE.md Phase 11.
-
-## Sources
-
-- [Splitwise pricing 2026](https://getfinny.app/blog/splitwise-pricing-2026)
-- [Splitwise free limits](https://splittyapp.com/learn/splitwise-free-limits/)
-- [Todoist pricing 2026](https://www.usecarly.com/blog/todoist-pricing/)
-- [TickTick pricing 2026](https://lifestack.ai/blog/ticktick-pricing)
-- [Honeydue review (CNBC Select)](https://www.cnbc.com/select/honeydue-budgeting-app-review/)
-- [Best budgeting apps for couples 2026](https://www.bestmoney.com/financial-advisor/learn-more/budgeting-apps-for-couples)
+Remember the `create-app-role.sql` gotcha: re-running it grants `PlanAccount`
+and `BillingEvent` to app_user; re-run the billing migration's REVOKE after.

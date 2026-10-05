@@ -71,6 +71,7 @@ heightened expectations and a breach would be materially harmful.
 | **Resend** | Email addresses, digest content (which includes task titles and debt payment amounts) | Transactional email |
 | **Anthropic** | Free-text quick-add input and **inbound email bodies** sent for parsing | Content leaves the system for classification |
 | **Google / Yahoo / Microsoft** | OAuth or IMAP access to the user's mailbox | Read-only |
+| **Stripe** | Email, name, plan and payment amounts; card details are entered on Stripe's page and never reach us | Only for people who buy Plus or AI credits. Ledger: `PlanAccount`, `BillingEvent` (6-year tax retention, unlinked from the person on deletion) |
 | **Vercel Blob** | Uploaded background images, on **public URLs** | Unguessable, but not access-controlled |
 
 Each of these needs listing in a privacy policy, and a DPA in place, before EU users.

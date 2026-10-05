@@ -5,6 +5,7 @@ import { withHub } from "@/lib/hub-context";
 import { rateLimit } from "@/lib/rate-limit";
 import { CURRENT_HUB_COOKIE } from "@/lib/session";
 import { logActivity } from "@/lib/activity";
+import { ownHubLimitMessage } from "@/lib/billing/plan";
 
 /**
  * The parts of "make a hub" / "join a hub" that more than one caller needs —
@@ -51,6 +52,8 @@ export async function createHubFor(userId: string, name: string, color?: string)
   if (owned >= MAX_OWNED_HUBS) {
     throw new HubLimitError("You can own up to 10 hubs. Delete one you no longer use first.");
   }
+  const planLimit = await ownHubLimitMessage(userId);
+  if (planLimit) throw new HubLimitError(planLimit);
   return prisma.$transaction(async (tx) => {
     const hub = await tx.hub.create({
       data: { name, createdById: userId, ...(isHubColor(color) ? { color } : {}) },

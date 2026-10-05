@@ -17,6 +17,10 @@ import { ActionForm } from "@/components/ActionForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PageHeader } from "@/components/SectionHeader";
 import { FormSection } from "@/components/Form";
+import { stripeConfigured } from "@/lib/billing/stripe";
+import { CREDIT_PACKS_CENTS } from "@/lib/billing/plans";
+import { buyCredits } from "../billing/actions";
+import { Agree } from "../billing/Agree";
 import { adminAdjustCredit, setMonthlyLimit } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -41,9 +45,9 @@ const KINDS: Record<string, string> = {
  * and a ceiling they control. Every AI call in the app is charged to the
  * person who made it (mail sorting to the mailbox's owner).
  */
-export default async function CreditsPage() {
+export default async function CreditsPage({ searchParams }: { searchParams: Promise<{ done?: string }> }) {
   const user = await requireUser();
-  const [t, lang] = await Promise.all([getT(), getLang()]);
+  const [t, lang, { done }] = await Promise.all([getT(), getLang(), searchParams]);
   const locale = user.locale ?? (lang === "fr" ? "fr-CA" : "en-CA");
   const [wallet, spent, byFeature, entries] = await Promise.all([
     getWallet(user.id),
@@ -87,10 +91,33 @@ export default async function CreditsPage() {
         )}
       </section>
 
+      {done === "credits" && <p className="card p-4 text-sm">{t("Thank you! Your credits will appear in a few seconds.")}</p>}
+
       <FormSection title={t("Add credit")}>
-        <p className="text-sm text-[var(--color-text-dim)]">
-          {t("Paying by card is coming soon. Until then, ask the person who runs Life Hub to add credit to your account.")}
-        </p>
+        {stripeConfigured() ? (
+          <ActionForm action={buyCredits} className="form-stack">
+            <p className="field-hint mt-0">
+              {t("Paid by card through Stripe, in Canadian dollars. Credit never expires and never reloads on its own; whatever is left is refunded on request if you close your account.")}
+            </p>
+            <fieldset className="flex flex-wrap gap-3 text-sm">
+              <legend className="sr-only">{t("Amount")}</legend>
+              {CREDIT_PACKS_CENTS.map((c, i) => (
+                <label key={c} className="flex items-center gap-2" htmlFor={`pack-${c}`}>
+                  <input id={`pack-${c}`} type="radio" name="cents" value={c} defaultChecked={i === 1} />
+                  {money(c, "CAD", locale)}
+                </label>
+              ))}
+            </fieldset>
+            <Agree t={t} id="credits" />
+            <SubmitButton className="btn btn-primary w-full" pendingLabel="…">
+              {t("Buy credit")}
+            </SubmitButton>
+          </ActionForm>
+        ) : (
+          <p className="text-sm text-[var(--color-text-dim)]">
+            {t("Paying by card is coming soon. Until then, ask the person who runs Life Hub to add credit to your account.")}
+          </p>
+        )}
       </FormSection>
 
       <FormSection title={t("Where it went this month")}>

@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { withHub } from "@/lib/hub-context";
 import { requireHub } from "@/lib/session";
+import { hubHasPlus, NEEDS_PLUS_MAILBOX } from "@/lib/billing/plan";
 import { buildAuthUrl, googleOAuthConfigured } from "@/lib/mail/google";
 import {
   buildAuthUrl as buildMicrosoftAuthUrl,
@@ -70,6 +71,7 @@ export async function startGoogleConnect() {
   if (!(await hasConsent(user.id, "MAIL_AI", hub.id))) {
     redirect("/mail?error=" + encodeURIComponent(NEEDS_MAIL_AI));
   }
+  if (!(await hubHasPlus(hub.id))) redirect("/mail?error=" + encodeURIComponent(NEEDS_PLUS_MAILBOX));
   if (!googleOAuthConfigured()) {
     throw new Error("Google OAuth isn't configured yet (GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET).");
   }
@@ -95,6 +97,7 @@ export async function startMicrosoftConnect() {
   if (!(await hasConsent(user.id, "MAIL_AI", hub.id))) {
     redirect("/mail?error=" + encodeURIComponent(NEEDS_MAIL_AI));
   }
+  if (!(await hubHasPlus(hub.id))) redirect("/mail?error=" + encodeURIComponent(NEEDS_PLUS_MAILBOX));
   if (!microsoftOAuthConfigured()) {
     throw new Error("Microsoft OAuth isn't configured yet (MICROSOFT_CLIENT_ID/MICROSOFT_CLIENT_SECRET).");
   }
@@ -133,6 +136,7 @@ export async function connectImapAccount(formData: FormData) {
   if (!(await hasConsent(user.id, "MAIL_AI", hub.id))) {
     redirect("/mail?error=" + encodeURIComponent(NEEDS_MAIL_AI));
   }
+  if (!(await hubHasPlus(hub.id))) redirect("/mail?error=" + encodeURIComponent(NEEDS_PLUS_MAILBOX));
 
   const parsed = ImapConnectSchema.safeParse({
     provider: formData.get("provider"),

@@ -9,6 +9,7 @@ import {
   MessageCircle,
   CalendarDays,
   Clock,
+  CreditCard,
   ListOrdered,
   LogOut,
   Palette,
@@ -42,6 +43,7 @@ const LINKS: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/notifications", label: "Notifications", Icon: Bell },
   { href: "/appearance", label: "Appearance", Icon: Palette },
   { href: "/account", label: "Your account", Icon: Settings },
+  { href: "/billing", label: "Plan & billing", Icon: CreditCard },
   { href: "/invitations", label: "Invite to Life Hub", Icon: UserPlus },
 ];
 

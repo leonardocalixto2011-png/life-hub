@@ -8,6 +8,7 @@ import { secretMatches } from "@/lib/bearer";
 import { resolveHubFromRecipient } from "@/lib/inbound-address";
 import { hubHasMailAiConsent } from "@/lib/consent";
 import { overAiBudget } from "@/lib/ai-budget";
+import { hubHasPlus } from "@/lib/billing/plan";
 import { creditBlock } from "@/lib/credits";
 
 export const runtime = "nodejs";
@@ -190,10 +191,12 @@ export async function POST(req: Request) {
   // the mail is still recorded, just not analysed.
   // Forwarded mail has no session, so its Claude credit comes from whoever
   // created the hub; out of credit, it is recorded unanalysed like the rest.
+  // Mail sorting is also a Plus feature (lib/billing/plan.ts).
   const payerId =
     (await prisma.hub.findUnique({ where: { id: hubId }, select: { createdById: true } }))?.createdById ?? null;
   const aiAllowed =
     (await hubHasMailAiConsent(hubId)) &&
+    (await hubHasPlus(hubId)) &&
     !(await overAiBudget(hubId)) &&
     !(payerId && (await creditBlock(payerId)));
 

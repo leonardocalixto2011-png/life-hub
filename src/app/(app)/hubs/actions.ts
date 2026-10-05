@@ -22,6 +22,7 @@ import { newJoinCode } from "@/lib/join-codes";
 import { normalizeUsername } from "@/lib/username";
 import { langOf, translate } from "@/lib/i18n";
 import { logActivity } from "@/lib/activity";
+import { assertMemberRoom } from "@/lib/billing/plan";
 
 /**
  * Hub creation itself runs on the owner-role client (bypasses RLS), same as
@@ -151,6 +152,7 @@ async function placeInvite(hubId: string, targetId: string, inviter: { id: strin
   });
   if (existing?.status === "ACTIVE") return "active";
   if (existing?.status === "REQUESTED") {
+    await assertMemberRoom(hubId);
     await approveRequestRow(hubId, targetId);
     return "approved";
   }
@@ -160,6 +162,7 @@ async function placeInvite(hubId: string, targetId: string, inviter: { id: strin
       data: { invitedById: inviter.id },
     });
   } else {
+    await assertMemberRoom(hubId);
     await prisma.hubMembership.create({
       data: { hubId, userId: targetId, role: "MEMBER", status: "INVITED", invitedById: inviter.id },
     });
@@ -571,6 +574,7 @@ export async function approveJoinRequest(hubId: string, targetUserId: string) {
   const user = await requireUser();
   z.string().cuid().parse(hubId);
   await requireHubOwner(hubId, user.id, "approve requests");
+  await assertMemberRoom(hubId);
   await approveRequestRow(hubId, targetUserId);
   revalidatePath(`/hubs/${hubId}/members`);
 }

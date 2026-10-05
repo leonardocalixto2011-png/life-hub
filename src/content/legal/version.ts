@@ -10,10 +10,10 @@ import { TERMS } from "./terms";
  * people consented to. A plain module: imported by server code and by the
  * legal pages alike.
  */
-export const POLICY_VERSION = "2026-10-04-draft";
+export const POLICY_VERSION = "2026-10-05-draft";
 
 /** "Last updated" date for the legal pages (ISO, date only). */
-export const POLICY_UPDATED = "2026-10-04";
+export const POLICY_UPDATED = "2026-10-05";
 
 /**
  * True once the owner has set LEGAL_PUBLISHED=1 AND the text can actually

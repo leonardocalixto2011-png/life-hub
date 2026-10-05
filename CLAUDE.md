@@ -1412,6 +1412,30 @@ verification.
 - Remember the `create-app-role.sql` gotcha: re-running it grants
   `UserPassword` too; re-run the migration's REVOKE.
 
+### Finance department: plans and Stripe (2026-10-05)
+
+Owner asked for "the finance department": audit how the app makes money, then
+build it. Strategy page https://claude.ai/artifact/V8njD2XtNnmZnddCK2PesS;
+the model, unit economics, file map and the switch-on checklist are in
+**MONETIZATION.md** — read it before touching anything billing.
+
+- Free / **Plus 5,99 $ mo · 59 $ yr per household** (a subscriber's 3 oldest
+  owned hubs, all members) / per-person **Claude credit** at 2× API cost.
+- **`BILLING_ENABLED` unset = beta = everyone is Plus.** Every gate in
+  `lib/billing/plan.ts` returns "allowed" then. Don't add a gate that ignores it.
+- `PlanAccount` / `BillingEvent` are server-only (RLS on, no policy, no grant),
+  like `UserPassword`.
+- Stripe via plain `fetch` (`lib/billing/stripe.ts`), no SDK. Its errors become
+  a generic plain `Error` (shown inline by `formResult`); details go to logs.
+- Never hold data hostage: limits only block *new* hubs/members/AI calls and
+  pause mail sorting. Cancel is one tap with no confirmation page (Bill 10).
+- **One Claude-credit wallet** (`lib/credits.ts`). Stripe top-ups land in it
+  via `lib/billing/credits-hook.ts` → `addCredit(TOPUP, externalRef = checkout
+  session id)`; Plus adds 2 $/month (`lib/billing/monthly-credit.ts`, daily
+  cron, ACTIVE plans only). Never add a second balance or a per-feature AI cap:
+  the wallet meters every call. Top-ups are sold from `/credits` whenever Stripe
+  is configured, regardless of `BILLING_ENABLED`.
+
 ### Assistant that drives the app, chats, Claude credit (2026-10-05)
 
 Owner asked: the in-app AI should handle every part of the app by

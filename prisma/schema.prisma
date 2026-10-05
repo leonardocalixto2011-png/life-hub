@@ -94,6 +94,7 @@ model User {
   conversationSeats  ConversationMember[]
   chatMessages       ChatMessage[]           @relation("ChatMessageAuthor")
   password           UserPassword?
+  plan               PlanAccount?
 }
 
 /// An invitation to the app itself, not to a hub. Sent by email (bound to that
@@ -159,6 +160,9 @@ enum ConsentKind {
   MAIL_AI
   AGE_14
   AGE_18
+  /// Accepted the paid-plan terms (price, renewal, cancellation) before a
+  /// first payment or trial. Account-wide.
+  PAID_TERMS
 }
 
 model Consent {
@@ -1186,4 +1190,77 @@ model UserPassword {
   hash      String
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Billing (the "finance department"). See src/lib/billing/ and MONETIZATION.md.
+// Both tables are server-only like AppInvite: RLS on, no policy, no grant for
+// app_user. Reads and writes go through the owner client after the app's own
+// checks (the person's own row, or the ADMIN finance page).
+// ---------------------------------------------------------------------------
+
+enum PlanStatus {
+  /// The 14-day in-app trial. No card, no Stripe: it simply ends.
+  TRIALING
+  /// A Stripe subscription in good standing (incl. Stripe's own trialing).
+  ACTIVE
+  /// Stripe is retrying a failed payment. Plus is kept during the retries.
+  PAST_DUE
+  CANCELED
+  /// Plus given for free by the app admin (beta households, founders).
+  COMP
+}
+
+enum BillingInterval {
+  MONTH
+  YEAR
+}
+
+/// One person's plan. Plus is bought by a person and covers the hubs they own
+/// (lib/billing/plan.ts), so the plan lives on the user, not on a hub.
+model PlanAccount {
+  userId               String           @id
+  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status               PlanStatus
+  interval             BillingInterval?
+  stripeCustomerId     String?          @unique
+  stripeSubscriptionId String?          @unique
+  /// End of the paid period Stripe last reported.
+  currentPeriodEnd     DateTime?
+  /// Cancelled with the one-tap button: Plus runs until currentPeriodEnd.
+  cancelAtPeriodEnd    Boolean          @default(false)
+  trialEndsAt          DateTime?
+  /// One trial per person, ever — kept even after the plan changes.
+  trialUsedAt          DateTime?
+  /// Bill 10: the "your trial ends on …" email, sent 2–10 days before.
+  trialNoticeSentAt    DateTime?
+  /// COMP only: free Plus until this date; null = no end date.
+  compUntil            DateTime?
+  compNote             String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@index([status])
+}
+
+/// The revenue ledger, one row per Stripe event that moved money. Idempotent
+/// on the Stripe event id (Stripe retries webhooks). Amounts in cents of
+/// `currency`: positive for money in, negative for refunds. `userId` is a plain
+/// id (no FK) so the books survive an account deletion, which nulls it.
+model BillingEvent {
+  id            String   @id @default(cuid())
+  stripeEventId String   @unique
+  type          String
+  /// "plan" | "credits" | "refund" | "payment_failed"
+  kind          String
+  userId        String?
+  amountCents   Int      @default(0)
+  /// Stripe's fee, when the event carries it (estimated otherwise on the dashboard).
+  feeCents      Int?
+  currency      String   @default("cad")
+  occurredAt    DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([occurredAt])
+  @@index([userId])
 }
