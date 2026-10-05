@@ -1261,4 +1261,10 @@ export const FR: Record<string, string> = {
   "Got it": "Compris",
   "Mailbox": "Boîte courriel",
   "Couldn't classify (assistant unavailable).": "Impossible à classer (assistant indisponible).",
+  // Theme names (src/lib/themes.ts) and the login placeholder.
+  "Pink": "Rose",
+  "Forest": "Forêt",
+  "Ocean": "Océan",
+  "Sunset": "Couchant",
+  "you@example.com": "toi@exemple.ca",
 };

@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { upload } from "@vercel/blob/client";
-import { Trash2 } from "lucide-react";
+import { Trash2, ImagePlus } from "lucide-react";
 
 import { useT } from "@/components/I18nProvider";
 import { setHubCover, removeHubCover } from "@/app/(app)/hubs/actions";
@@ -45,15 +45,24 @@ export function CoverUpload({ hubId, hasCover }: { hubId: string; hasCover: bool
 
   return (
     <div className="space-y-2">
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        disabled={pending || removing}
-        onChange={handleChange}
-        className="field w-full"
-        aria-label={hasCover ? t("Replace the hub cover photo") : t("Add a hub cover photo")}
-      />
+      {/* A label styled as a button around a hidden input: the native control
+          reads "Choose File · No file chosen" in English whatever the app's
+          language, and can't be styled. */}
+      <label
+        className="btn btn-secondary w-full cursor-pointer has-[:disabled]:opacity-60"
+        aria-disabled={pending || removing}
+      >
+        <ImagePlus size={16} strokeWidth={2} aria-hidden />
+        {hasCover ? t("Replace the hub cover photo") : t("Add a hub cover photo")}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          disabled={pending || removing}
+          onChange={handleChange}
+          className="sr-only"
+        />
+      </label>
       <p className="field-hint mt-0">
         {t("Everyone in this hub sees this one, and it's the first thing on an invite. Your own background photo stays private.")}
       </p>

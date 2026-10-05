@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
+import { ImagePlus } from "lucide-react";
 
 import { useT } from "@/components/I18nProvider";
 import { setBackgroundImage } from "./actions";
@@ -34,15 +35,24 @@ export function BackgroundUploadForm() {
 
   return (
     <div className="space-y-2">
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        disabled={pending}
-        onChange={handleChange}
-        className="field w-full"
-        aria-label={t("Choose a background photo")}
-      />
+      {/* A label styled as a button around a hidden input: the native control
+          reads "Choose File · No file chosen" in English whatever the app's
+          language, and can't be styled. */}
+      <label
+        className="btn btn-secondary w-full cursor-pointer has-[:disabled]:opacity-60"
+        aria-disabled={pending}
+      >
+        <ImagePlus size={16} strokeWidth={2} aria-hidden />
+        {t("Choose a background photo")}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          disabled={pending}
+          onChange={handleChange}
+          className="sr-only"
+        />
+      </label>
       {pending && <p className="text-xs text-[var(--color-text-dim)]">{t("Uploading…")}</p>}
       {error && <p className="text-xs text-[var(--color-danger)]">{error}</p>}
     </div>

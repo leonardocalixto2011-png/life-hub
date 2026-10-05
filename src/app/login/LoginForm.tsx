@@ -40,7 +40,7 @@ export function LoginForm({ open, next }: { open: boolean; next?: string }) {
         autoComplete="email"
         inputMode="email"
         required
-        placeholder="you@example.com"
+        placeholder={t("you@example.com")}
         className="field mt-2"
       />
       {state.error && (

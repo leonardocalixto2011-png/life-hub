@@ -38,25 +38,25 @@ export default function manifest(): MetadataRoute.Manifest {
         name: "Add",
         short_name: "Add",
         url: "/today?add=1",
-        icons: [{ src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+        icons: [{ src: "/icons/shortcut-add.png", sizes: "192x192", type: "image/png" }],
       },
       {
         name: "Speak",
         short_name: "Speak",
         url: "/today?voice=1",
-        icons: [{ src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+        icons: [{ src: "/icons/shortcut-speak.png", sizes: "192x192", type: "image/png" }],
       },
       {
         name: "Snap a receipt",
         short_name: "Snap",
         url: "/today?snap=1",
-        icons: [{ src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+        icons: [{ src: "/icons/shortcut-snap.png", sizes: "192x192", type: "image/png" }],
       },
     ],
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }

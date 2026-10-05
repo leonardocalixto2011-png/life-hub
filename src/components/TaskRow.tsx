@@ -223,7 +223,11 @@ export function TaskRow({
               {task.venture ? (
                 <VentureChip name={task.venture.name} color={task.venture.color} />
               ) : canEdit ? (
-                <span className="chip text-[var(--color-text-dim)]">+ {t("venture")}</span>
+                // Quiet text, not a chip: on a list with no projects set, a boxed
+                // "+ projet" on every row out-shouted the task titles.
+                <span className="text-[0.72rem] font-medium text-[var(--color-text-dim)] opacity-75">
+                  + {t("venture")}
+                </span>
               ) : null}
               {due ? (
                 <span
@@ -233,7 +237,7 @@ export function TaskRow({
                   {dueLabel(due, lang)}
                 </span>
               ) : canEdit ? (
-                <span className="text-[0.72rem] font-semibold text-[var(--color-text-dim)]">
+                <span className="text-[0.72rem] font-medium text-[var(--color-text-dim)] opacity-75">
                   + {t("date")}
                 </span>
               ) : null}

@@ -4,10 +4,12 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { THEMES } from "@/lib/themes";
+import { useT } from "@/components/I18nProvider";
 import { setTheme } from "./actions";
 
 export function ThemePicker({ current }: { current: string }) {
   const router = useRouter();
+  const tr = useT();
   const [pending, startTransition] = useTransition();
   // Optimistic: the swatch highlights immediately, before the layout
   // re-renders with the new palette.
@@ -49,7 +51,7 @@ export function ThemePicker({ current }: { current: string }) {
                 style={{ background: t.swatch[1] }}
               />
             </span>
-            <span className="text-[0.7rem] font-semibold">{t.label}</span>
+            <span className="text-[0.7rem] font-semibold">{tr(t.label)}</span>
           </button>
         );
       })}

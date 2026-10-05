@@ -1,6 +1,6 @@
-import { countdownLabel, daysUntil } from "@/lib/format";
+import { daysUntil } from "@/lib/format";
 import type { Lang } from "@/lib/i18n";
-import { translate } from "@/lib/i18n";
+import { fmtShort, translate } from "@/lib/i18n";
 
 /** Big signed day count + label. Red when overdue, amber within 3 days. */
 export function Countdown({
@@ -30,8 +30,10 @@ export function Countdown({
       <div className="text-[0.62rem] font-semibold uppercase tracking-wide">
         {done ? t("done") : d < 0 ? t("days over") : d === 1 ? t("day") : t("days")}
       </div>
-      <div className="mt-0.5 text-[0.62rem] text-[var(--color-text-dim)]">
-        {countdownLabel(date, lang)}
+      {/* The date itself, not "in 3 days" again: the number above already
+          says how far away it is. */}
+      <div className="mt-1 text-[0.68rem] text-[var(--color-text-dim)]">
+        {fmtShort(date, lang)}
       </div>
     </div>
   );

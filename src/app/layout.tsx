@@ -6,8 +6,9 @@ import "./globals.css";
 import { getUser } from "@/lib/session";
 import { resolveThemeId, themeColor } from "@/lib/themes";
 import { MOTION_INIT_SCRIPT } from "@/lib/motion";
-import { langOf } from "@/lib/i18n";
+import { getLang } from "@/lib/i18n-server";
 import { I18nProvider } from "@/components/I18nProvider";
+import { startupImages } from "@/lib/splash";
 
 /**
  * Two faces, strictly rationed — see the design direction.
@@ -41,7 +42,12 @@ export const metadata: Metadata = {
   title: "Life Hub",
   description: "Shared life & business admin — tasks, deadlines, subscriptions, budget.",
   applicationName: "Life Hub",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "Life Hub" },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Life Hub",
+    startupImage: startupImages,
+  },
   manifest: "/manifest.webmanifest",
 };
 
@@ -62,7 +68,7 @@ export async function generateViewport(): Promise<Viewport> {
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   // Signed-out routes (/login) resolve to the default palette.
   const user = await getUser();
-  const lang = langOf(user?.locale);
+  const lang = await getLang();
 
   return (
     <html
