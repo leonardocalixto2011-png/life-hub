@@ -127,6 +127,7 @@ export async function findInviteByToken(token: string) {
       id: true,
       email: true,
       claimedEmail: true,
+      createdById: true,
       hubId: true,
       expiresAt: true,
       createdBy: { select: { name: true } },

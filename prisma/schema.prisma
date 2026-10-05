@@ -88,6 +88,7 @@ model User {
   appInvitesUsed     AppInvite[]             @relation("AppInviteUsedBy")
   membershipsInvited HubMembership[]         @relation("MembershipInvitedBy")
   emailChanges       EmailChange[]
+  password           UserPassword?
 }
 
 /// An invitation to the app itself, not to a hub. Sent by email (bound to that
@@ -1028,4 +1029,17 @@ model Activity {
   createdAt   DateTime     @default(now())
 
   @@index([hubId, createdAt])
+}
+
+/// A password, for people who'd rather type one than wait for an emailed
+/// link. Optional: the link still works for everyone. Kept out of `User` on
+/// purpose: User rows are read all over the app (rosters, includes), and a
+/// hash must never ride along into one of those. Server-only like AppInvite:
+/// RLS on, no policy, no grant for app_user.
+model UserPassword {
+  userId    String   @id
+  /// scrypt, self-describing: scrypt$N$r$p$salt$hash (lib/password.ts).
+  hash      String
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

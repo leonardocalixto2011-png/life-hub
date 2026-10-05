@@ -18,6 +18,9 @@ export type SessionUser = {
   interests: string[];
   /** Null until they dismiss the one-time "AI is done by Anthropic (US)" notice. */
   aiNoticeAt: Date | null;
+  /** When the address was proven by an opened link; null for an account made
+   *  with a password on an invitation that hasn't opened its link yet. */
+  emailVerified: Date | null;
   /** Their @handle, lowercase; null until they pick one. */
   username: string | null;
   avatarUrl: string | null;
@@ -63,6 +66,7 @@ export const getUser = cache(async (): Promise<SessionUser | null> => {
       aiNoticeAt: true,
       username: true,
       avatarUrl: true,
+      emailVerified: true,
     },
   });
   return user?.email
@@ -77,6 +81,7 @@ export const getUser = cache(async (): Promise<SessionUser | null> => {
         onboardedAt: user.onboardedAt,
         interests: user.interests,
         aiNoticeAt: user.aiNoticeAt,
+        emailVerified: user.emailVerified,
         username: user.username,
         avatarUrl: user.avatarUrl,
       }

@@ -92,3 +92,42 @@ export async function sendMagicLinkEmail(to: string, url: string): Promise<void>
     `,
   });
 }
+
+/**
+ * For someone who created their account with a password on an invitation:
+ * they're already in, and this link confirms the address is theirs. Same
+ * kind of link as a sign-in link (Auth.js marks the address verified when
+ * it is opened), different words.
+ */
+export async function sendConfirmAddressEmail(to: string, url: string): Promise<void> {
+  if (!process.env.AUTH_RESEND_KEY) {
+    console.log(`\n✉️  [auth:dev] confirm-address link for ${to}\n   ${url}\n`);
+    return;
+  }
+  const href = url.replace(/"/g, "&quot;");
+  await sendEmail({
+    to,
+    kind: "confirm-address",
+    subject: "Confirme ton adresse Life Hub · Confirm your Life Hub address",
+    text: `Ton compte Life Hub est créé. Ouvre ce lien pour confirmer que cette adresse est bien la tienne (valide 24 heures) :\n${url}\n\nSi tu n'as rien créé, ignore ce courriel.\n\n---\nYour Life Hub account is ready. Open this link to confirm this address is yours (works for 24 hours):\n${url}\n\nIf you didn't create an account, ignore this email.`,
+    html: `
+      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#222">
+        <h1 lang="fr" style="font-size:18px;margin:0 0 8px">Confirme ton adresse</h1>
+        <p lang="fr" style="font-size:15px;line-height:1.5;margin:0 0 20px">
+          Ton compte Life Hub est créé. Touche le bouton pour confirmer que cette adresse est bien la tienne. Le lien marche pendant 24 heures.
+        </p>
+        <p style="margin:0 0 20px">
+          <a href="${href}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-size:15px;font-weight:600">
+            Confirmer · Confirm
+          </a>
+        </p>
+        <p lang="en" style="color:#555;font-size:14px;line-height:1.5;margin:0 0 20px">
+          Your Life Hub account is ready. Tap the button to confirm this address is yours. The link works for 24 hours.
+        </p>
+        <p style="color:#888;font-size:12px;line-height:1.5;margin:0">
+          Tu n'as rien créé ? Ignore ce courriel. · Didn't create an account? Ignore this email.
+        </p>
+      </div>
+    `,
+  });
+}

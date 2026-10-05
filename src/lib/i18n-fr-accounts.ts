@@ -196,4 +196,46 @@ export const FR_ACCOUNTS: Record<string, string> = {
     "Rien après quelques minutes ? Cherche « Life Hub » dans les indésirables ou les promotions, vérifie l'adresse ci-dessus, puis renvoie le lien.",
   "Send the link again": "Renvoyer le lien",
   "Use another address": "Utiliser une autre adresse",
+  // ---- passwords ---------------------------------------------------------------
+  "Password": "Mot de passe",
+  "(if you set one)": "(si tu en as un)",
+  "One moment…": "Un instant…",
+  "Sign in": "Se connecter",
+  "Email me a sign-in link instead": "M'envoyer un lien par courriel à la place",
+  "Wrong email or password. No password yet? Get a link by email, then add one under Your account.":
+    "Adresse ou mot de passe incorrect. Pas encore de mot de passe ? Reçois un lien par courriel, puis ajoutes-en un dans Ton compte.",
+  "Choose a password": "Choisis un mot de passe",
+  "At least 8 characters. Your phone can save it for you.": "Au moins 8 caractères. Ton téléphone peut le retenir pour toi.",
+  "This address already has an account. Sign in instead.": "Cette adresse a déjà un compte. Connecte-toi plutôt.",
+  "You're in right away. We also email you a link to confirm the address is yours.":
+    "Tu entres tout de suite. On t'envoie aussi un lien par courriel pour confirmer que l'adresse est bien la tienne.",
+  "No password: email me a link instead": "Sans mot de passe : m'envoyer un lien",
+  "Your address stays private: other people see your name and username.":
+    "Ton adresse reste privée : les autres voient ton nom et ton nom d'utilisateur.",
+  "Use at least 8 characters.": "Utilise au moins 8 caractères.",
+  "Keep it under 128 characters.": "Garde-le sous 128 caractères.",
+  "That password is too common. Pick another.": "Ce mot de passe est trop courant. Choisis-en un autre.",
+  "Don't use your email address as your password.": "N'utilise pas ton adresse courriel comme mot de passe.",
+  "Your account is ready. Sign in with your email and password.":
+    "Ton compte est prêt. Connecte-toi avec ton adresse et ton mot de passe.",
+  "You can sign in with your email and password, or with an emailed link — both work.":
+    "Tu peux te connecter avec ton adresse et ton mot de passe, ou avec un lien par courriel : les deux marchent.",
+  "Optional. With a password you sign in right away instead of waiting for an email. Emailed links keep working.":
+    "Optionnel. Avec un mot de passe, tu te connectes tout de suite au lieu d'attendre un courriel. Les liens par courriel marchent toujours.",
+  "Current password": "Mot de passe actuel",
+  "New password": "Nouveau mot de passe",
+  "Change the password": "Changer le mot de passe",
+  "Save the password": "Enregistrer le mot de passe",
+  "Current password, to remove it": "Mot de passe actuel, pour le retirer",
+  "Remove the password (links only)": "Retirer le mot de passe (liens seulement)",
+  "Forgot it? Sign out, sign back in with an emailed link, then set a new one here within 15 minutes.":
+    "Oublié ? Déconnecte-toi, reconnecte-toi avec un lien par courriel, puis choisis-en un nouveau ici dans les 15 minutes.",
+  "Your current password isn't right. Forgot it? Sign out, sign back in with an emailed link, and you can set a new one here for 15 minutes.":
+    "Ton mot de passe actuel n'est pas le bon. Oublié ? Déconnecte-toi, reconnecte-toi avec un lien par courriel, et tu pourras en choisir un nouveau ici pendant 15 minutes.",
+  "Password changed.": "Mot de passe changé.",
+  "Password saved. You can now sign in with it.": "Mot de passe enregistré. Tu peux maintenant te connecter avec.",
+  "Password removed. You'll sign in with an emailed link.": "Mot de passe retiré. Tu te connecteras avec un lien par courriel.",
+  "Sent. Open the link in the email to confirm your address.": "Envoyé. Ouvre le lien dans le courriel pour confirmer ton adresse.",
+  "Confirm your address: open the link we sent to {email}.": "Confirme ton adresse : ouvre le lien envoyé à {email}.",
+  "Resend": "Renvoyer",
 };

@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { signOut } from "@/auth";
+import { signIn, signOut } from "@/auth";
+import { signedInByFreshLink } from "@/lib/fresh-link";
 import { requireUser } from "@/lib/session";
 import { deleteAccount } from "@/lib/account";
 import { prisma } from "@/lib/prisma";
@@ -16,7 +17,8 @@ import { blobUrlSchema } from "@/lib/blob-url";
 import { deleteBlobIfUnreferenced } from "@/lib/blob-delete";
 import { hashedKey, rateLimit } from "@/lib/rate-limit";
 import { appUrl } from "@/lib/app-invites";
-import { sendEmailChangeConfirm, sendEmailChangedNotice } from "@/lib/account-emails";
+import { sendEmailChangeConfirm, sendEmailChangedNotice, sendPasswordChangedNotice } from "@/lib/account-emails";
+import { hasPassword, passwordProblem, setPasswordFor, verifyPassword } from "@/lib/password";
 
 /**
  * The name other hub members see. It matters more now that members no longer
@@ -188,4 +190,65 @@ export async function confirmEmailChange(token: string) {
   }
   revalidatePath("/", "layout");
   redirect("/account?changed=1");
+}
+
+async function checkCurrent(userId: string, formData: FormData) {
+  if (!(await hasPassword(userId)) || (await signedInByFreshLink())) return;
+  const current = String(formData.get("current") ?? "");
+  const row = await prisma.userPassword.findUnique({ where: { userId }, select: { hash: true } });
+  if (!current || !row || !(await verifyPassword(current, row.hash))) {
+    throw new Error("Your current password isn't right. Forgot it? Sign out, sign back in with an emailed link, and you can set a new one here for 15 minutes.");
+  }
+}
+
+/** Sets or changes the password. The emailed link keeps working either way. */
+export async function setPassword(formData: FormData): Promise<ActionResult> {
+  return formResult(async () => {
+    const user = await requireUser();
+    if (!(await rateLimit(`pw-change:${user.id}`, 10, 3600)).ok) {
+      throw new Error("Too many tries. Wait a little and try again.");
+    }
+    await checkCurrent(user.id, formData);
+    const next = String(formData.get("password") ?? "");
+    const problem = passwordProblem(next, user.email);
+    if (problem) throw new Error(problem);
+    const had = await hasPassword(user.id);
+    await setPasswordFor(user.id, next);
+    // A change nobody expected should never be silent.
+    try {
+      await sendPasswordChangedNotice({ to: user.email, privacyUrl: `${appUrl()}/confidentialite`, removed: false });
+    } catch {
+      // Logged in lib/email.ts; the change itself stands.
+    }
+    revalidatePath("/account");
+    return { notice: had ? "Password changed." : "Password saved. You can now sign in with it." };
+  });
+}
+
+/** Back to emailed links only. */
+export async function removePassword(formData: FormData): Promise<ActionResult> {
+  return formResult(async () => {
+    const user = await requireUser();
+    if (!(await rateLimit(`pw-change:${user.id}`, 10, 3600)).ok) {
+      throw new Error("Too many tries. Wait a little and try again.");
+    }
+    await checkCurrent(user.id, formData);
+    await prisma.userPassword.deleteMany({ where: { userId: user.id } });
+    try {
+      await sendPasswordChangedNotice({ to: user.email, privacyUrl: `${appUrl()}/confidentialite`, removed: true });
+    } catch {
+      // As above.
+    }
+    revalidatePath("/account");
+    return { notice: "Password removed. You'll sign in with an emailed link." };
+  });
+}
+
+/** Sends the address-confirmation link again (the reminder on /today). */
+export async function resendConfirmation(): Promise<ActionResult> {
+  return formResult(async () => {
+    const user = await requireUser();
+    await signIn("resend", { email: user.email, redirect: false, redirectTo: "/today" });
+    return { notice: "Sent. Open the link in the email to confirm your address." };
+  });
 }

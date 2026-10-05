@@ -3,15 +3,18 @@
 import { useActionState, useState } from "react";
 import { RotateCw } from "lucide-react";
 
-import { requestMagicLink, type LoginState } from "./actions";
+import { login, type LoginState } from "./actions";
 import { useT } from "@/components/I18nProvider";
 
 const initial: LoginState = { sent: false };
 
 export function LoginForm({ open, next }: { open: boolean; next?: string }) {
-  const [state, formAction, pending] = useActionState(requestMagicLink, initial);
+  const [state, formAction, pending] = useActionState(login, initial);
   const t = useT();
   const [editing, setEditing] = useState(false);
+  // Controlled, so a failed try (wrong password, taken address) doesn't wipe
+  // the address: React resets uncontrolled fields after every form action.
+  const [email, setEmail] = useState("");
 
   if (state.sent && !editing) {
     return (
@@ -57,14 +60,31 @@ export function LoginForm({ open, next }: { open: boolean; next?: string }) {
         autoComplete="email"
         inputMode="email"
         required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
         placeholder={t("you@example.com")}
+        className="field mt-2"
+      />
+      <label htmlFor="password" className="mt-3 block text-sm font-semibold">
+        {t("Password")}{" "}
+        <span className="font-normal text-[var(--color-text-dim)]">{t("(if you set one)")}</span>
+      </label>
+      <input
+        id="password"
+        name="password"
+        type="password"
+        autoComplete="current-password"
+        maxLength={128}
         className="field mt-2"
       />
       {state.error && (
         <p className="mt-2 text-sm text-[var(--color-danger)]">{t(state.error)}</p>
       )}
-      <button type="submit" disabled={pending} className="btn btn-primary mt-3 w-full">
-        {pending ? t("Sending…") : t("Send sign-in link")}
+      <button type="submit" name="intent" value="password" disabled={pending} className="btn btn-primary mt-3 w-full">
+        {pending ? t("One moment…") : t("Sign in")}
+      </button>
+      <button type="submit" name="intent" value="link" disabled={pending} className="btn btn-secondary mt-2 w-full">
+        {t("Email me a sign-in link instead")}
       </button>
       <p className="mt-3 text-xs text-[var(--color-text-dim)]">
         {open
