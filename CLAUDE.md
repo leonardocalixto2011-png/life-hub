@@ -1384,3 +1384,30 @@ request → owner approves → username invite → address change).
   (`trips/colors.ts` `tripGradient`, shared with the trip page's day strip).
 - **Launch screens stay indigo on purpose**: they show the icon the person just
   tapped. Per-theme versions would be 144 images for a half-second screen.
+
+### Passwords, optional (2026-10-05)
+
+Owner asked: sign in with the account directly (not only by emailed link),
+and create the account on the invitation page itself, the email serving as
+verification.
+
+- **`UserPassword`** (separate table, RLS on, no policy, no grant for
+  app_user — like `AppInvite`). scrypt from `node:crypto`, stored as
+  `scrypt$N$r$p$salt$hash` so parameters can rise later. Length 8–128 is the
+  only rule (plus a tiny common list and "not your address"). Failures burn
+  the same time as a real check (`verifyAgainstNothing`).
+- **Login** (`login/actions.ts`): Credentials provider `"password"`; an empty
+  password always means "send me a link". Limits 10/15 min per address, 30/hr
+  per IP. Same error whether the account, the password or the match is wrong.
+- **Invite page**: "Choose a password" creates the account on the spot
+  (`createInvitedAccount` consumes the invite in the same transaction), signs
+  in, and sends a *confirmation* link instead of a sign-in link. "Unconfirmed"
+  = `emailVerified` null **and** a password row — never gate on
+  `emailVerified` alone, older rows predate it. Unconfirmed accounts get a
+  banner and no digest emails.
+- **Reset** = sign in by link; for 15 minutes after (`token.via/authAt`,
+  `lib/fresh-link.ts`) a new password can be set without the old one.
+  Changes/removals email a notice. Other sessions are *not* revoked on change
+  (JWT); passkeys not built (iOS Keychain + Face ID already fills passwords).
+- Remember the `create-app-role.sql` gotcha: re-running it grants
+  `UserPassword` too; re-run the migration's REVOKE.

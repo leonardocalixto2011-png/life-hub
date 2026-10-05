@@ -13,10 +13,11 @@ import { consumeInvite, pendingInviteFor } from "@/lib/app-invites";
  * strangers' financial data with no stated lawful basis. Turn it on
  * deliberately, after those exist — not as a side effect of a deploy.
  *
- * There is no password anywhere in this flow. A magic link *is* the email
- * verification: an address that can't receive the link can't sign in, so
- * "create account", "verify email" and "reset password" collapse into one
- * step, and there is no password hash to leak.
+ * A magic link is still the email verification: an address that can't receive
+ * the link can't sign in. Passwords are optional (lib/password.ts): an account
+ * made with one on an invitation gets in at once, and its address stays
+ * unconfirmed (no digests to it) until the emailed confirmation link is opened.
+ * "Reset password" is: sign in by link, then set a new one within 15 minutes.
  */
 export function signupsOpen(): boolean {
   // Also requires LEGAL_PUBLISHED=1: strangers must not be able to create an
@@ -55,23 +56,7 @@ export async function findOrCreateUser(email: string, name?: string | null): Pro
   if (existing) return true;
 
   const invite = await pendingInviteFor(address);
-  if (invite) {
-    const created = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: { email: address, name: name?.trim() || null, role: "MEMBER", invitedById: invite.createdById },
-      });
-      // Single use: if another click already used it, roll the account back.
-      if (!(await consumeInvite(tx, invite, user.id))) throw new InviteRace();
-      return true;
-    }).catch((e) => {
-      if (e instanceof InviteRace) return false;
-      throw e;
-    });
-    if (created) {
-      logInfo("signup.created", { via: "app-invite" });
-      return true;
-    }
-  }
+  if (invite && (await createInvitedAccount(address, invite, { name }))) return true;
 
   if (!signupsOpen()) return false;
 
@@ -93,6 +78,35 @@ export async function findOrCreateUser(email: string, name?: string | null): Pro
 
   logInfo("signup.created", { via: "magic-link" });
   return true;
+}
+
+/**
+ * Creates the account an invitation allows, and uses the invitation up, in
+ * one transaction: if another tab or click already used it, nothing is
+ * created and this returns false. With `passwordHash`, the account gets a
+ * password at the same time (an invitation claimed with a password, on
+ * /invite/<token>); its address is confirmed later, by the emailed link.
+ */
+export async function createInvitedAccount(
+  address: string,
+  invite: { id: string; createdById: string; hubId: string | null },
+  opts: { name?: string | null; passwordHash?: string } = {},
+): Promise<boolean> {
+  const created = await prisma
+    .$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { email: address, name: opts.name?.trim() || null, role: "MEMBER", invitedById: invite.createdById },
+      });
+      if (!(await consumeInvite(tx, invite, user.id))) throw new InviteRace();
+      if (opts.passwordHash) await tx.userPassword.create({ data: { userId: user.id, hash: opts.passwordHash } });
+      return true;
+    })
+    .catch((e) => {
+      if (e instanceof InviteRace) return false;
+      throw e;
+    });
+  if (created) logInfo("signup.created", { via: opts.passwordHash ? "app-invite-password" : "app-invite" });
+  return created;
 }
 
 class InviteRace extends Error {}

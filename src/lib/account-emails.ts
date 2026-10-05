@@ -120,3 +120,25 @@ export async function sendEmailChangedNotice(opts: { to: string; newEmail: strin
     }),
   });
 }
+
+/** Sent whenever a password is set, changed or removed: a change the owner
+ *  didn't make must never be silent. */
+export async function sendPasswordChangedNotice(opts: { to: string; privacyUrl: string; removed: boolean }) {
+  const link = escapeHtml(opts.privacyUrl);
+  const fr = opts.removed
+    ? "Le mot de passe de ton compte Life Hub a été retiré. Tu te connectes maintenant avec un lien par courriel."
+    : "Le mot de passe de ton compte Life Hub vient d'être choisi ou changé.";
+  const en = opts.removed
+    ? "The password on your Life Hub account was removed. You now sign in with an emailed link."
+    : "The password on your Life Hub account was just set or changed.";
+  await sendEmail({
+    kind: "password-changed",
+    to: opts.to,
+    subject: "Mot de passe Life Hub modifié · Life Hub password changed",
+    text: `${fr} Si ce n'est pas toi, connecte-toi avec un lien par courriel et change-le, puis écris-nous : ${opts.privacyUrl}\n\n${en} If this wasn't you, sign in with an emailed link and change it, then write to us: ${opts.privacyUrl}`,
+    html: layout({
+      fr: `<p style="margin:0">${fr} Si ce n'est pas toi, connecte-toi avec un lien par courriel et change-le, puis écris-nous à l'adresse indiquée dans la <a href="${link}">politique de confidentialité</a>.</p>`,
+      en: `<p style="margin:0">${en} If this wasn't you, sign in with an emailed link and change it, then write to the address in the <a href="${link}">privacy policy</a>.</p>`,
+    }),
+  });
+}

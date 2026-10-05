@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { signIn, signOut } from "@/auth";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { getUser } from "@/lib/session";
 import { SIGNED_OUT_LANG_COOKIE } from "@/lib/i18n-server";
@@ -35,6 +36,38 @@ function safeNext(value: FormDataEntryValue | null): string {
 }
 
 export type LoginState = { sent: boolean; error?: string; email?: string; resent?: boolean };
+
+/**
+ * The login form's two buttons share one form: "Se connecter" (email +
+ * password) and "M'envoyer un lien". Which one was pressed arrives as
+ * `intent`.
+ */
+export async function login(prev: LoginState, formData: FormData): Promise<LoginState> {
+  const password = String(formData.get("password") ?? "");
+  // No password typed means a link, whichever button (or Enter) sent it:
+  // most accounts have no password, and that must keep working as before.
+  if (formData.get("intent") === "link" || !password) return requestMagicLink(prev, formData);
+
+  const parsed = schema.safeParse({ email: formData.get("email") });
+  if (!parsed.success) return { sent: false, error: "Enter a valid email address." };
+  const email = parsed.data.email.toLowerCase();
+
+  try {
+    await signIn("password", { email, password, redirect: false });
+  } catch (err) {
+    if (err instanceof AuthError) {
+      // One message for every failure (no account, no password set, wrong
+      // password, too many tries): src/auth.ts keeps them indistinguishable.
+      return {
+        sent: false,
+        email,
+        error: "Wrong email or password. No password yet? Get a link by email, then add one under Your account.",
+      };
+    }
+    throw err;
+  }
+  redirect(safeNext(formData.get("next")));
+}
 
 export async function requestMagicLink(
   _prev: LoginState,

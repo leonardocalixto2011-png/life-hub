@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import Link from "next/link";
 import { MailCheck, RotateCw } from "lucide-react";
 
 import { claimInvite, type ClaimState } from "../actions";
@@ -13,6 +14,9 @@ export function ClaimForm({ token, hint }: { token: string; hint: string | null 
   const t = useT();
   // "Use another address" goes back to the form; the next send hides it again.
   const [editing, setEditing] = useState(false);
+  // Controlled, so a failed try (wrong password, taken address) doesn't wipe
+  // the address: React resets uncontrolled fields after every form action.
+  const [email, setEmail] = useState("");
 
   if (state.sent && !editing) {
     return (
@@ -56,17 +60,43 @@ export function ClaimForm({ token, hint }: { token: string; hint: string | null 
         autoComplete="email"
         inputMode="email"
         required
-        defaultValue={editing ? state.email : undefined}
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
         placeholder={hint ?? "you@example.com"}
         className="field"
       />
       {hint && <p className="field-hint mt-0">{t("This invitation was sent to {email}.", { email: hint })}</p>}
+      <label htmlFor="password" className="block text-sm font-semibold">
+        {t("Choose a password")}
+      </label>
+      <input
+        id="password"
+        name="password"
+        type="password"
+        autoComplete="new-password"
+        required
+        minLength={8}
+        maxLength={128}
+        className="field"
+      />
+      <p className="field-hint mt-0">{t("At least 8 characters. Your phone can save it for you.")}</p>
       {state.error && <p className="text-sm text-[var(--color-danger)]">{t(state.error)}</p>}
-      <button type="submit" disabled={pending} className="btn btn-primary btn-lg w-full">
-        {pending ? t("Sending…") : t("Create my account")}
+      {state.error === "This address already has an account. Sign in instead." && (
+        <Link href="/login" className="btn btn-secondary w-full">
+          {t("Sign in")}
+        </Link>
+      )}
+      <button type="submit" name="intent" value="password" disabled={pending} className="btn btn-primary btn-lg w-full">
+        {pending ? t("One moment…") : t("Create my account")}
       </button>
       <p className="text-xs text-[var(--color-text-dim)]">
-        {t("We email you a link instead of asking for a password. Your address stays private: other people see your name and username.")}
+        {t("You're in right away. We also email you a link to confirm the address is yours.")}
+      </p>
+      <button type="submit" name="intent" value="link" formNoValidate disabled={pending} className="btn btn-ghost w-full">
+        {t("No password: email me a link instead")}
+      </button>
+      <p className="text-xs text-[var(--color-text-dim)]">
+        {t("Your address stays private: other people see your name and username.")}
       </p>
     </form>
   );
