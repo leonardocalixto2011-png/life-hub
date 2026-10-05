@@ -12,6 +12,9 @@ export const config = {
   matcher: [
     // Everything except API routes (they auth themselves), Next internals and
     // static PWA assets.
-    "/((?!api/|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons/).*)",
+    // apple-touch-icon.png and splash/ must stay public: iOS fetches them
+    // while installing from the (signed-out) login page, and a redirect to
+    // /login there leaves the home screen with a blank tile.
+    "/((?!api/|_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png|apple-touch-icon.png|manifest.webmanifest|sw.js|icons/|splash/).*)",
   ],
 };

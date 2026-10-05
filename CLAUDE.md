@@ -1357,3 +1357,26 @@ request → owner approves → username invite → address change).
   (never verified, never onboarded, nothing authored).
 - Not built: a hub-switcher badge for pending requests (owners get a push and
   see them on the members page); per-member removal of a co-owner.
+
+### Brand: icon, launch screens, French-first login (2026-10-05)
+
+- **One source for every brand image**: `scripts/brand/mark.svg` (a hub with
+  three people around it, indigo gradient). `node scripts/gen-icons.mjs`
+  renders the PWA icons, `src/app/apple-icon.png` + `public/apple-touch-icon.png`,
+  `src/app/icon.svg` + `favicon.ico`, the shortcut icons, the Android
+  notification badge and 24 iOS launch screens (`public/splash/`, light +
+  dark per iPhone size). `src/lib/splash.ts` emits the matching
+  `apple-touch-startup-image` links — keep its size list in sync with the
+  script's. `components/Logo.tsx` is the same art inline; change both together.
+- ⚠️ **The home-screen icon used to be a flat indigo square**: the old
+  generator drew a placeholder, and `/apple-touch-icon.png` sat behind the
+  auth proxy, so iOS (installing from the signed-out login page) got a
+  redirect instead of an image. `proxy.ts` now excludes the icon and splash
+  paths — keep them public. iOS caches the icon at install: an existing
+  home-screen copy only updates after removing it and adding it again.
+- **Do not set `metadata.icons`** in the root layout: it silently replaces the
+  file-convention `icon.svg` / `apple-icon.png` links.
+- **Signed-out pages are French first** (`getLang` in `lib/i18n-server.ts`):
+  French unless the visitor taps "English" on the login screen (`lh_lang`
+  cookie). Same Charter-of-the-French-language call as the legal pages — no
+  Accept-Language sniffing.

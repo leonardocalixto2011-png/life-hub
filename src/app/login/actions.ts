@@ -4,7 +4,10 @@ import { AuthError } from "next-auth";
 import { z } from "zod";
 
 import { signIn, signOut } from "@/auth";
+import { cookies } from "next/headers";
+
 import { getUser } from "@/lib/session";
+import { SIGNED_OUT_LANG_COOKIE } from "@/lib/i18n-server";
 
 const schema = z.object({ email: z.string().email() });
 
@@ -71,4 +74,18 @@ export async function requestMagicLink(
 export async function clearStaleSession(): Promise<void> {
   if (await getUser()) return;
   await signOut({ redirect: false });
+}
+
+/** The login screen's "English / Français" link, for people with no account
+ *  yet. A signed-in person's language lives on their profile instead. */
+export async function setSignedOutLang(formData: FormData): Promise<void> {
+  const lang = formData.get("lang") === "en" ? "en" : "fr";
+  const jar = await cookies();
+  jar.set(SIGNED_OUT_LANG_COOKIE, lang, {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax",
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+  });
 }
