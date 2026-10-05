@@ -18,6 +18,9 @@ export type SessionUser = {
   interests: string[];
   /** Null until they dismiss the one-time "AI is done by Anthropic (US)" notice. */
   aiNoticeAt: Date | null;
+  /** Their @handle, lowercase; null until they pick one. */
+  username: string | null;
+  avatarUrl: string | null;
 };
 
 export type SessionHub = {
@@ -38,10 +41,15 @@ export const CURRENT_HUB_COOKIE = "current_hub";
  */
 export const getUser = cache(async (): Promise<SessionUser | null> => {
   const session = await auth();
+  // By id, from the token, wherever it is present: the address can change
+  // (/account → change email) while the JWT keeps the one it was issued with.
+  // Tokens always carry the id (auth.config.ts jwt callback); the email path
+  // is only a fallback for one minted before that.
+  const id = session?.user?.id;
   const email = session?.user?.email?.toLowerCase();
-  if (!email) return null;
+  if (!id && !email) return null;
   const user = await prisma.user.findUnique({
-    where: { email },
+    where: id ? { id } : { email: email! },
     select: {
       id: true,
       email: true,
@@ -53,6 +61,8 @@ export const getUser = cache(async (): Promise<SessionUser | null> => {
       onboardedAt: true,
       interests: true,
       aiNoticeAt: true,
+      username: true,
+      avatarUrl: true,
     },
   });
   return user?.email
@@ -67,6 +77,8 @@ export const getUser = cache(async (): Promise<SessionUser | null> => {
         onboardedAt: user.onboardedAt,
         interests: user.interests,
         aiNoticeAt: user.aiNoticeAt,
+        username: user.username,
+        avatarUrl: user.avatarUrl,
       }
     : null;
 });
@@ -111,10 +123,9 @@ export const listPendingInvites = cache(async (userId: string) => {
   const rows = await prisma.hubMembership.findMany({
     where: { userId, status: "INVITED" },
     select: {
-      hub: {
-        // Name only: an invite must not hand over the inviter's address.
-        select: { id: true, name: true, color: true, createdBy: { select: { name: true } } },
-      },
+      // Name only: an invite must not hand over the inviter's address.
+      invitedBy: { select: { name: true } },
+      hub: { select: { id: true, name: true, color: true, createdBy: { select: { name: true } } } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -122,7 +133,9 @@ export const listPendingInvites = cache(async (userId: string) => {
     id: r.hub.id,
     name: r.hub.name,
     color: r.hub.color,
-    invitedBy: r.hub.createdBy.name ?? "Someone",
+    // Who actually sent it; the hub's creator for invites from before that
+    // was recorded.
+    invitedBy: r.invitedBy?.name ?? r.hub.createdBy.name ?? "Someone",
   }));
 });
 
@@ -155,8 +168,11 @@ export async function requireHub(): Promise<{ user: SessionUser; hub: SessionHub
     // Someone who was invited but hasn't accepted yet has zero active hubs.
     // Sending them to "Create a hub" buried the invite behind a form they had
     // no reason to fill in — a real member sat as "invited" for this reason.
+    // A pending join request counts too: that person is waiting on an owner,
+    // and /hubs/invites is where they see the request and can make a hub
+    // of their own meanwhile.
     const pending = await prisma.hubMembership.count({
-      where: { userId: user.id, status: "INVITED" },
+      where: { userId: user.id, status: { in: ["INVITED", "REQUESTED"] } },
     });
     redirect(pending > 0 ? "/hubs/invites" : "/hubs/new");
   }

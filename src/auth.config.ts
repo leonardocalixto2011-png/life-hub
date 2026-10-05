@@ -39,7 +39,10 @@ export const authConfig = {
         // Legal pages must be readable before signing in — they are linked
         // from the login screen. Exact paths, not prefixes.
         pathname === "/confidentialite" ||
-        pathname === "/conditions";
+        pathname === "/conditions" ||
+        // An invitation must open before the person has an account. The
+        // page itself only shows who invited them and asks for an address.
+        pathname.startsWith("/invite/");
 
       if (isPublic) return true;
       return isLoggedIn;

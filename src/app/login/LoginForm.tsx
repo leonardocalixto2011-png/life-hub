@@ -7,7 +7,7 @@ import { useT } from "@/components/I18nProvider";
 
 const initial: LoginState = { sent: false };
 
-export function LoginForm({ open }: { open: boolean }) {
+export function LoginForm({ open, next }: { open: boolean; next?: string }) {
   const [state, formAction, pending] = useActionState(requestMagicLink, initial);
   const t = useT();
 
@@ -18,7 +18,7 @@ export function LoginForm({ open }: { open: boolean }) {
         <p className="mt-1 text-[var(--color-text-dim)]">
           {open
             ? t("A sign-in link is on its way. It expires in 24 hours — clicking it both verifies your address and signs you in, so there is no password to set.")
-            : t("If that address has access, a sign-in link is on its way. It expires in 24 hours.")}
+            : t("If that address has an account or an invitation, a sign-in link is on its way. It expires in 24 hours.")}
         </p>
         <p className="mt-3 text-xs text-[var(--color-text-dim)]">
           {t("Running locally with no email key? The link is printed in the dev server console.")}
@@ -29,6 +29,7 @@ export function LoginForm({ open }: { open: boolean }) {
 
   return (
     <form action={formAction} className="card p-5">
+      {next && <input type="hidden" name="next" value={next} />}
       <label htmlFor="email" className="text-sm font-semibold">
         {t("Email")}
       </label>
@@ -51,7 +52,7 @@ export function LoginForm({ open }: { open: boolean }) {
       <p className="mt-3 text-xs text-[var(--color-text-dim)]">
         {open
           ? t("New here? Enter your email — the same link creates your account.")
-          : t("Invite-only. Ask an admin to add your address.")}
+          : t("Invite-only for now: someone who uses Life Hub can send you an invitation.")}
       </p>
     </form>
   );

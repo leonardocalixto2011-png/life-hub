@@ -386,6 +386,53 @@ async function main() {
       ledgerDeleteBlocked && consentStillThere !== null,
     );
 
+    // --- account system: invitations and address changes are server-only ----
+    // Torn down with the users below (both cascade from User).
+    const inviteA1 = await db.appInvite.create({
+      data: {
+        tokenHash: `verify-${stamp}`, createdById: userA1.id, email: email("invitee"),
+        expiresAt: new Date(Date.now() + 864e5),
+      },
+    });
+    const changeA1 = await db.emailChange.create({
+      data: { userId: userA1.id, newEmail: email("new"), tokenHash: `verify-${stamp}`, expiresAt: new Date(Date.now() + 36e5) },
+    });
+    let ownInvitesRead = null;
+    try {
+      ownInvitesRead = await asAppUser(userA1.id, (tx) => tx.appInvite.findMany({ where: { id: inviteA1.id } }));
+    } catch {
+      ownInvitesRead = null;
+    }
+    check(
+      "app_user cannot read invitations, not even its own (no grant / RLS)",
+      ownInvitesRead === null || ownInvitesRead.length === 0,
+    );
+    let ownChangeRead = null;
+    try {
+      ownChangeRead = await asAppUser(userA1.id, (tx) => tx.emailChange.findMany({ where: { id: changeA1.id } }));
+    } catch {
+      ownChangeRead = null;
+    }
+    check(
+      "app_user cannot read pending address changes (no grant / RLS)",
+      ownChangeRead === null || ownChangeRead.length === 0,
+    );
+
+    // A join request is the requester's own row: other people — even the
+    // hub's members — don't see it through the app role, and it can't be
+    // turned into a membership by the requester themself except by the
+    // server's owner-checked approval (enforced in code; RLS keeps it private).
+    const requestB1toA = await db.hubMembership.create({
+      data: { hubId: hubA.id, userId: userB1.id, role: "MEMBER", status: "REQUESTED" },
+    });
+    const a1SeesRequest = await asAppUser(userA1.id, (tx) =>
+      tx.hubMembership.findMany({ where: { id: requestB1toA.id } }),
+    );
+    check("A1 (owner of A) sees no one else's membership row via app_user", a1SeesRequest.length === 0);
+    const b1Tasks = await asAppUser(userB1.id, (tx) => tx.task.findMany({ where: { hubId: hubA.id } }));
+    check("B1 with a pending REQUEST to Hub A sees none of its tasks", b1Tasks.length === 0);
+    await db.hubMembership.delete({ where: { id: requestB1toA.id } });
+
     // --- activity feed: hub-scoped, a private item's line is its actor's only --
     // Torn down by the hub delete below (Activity cascades from Hub).
     const sharedActA1 = await db.activity.create({

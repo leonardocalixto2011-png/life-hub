@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { logInfo } from "@/lib/observability";
 import { legalPublished } from "@/content/legal/version";
+import { consumeInvite, pendingInviteFor } from "@/lib/app-invites";
 
 /**
  * Self-serve signup, off by default.
@@ -25,14 +26,24 @@ export function signupsOpen(): boolean {
 }
 
 /**
+ * Whether an address with no account may still be sent a sign-in link: when
+ * signups are open, or when someone invited it (lib/app-invites.ts).
+ */
+export async function mayCreateAccount(email: string): Promise<boolean> {
+  if (signupsOpen()) return true;
+  return (await pendingInviteFor(email)) !== null;
+}
+
+/**
  * Called from the Auth.js signIn callback after a link is verified — i.e.
  * only ever for an address that provably received mail. Returns false when
- * the address has no account and signups are closed, which is what keeps the
- * app invite-only.
+ * the address has no account, signups are closed and nobody invited it,
+ * which is what keeps the app invite-only.
  *
- * The new user gets a hub immediately rather than being dropped on
- * /hubs/new: someone arriving with zero context should land on a working
- * app, not a form asking them to name something they don't understand yet.
+ * An invited person gets no hub here: the welcome (/welcome) asks them to
+ * make their own, answer a hub invitation, or ask to join one with a code.
+ * Someone signing up on their own (open signups) gets a hub immediately —
+ * arriving with zero context, they should land on a working app.
  */
 export async function findOrCreateUser(email: string, name?: string | null): Promise<boolean> {
   const address = email.toLowerCase().trim();
@@ -42,6 +53,25 @@ export async function findOrCreateUser(email: string, name?: string | null): Pro
     select: { id: true },
   });
   if (existing) return true;
+
+  const invite = await pendingInviteFor(address);
+  if (invite) {
+    const created = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { email: address, name: name?.trim() || null, role: "MEMBER", invitedById: invite.createdById },
+      });
+      // Single use: if another click already used it, roll the account back.
+      if (!(await consumeInvite(tx, invite, user.id))) throw new InviteRace();
+      return true;
+    }).catch((e) => {
+      if (e instanceof InviteRace) return false;
+      throw e;
+    });
+    if (created) {
+      logInfo("signup.created", { via: "app-invite" });
+      return true;
+    }
+  }
 
   if (!signupsOpen()) return false;
 
@@ -64,3 +94,5 @@ export async function findOrCreateUser(email: string, name?: string | null): Pro
   logInfo("signup.created", { via: "magic-link" });
   return true;
 }
+
+class InviteRace extends Error {}

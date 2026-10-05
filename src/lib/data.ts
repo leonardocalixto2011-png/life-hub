@@ -98,9 +98,9 @@ export async function listMembers(viewerId: string, hubId: string) {
  *   - the row is the viewer themself;
  *   - that member turned on "show my email" for this hub
  *     (`HubMembership.showEmail`, their own choice, per hub);
- *   - the viewer is the hub's OWNER and the row is a pending invite — the
- *     owner typed that address to send the invite and needs it to tell one
- *     unanswered invite from another.
+ *   - the viewer is the hub's OWNER and the row is a pending invite from
+ *     before invites recorded who sent them — those were all typed-in
+ *     addresses, and the owner needs them to tell one invite from another.
  * Everything else gets `email: null`, and the UI falls back to a neutral
  * "Member" (lib/people.ts).
  *
@@ -124,8 +124,10 @@ export async function listHubRoster(
   const viewerIsOwner = viewer.role === "OWNER";
 
   const rows = await prisma.hubMembership.findMany({
-    where: { hubId, ...(opts.includeInvited ? {} : { status: "ACTIVE" }) },
-    include: { user: { select: { id: true, name: true, email: true, role: true } } },
+    // Join requests (REQUESTED) are never part of the roster: the members
+    // page lists them separately, for owners only.
+    where: { hubId, status: opts.includeInvited ? { in: ["ACTIVE", "INVITED"] } : "ACTIVE" },
+    include: { user: { select: { id: true, name: true, email: true, role: true, username: true, avatarUrl: true } } },
     orderBy: opts.includeInvited
       ? [{ status: "asc" }, { role: "asc" }, { joinedAt: "asc" }]
       : [{ role: "asc" }, { joinedAt: "asc" }],
@@ -133,12 +135,20 @@ export async function listHubRoster(
 
   return rows.map((m) => {
     const mayShowEmail =
-      m.userId === viewerId || m.showEmail || (viewerIsOwner && m.status === "INVITED");
+      m.userId === viewerId ||
+      m.showEmail ||
+      // Invites from before `invitedById` existed were all sent by email, so
+      // the owner typed that address. Newer ones may have been sent by
+      // username or picked from a list — the owner never saw an address
+      // there, so none is handed over; the name and @username identify them.
+      (viewerIsOwner && m.status === "INVITED" && m.invitedById === null);
     return {
       id: m.user.id,
       name: m.user.name,
       email: mayShowEmail ? m.user.email : null,
       role: m.user.role,
+      username: m.user.username,
+      avatarUrl: m.user.avatarUrl,
       hubRole: m.role,
       status: m.status,
       joinedAt: m.joinedAt,

@@ -11,6 +11,8 @@ import { InstallHint } from "@/components/InstallHint";
 import { QuickAdd } from "@/components/QuickAdd";
 import { fillQuickAdd } from "@/lib/quickadd-bus";
 import { FIRST_ADD_EXAMPLES, INTERESTS } from "@/lib/onboarding";
+import { UsernameField } from "@/app/(app)/account/UsernameField";
+import { JoinCodeBox } from "@/components/JoinCodeBox";
 import type { FavoriteChip } from "@/lib/favorites";
 import type { Lang } from "@/lib/i18n";
 import {
@@ -61,6 +63,9 @@ export function Welcome({
   ageAttested,
   ageNeeded,
   name,
+  username,
+  suggestedUsername,
+  pendingRequests,
   userId,
   first,
   suggestedHubName,
@@ -80,6 +85,11 @@ export function Welcome({
   /** They tried to finish without attesting — open on that step and say why. */
   ageNeeded: boolean;
   name: string;
+  /** Their saved @handle, or "" if none yet. */
+  username: string;
+  suggestedUsername: string;
+  /** Join requests they sent that no owner has answered yet. */
+  pendingRequests: number;
   userId: string;
   first: string | null;
   suggestedHubName: string;
@@ -105,7 +115,8 @@ export function Welcome({
     s.push("lang");
     // After the language, so the attestation is read in the right one. Left
     // out once it is on record — a replay doesn't ask again.
-    if (!ageAttested) s.push("you");
+    // Also shown to someone without a username yet, to pick one.
+    if (!ageAttested || !username) s.push("you");
     if (!hub || hub.owner) s.push("hub");
     s.push("interests", "notify", "first");
     return s;
@@ -120,6 +131,7 @@ export function Welcome({
   const [isOver14, setIsOver14] = useState(false);
   const [attested, setAttested] = useState(ageAttested);
   const [displayName, setDisplayName] = useState(name);
+  const [handle, setHandle] = useState(username || suggestedUsername);
   const youIndex = steps.indexOf("you");
   /** Everything past the attestation is locked until it is given. */
   const ageLocked = youIndex !== -1 && !attested;
@@ -312,6 +324,8 @@ export function Welcome({
               {t("The people in your hubs see this name — never your email address, unless you choose to show it.")}
             </span>
           </label>
+          <UsernameField value={handle} onChange={setHandle} />
+          {!ageAttested && (
           <label className="check-row items-start">
             <input
               type="checkbox"
@@ -322,6 +336,7 @@ export function Welcome({
             />
             <span>{t("I am 14 or older")}</span>
           </label>
+          )}
           <p id="age-why" className="text-xs text-[var(--color-text-dim)]">
             {t("Life Hub isn't for children under 14. Debts and email analysis ask for 18 or older, when you get to them.")}{" "}
             <Link href="/confidentialite" className="underline">
@@ -338,7 +353,11 @@ export function Welcome({
         label: t("Continue"),
         onClick: () =>
           run(async () => {
-            const r = await saveWelcomeAboutYou({ attested: isOver14, name: displayName });
+            const r = await saveWelcomeAboutYou({
+              attested: ageAttested || isOver14,
+              name: displayName,
+              username: handle,
+            });
             if (r.ok) setAttested(true);
             return r;
           }),
@@ -363,6 +382,11 @@ export function Welcome({
           <p className="text-sm text-[var(--color-text-dim)]">
             {t("A hub is a shared space — your home, a couple, a business. You can invite people later.")}
           </p>
+          {pendingRequests > 0 && !hub && (
+            <p className="card p-3 text-sm" role="status">
+              {t("Your request to join is waiting for an owner. You can make your own hub meanwhile, or skip.")}
+            </p>
+          )}
           <label className="field-label">
             {t("Hub name")}
             <input
@@ -395,13 +419,23 @@ export function Welcome({
           </fieldset>
         </div>
       );
+      body = (
+        <>
+          {body}
+          {!hub && (
+            <div className="border-t border-[var(--color-border)] pt-4">
+              <JoinCodeBox />
+            </div>
+          )}
+        </>
+      );
       primary = {
         label: hub ? t("Save") : t("Create my hub"),
         onClick: () => run(() => saveWelcomeHub({ hubId: hub?.id, name: hubName, color: hubColor })),
       };
       // Skipping with no hub at all still has to leave them somewhere to put
       // things: it takes the suggestion as-is.
-      skip = hub
+      skip = hub || pendingRequests > 0
         ? next
         : () => run(() => saveWelcomeHub({ name: suggestedHubName, color: colors[0] }));
       break;
@@ -548,7 +582,7 @@ export function Welcome({
             type="button"
             className="btn btn-primary btn-lg w-full"
             onClick={primary.onClick}
-            disabled={pending || (step === "you" && !isOver14)}
+            disabled={pending || (step === "you" && !isOver14 && !ageAttested)}
           >
             {pending ? t("Saving…") : primary.label}
           </button>

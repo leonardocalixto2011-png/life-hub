@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { createHub } from "@/app/(app)/hubs/actions";
 import { getT } from "@/lib/i18n-server";
 import { SubmitButton } from "@/components/SubmitButton";
+import { JoinCodeBox } from "@/components/JoinCodeBox";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,10 @@ export default async function NewHubPage() {
           {t("Create hub")}
         </SubmitButton>
       </form>
+
+      <div className="card p-4">
+        <JoinCodeBox />
+      </div>
 
       {hubs.length > 0 && (
         <p className="px-1 text-center text-[0.7rem] text-[var(--color-text-dim)]">

@@ -12,12 +12,14 @@ import { FR_SOCIAL } from "@/lib/i18n-fr-social";
 import { FR_VIZ } from "@/lib/i18n-fr-viz";
 import { FR_INTERACT } from "@/lib/i18n-fr-interact";
 import { FR_SHEETS } from "@/lib/i18n-fr-sheets";
+import { FR_ACCOUNTS } from "@/lib/i18n-fr-accounts";
 
 export const FR: Record<string, string> = {
   ...FR_SOCIAL,
   ...FR_VIZ,
   ...FR_INTERACT,
   ...FR_SHEETS,
+  ...FR_ACCOUNTS,
   // ---- navigation & chrome ------------------------------------------------
   "Today": "Aujourd'hui",
   "Tasks": "Tâches",

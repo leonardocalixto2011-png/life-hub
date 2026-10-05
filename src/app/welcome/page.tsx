@@ -15,6 +15,7 @@ import {
 import { I18nProvider } from "@/components/I18nProvider";
 import { Welcome } from "./Welcome";
 import { hasConsent } from "@/lib/consent";
+import { suggestUsername } from "@/lib/username";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ export default async function WelcomePage({
 }) {
   const user = await requireUser();
   const sp = await searchParams;
-  const [hdrs, store, hubs, ageAttested, inviteRows] = await Promise.all([
+  const [hdrs, store, hubs, ageAttested, inviteRows, requestCount] = await Promise.all([
     headers(),
     cookies(),
     listMyHubs(user.id),
@@ -39,6 +40,7 @@ export default async function WelcomePage({
     prisma.hubMembership.findMany({
       where: { userId: user.id, status: "INVITED" },
       select: {
+        invitedBy: { select: { name: true } },
         hub: {
           select: {
             id: true,
@@ -51,6 +53,7 @@ export default async function WelcomePage({
       },
       orderBy: { createdAt: "desc" },
     }),
+    prisma.hubMembership.count({ where: { userId: user.id, status: "REQUESTED" } }),
   ]);
 
   // Before they've chosen, greet them in their browser's language.
@@ -68,6 +71,9 @@ export default async function WelcomePage({
         ageAttested={ageAttested}
         ageNeeded={sp.age === "1" && !ageAttested}
         name={user.name ?? ""}
+        username={user.username ?? ""}
+        suggestedUsername={suggestUsername(user.name)}
+        pendingRequests={requestCount}
         userId={user.id}
         first={user.name?.trim().split(/\s+/)[0] ?? null}
         suggestedHubName={defaultHubName(first, lang)}
@@ -87,7 +93,7 @@ export default async function WelcomePage({
           id: r.hub.id,
           name: r.hub.name,
           color: r.hub.color,
-          invitedBy: r.hub.createdBy.name ?? (lang === "fr" ? "Quelqu'un" : "Someone"),
+          invitedBy: r.invitedBy?.name ?? r.hub.createdBy.name ?? (lang === "fr" ? "Quelqu'un" : "Someone"),
           members: r.hub._count.memberships,
         }))}
         interests={user.interests}

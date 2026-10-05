@@ -29,6 +29,11 @@ Last reviewed: 2026-10-01 (Québec Law 25 pass). Re-check whenever a new model o
 | Rate-limit counters | `RateLimit.key` | Opaque counters. Magic-link keys hold a keyed hash (HMAC-SHA-256, `AUTH_SECRET`) of the address / IP, never the value itself — see §5 |
 | Consent ledger | `Consent` | What each person expressly agreed to (debts, debt sharing per hub, AI mail analysis per hub, age 14+/18+), when, when withdrawn, and under which policy version |
 | Email visibility choice | `HubMembership.showEmail` | Per hub; off by default |
+| Profile | `User.username`, `User.avatarUrl` | Chosen handle (visible to people who can invite you) and optional profile photo (Blob) |
+| App invitations | `AppInvite.email`, `.claimedEmail` | The address an inviter typed or the invitee entered; token stored only as a SHA-256 hash. Server-only table (no app-role grant) |
+| Who invited whom | `User.invitedById`, `HubMembership.invitedById` | Shown on invite cards; set to null if the inviter deletes their account |
+| Join requests | `HubMembership` (status `REQUESTED`), `.requestNote` | Optional ≤140-char note to the hub's owners; email addresses refused in it |
+| Pending address change | `EmailChange.newEmail` | Token hashed; valid 1 hour. Server-only table |
 | AI-notice flag | `User.aiNoticeAt` | When the one-time "who processes AI input" notice was dismissed |
 
 **Sensitivity note.** Debt balances and default status, plus parsed email
@@ -112,6 +117,10 @@ dictation is done by the browser/phone vendor: `User.aiNoticeAt`.
    | Sessions | 7 days (JWT cookie, refreshed daily) | Expire |
    | Reminder ledger (`ReminderSent`) | Life of the account | Deleted with the account |
    | Consent ledger (`Consent`) | Life of the account, revoked rows included | Deleted with the account |
+   | App invitations (`AppInvite`) | 14 days usable | Deleted 30 days after used, cancelled or expired (`pruneAccountLeftovers`) |
+   | Pending address changes (`EmailChange`) | 1 hour | Deleted at the next daily sweep |
+   | Unanswered hub invites and join requests | 60 days | Deleted |
+   | Accounts created by the old hub-invite flow and never used (never signed in or onboarded, nothing authored) | 30 days | Deleted |
    | Everything else (tasks, budget, debts, …) | Until the person deletes it or their account | Deleted / anonymised per §4 |
 
    Still open: an inactivity rule for

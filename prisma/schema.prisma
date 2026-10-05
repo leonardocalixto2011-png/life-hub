@@ -48,6 +48,16 @@ model User {
   /// and that dictation is done by the browser/phone vendor. Informational,
   /// never blocking.
   aiNoticeAt         DateTime?
+  /// The person's handle: lowercase, unique, chosen at /welcome or /account.
+  /// Lets an owner invite someone to a hub without knowing their address, and
+  /// tells two people with the same first name apart. See lib/username.ts.
+  username           String?   @unique
+  /// Profile photo (our own Blob host only, see lib/blob-url.ts). Distinct from
+  /// the unused Auth.js `image` field, like backgroundImageUrl.
+  avatarUrl          String?
+  /// Who brought them into the app (an AppInvite or a hub invite), if anyone.
+  invitedById        String?
+  invitedBy          User?     @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
   role               UserRole  @default(MEMBER)
   createdAt          DateTime  @default(now())
 
@@ -65,7 +75,7 @@ model User {
   notificationPref   NotificationPreference?
   createdHubs        Hub[]                   @relation("HubCreatedBy")
   hubCoversSet       Hub[]                   @relation("HubCoverBy")
-  hubMemberships     HubMembership[]
+  hubMemberships     HubMembership[]         @relation("MembershipUser")
   mailAccounts       MailAccount[]
   remindersSent      ReminderSent[]
   specialDates       SpecialDate[]
@@ -73,6 +83,56 @@ model User {
   quickFavorites     QuickFavorite[]
   consents           Consent[]
   activities         Activity[]
+  invitees           User[]                  @relation("InvitedBy")
+  appInvitesSent     AppInvite[]             @relation("AppInviteBy")
+  appInvitesUsed     AppInvite[]             @relation("AppInviteUsedBy")
+  membershipsInvited HubMembership[]         @relation("MembershipInvitedBy")
+  emailChanges       EmailChange[]
+}
+
+/// An invitation to the app itself, not to a hub. Sent by email (bound to that
+/// address) or handed over as a link (bound to the first address that claims
+/// it). Single use, expires. Only a hash of the token is stored, so the table
+/// is no use to anyone who reads it. See lib/app-invites.ts.
+model AppInvite {
+  id           String    @id @default(cuid())
+  tokenHash    String    @unique
+  createdById  String
+  createdBy    User      @relation("AppInviteBy", fields: [createdById], references: [id], onDelete: Cascade)
+  /// Set for an email invite: only this address can use it.
+  email        String?
+  /// Set when someone opens a link invite and enters their address. Replaced if
+  /// they correct a typo; whichever address is on it when a link is clicked wins.
+  claimedEmail String?
+  /// A hub the person is also invited into (an owner's email invite to someone
+  /// with no account yet). Becomes an INVITED membership when they sign up, so
+  /// joining is still their choice.
+  hubId        String?
+  hub          Hub?      @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  usedAt       DateTime?
+  usedById     String?
+  usedBy       User?     @relation("AppInviteUsedBy", fields: [usedById], references: [id], onDelete: SetNull)
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([createdById, createdAt])
+  @@index([email])
+  @@index([claimedEmail])
+}
+
+/// A pending change of sign-in address, confirmed from a link sent to the NEW
+/// address. Hashed token, one hour. See (app)/account/email.
+model EmailChange {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  newEmail  String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 // ---------------------------------------------------------------------------
@@ -128,6 +188,9 @@ enum HubRole {
 enum MembershipStatus {
   INVITED
   ACTIVE
+  /// The person asked to join (with the hub's join code); an owner approves.
+  /// The mirror of INVITED: there the owner proposed and the person answers.
+  REQUESTED
 }
 
 enum Visibility {
@@ -151,6 +214,10 @@ model Hub {
   /// someone asks for the address. Unique so a forwarded mail resolves to
   /// exactly one hub — see src/lib/inbound-address.ts.
   inboundToken String?  @unique
+  /// Code people use to ASK to join (lib/join-codes.ts). Null = asking is off.
+  /// Owner-minted and replaceable, like inboundToken; a request still needs an
+  /// owner's approval, so the code alone lets nobody in.
+  joinCode     String?  @unique
 
   /// The hub's shared cover photo — everyone in the hub sees the same one.
   /// Deliberately distinct from `User.backgroundImageUrl`, which stays private
@@ -187,21 +254,28 @@ model Hub {
   budgetTargets  BudgetTarget[]
   quickFavorites QuickFavorite[]
   activities     Activity[]
+  appInvites     AppInvite[]
 }
 
 model HubMembership {
-  id        String           @id @default(cuid())
-  hubId     String
-  hub       Hub              @relation(fields: [hubId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      HubRole          @default(MEMBER)
-  status    MembershipStatus @default(INVITED)
-  joinedAt  DateTime?
-  createdAt DateTime         @default(now())
+  id          String           @id @default(cuid())
+  hubId       String
+  hub         Hub              @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User             @relation("MembershipUser", fields: [userId], references: [id], onDelete: Cascade)
+  role        HubRole          @default(MEMBER)
+  status      MembershipStatus @default(INVITED)
+  joinedAt    DateTime?
+  createdAt   DateTime         @default(now())
   /// Other members of this hub see this person's NAME only, unless they turn
   /// this on for this hub. Enforced in listMembers / listHubRoster (lib/data.ts).
-  showEmail Boolean          @default(false)
+  showEmail   Boolean          @default(false)
+  /// Who sent the invite (INVITED rows). Shown on the invite card; the hub's
+  /// creator used to be named instead, who often wasn't the one inviting.
+  invitedById String?
+  invitedBy   User?            @relation("MembershipInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+  /// A short message with a join request ("C'est Marie, la sœur de Chantelle").
+  requestNote String?
 
   @@unique([hubId, userId])
   @@index([userId, status])
@@ -783,27 +857,27 @@ model SpecialDate {
 }
 
 model Trip {
-  id          String     @id @default(cuid())
-  hubId       String
-  hub         Hub        @relation(fields: [hubId], references: [id], onDelete: Cascade)
-  visibility  Visibility @default(SHARED)
-  title       String
-  destination String?
-  startDate   DateTime
-  endDate     DateTime
-  budgetCents Int?
+  id            String     @id @default(cuid())
+  hubId         String
+  hub           Hub        @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  visibility    Visibility @default(SHARED)
+  title         String
+  destination   String?
+  startDate     DateTime
+  endDate       DateTime
+  budgetCents   Int?
   /// Put aside so far for this trip — the savings progress bar on the trip page.
-  savedCents  Int        @default(0)
+  savedCents    Int        @default(0)
   /// Who's going — plain member ids (no FK, like Event.attendeeIds). Empty =
   /// everyone in the hub. Drives the per-person "Each" split of deposits.
-  travelerIds String[]   @default([])
-  notes       String?
+  travelerIds   String[]   @default([])
+  notes         String?
   /// The hero photo on the trip page (Vercel Blob URL).
   coverImageUrl String?
-  createdById String
-  createdBy   User       @relation(fields: [createdById], references: [id], onDelete: Restrict)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdById   String
+  createdBy     User       @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
   items     TripItem[]
   /// Reminders its imported plan created — see Deadline.tripId.

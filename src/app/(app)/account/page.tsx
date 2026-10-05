@@ -1,9 +1,14 @@
 import Link from "next/link";
-import { Download, Save, Sparkles, Trash2 } from "lucide-react";
+import { Download, Mail, Save, Sparkles, Trash2, UserPlus } from "lucide-react";
 
 import { requireUser } from "@/lib/session";
 import { getT } from "@/lib/i18n-server";
-import { deleteMyAccount, setDisplayName } from "./actions";
+import { deleteMyAccount, requestEmailChange, setDisplayName, setUsername } from "./actions";
+import { AvatarUpload } from "./AvatarUpload";
+import { UsernameField } from "./UsernameField";
+import { ActionForm } from "@/components/ActionForm";
+import { prisma } from "@/lib/prisma";
+import { suggestUsername } from "@/lib/username";
 import { LegalLinks } from "@/components/LegalPage";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PageHeader } from "@/components/SectionHeader";
@@ -18,11 +23,18 @@ export const dynamic = "force-dynamic";
 export default async function AccountPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; changed?: string }>;
 }) {
   const sp = await searchParams;
   const user = await requireUser();
   const t = await getT();
+  const [invitedBy, pendingChange] = await Promise.all([
+    prisma.user.findUnique({ where: { id: user.id }, select: { invitedBy: { select: { name: true } } } }),
+    prisma.emailChange.findFirst({
+      where: { userId: user.id, expiresAt: { gt: new Date() } },
+      select: { newEmail: true },
+    }),
+  ]);
 
   return (
     <div className="page">
@@ -37,6 +49,17 @@ export default async function AccountPage({
           {t(sp.error)}
         </div>
       )}
+
+      {sp.changed && (
+        <div role="status" className="card p-4 text-sm font-semibold">
+          {t("Done: you now sign in with {email}.", { email: user.email })}
+        </div>
+      )}
+
+      <FormSection title={t("Photo")}>
+        <AvatarUpload userId={user.id} name={user.name} email={user.email} avatarUrl={user.avatarUrl} />
+        <p className="field-hint mt-0">{t("Shown to the people in your hubs, next to your name.")}</p>
+      </FormSection>
 
       <form action={setDisplayName}>
         <FormSection title={t("Your name")}>
@@ -60,6 +83,52 @@ export default async function AccountPage({
           </SubmitButton>
         </FormSection>
       </form>
+
+      <ActionForm action={setUsername}>
+        <FormSection title={t("Username")}>
+          <UsernameField defaultValue={user.username ?? suggestUsername(user.name)} />
+          {!user.username && (
+            <p className="field-hint mt-0">{t("You don't have one yet — the suggestion above isn't saved until you press Save.")}</p>
+          )}
+          <SubmitButton className="btn btn-secondary w-full" pendingLabel={t("Saving…")}>
+            <Save size={16} strokeWidth={2} aria-hidden />
+            {t("Save")}
+          </SubmitButton>
+        </FormSection>
+      </ActionForm>
+
+      <ActionForm action={requestEmailChange}>
+        <FormSection title={t("Sign-in address")}>
+          <p className="field-hint mt-0">
+            {t("Your sign-in links go to {email}. To change it, enter the new address: we send it a confirmation link, and nothing changes until you open it.", { email: user.email })}
+          </p>
+          {pendingChange && (
+            <p className="field-hint mt-0 font-semibold">
+              {t("Waiting for confirmation from {email}.", { email: pendingChange.newEmail })}
+            </p>
+          )}
+          <label className="field-label">
+            {t("New address")}
+            <input name="email" type="email" required autoComplete="email" className="field" placeholder="you@example.com" />
+          </label>
+          <SubmitButton className="btn btn-secondary w-full" pendingLabel={t("Sending…")}>
+            <Mail size={16} strokeWidth={2} aria-hidden />
+            {t("Send the confirmation link")}
+          </SubmitButton>
+        </FormSection>
+      </ActionForm>
+
+      <FormSection title={t("Invite to Life Hub")}>
+        <p className="field-hint mt-0">
+          {invitedBy?.invitedBy?.name
+            ? t("{name} invited you. Bring someone in the same way: they create their own account.", { name: invitedBy.invitedBy.name })
+            : t("Bring someone in: they create their own account, then join your hubs if they want.")}
+        </p>
+        <Link href="/invitations" className="btn btn-secondary w-full">
+          <UserPlus size={17} strokeWidth={2} aria-hidden />
+          {t("Invite someone")}
+        </Link>
+      </FormSection>
 
       <FormSection title={t("Download your data")}>
         <p className="field-hint mt-0">

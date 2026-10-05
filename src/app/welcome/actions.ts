@@ -16,6 +16,8 @@ import {
 } from "@/lib/hub-setup";
 import { defaultHubName, firstNameOf, isInterest } from "@/lib/onboarding";
 import { grantConsent, hasConsent } from "@/lib/consent";
+import { Prisma } from "@prisma/client";
+import { normalizeUsername, usernameMessage, usernameProblem } from "@/lib/username";
 
 /**
  * Server actions for the first-run welcome. Unlike their counterparts under
@@ -105,7 +107,11 @@ export async function declineWelcomeInvite(hubId: string): Promise<Result> {
  * anything but `true` records nothing. Also saves the name other hub members
  * will see, since members no longer see each other's email address.
  */
-export async function saveWelcomeAboutYou(input: { attested: boolean; name?: string }): Promise<Result> {
+export async function saveWelcomeAboutYou(input: {
+  attested: boolean;
+  name?: string;
+  username?: string;
+}): Promise<Result> {
   const user = await requireUser();
   if (input?.attested !== true) {
     return { ok: false, error: "Confirm that you are 14 or older to continue." };
@@ -114,7 +120,24 @@ export async function saveWelcomeAboutYou(input: { attested: boolean; name?: str
   if (!name.success || name.data.includes("@")) {
     return { ok: false, error: "A name can't contain @ — your email stays private." };
   }
-  await grantConsent(user.id, "AGE_14");
+  // Optional here: an empty box keeps whatever they had (or nothing).
+  const username = normalizeUsername(String(input.username ?? ""));
+  if (username) {
+    const problem = usernameProblem(username);
+    if (problem) return { ok: false, error: usernameMessage(problem) };
+  }
+  if (username && username !== user.username) {
+    try {
+      await prisma.user.update({ where: { id: user.id }, data: { username } });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        return { ok: false, error: "That username is taken. Try another one." };
+      }
+      throw e;
+    }
+  }
+  // Once is enough: a replay that only adds a username doesn't re-attest.
+  if (!(await hasConsent(user.id, "AGE_14"))) await grantConsent(user.id, "AGE_14");
   if (name.data && name.data !== user.name) {
     await prisma.user.update({ where: { id: user.id }, data: { name: name.data } });
   }
@@ -148,8 +171,13 @@ export async function finishWelcome(): Promise<void> {
 
   const hubs = await listMyHubs(user.id);
   if (hubs.length === 0) {
-    const invites = await prisma.hubMembership.count({ where: { userId: user.id, status: "INVITED" } });
-    if (invites === 0) {
+    // Someone waiting on an invite or on a join request isn't given a hub
+    // they didn't ask for; /hubs/invites holds them until one comes through
+    // (and offers to make their own meanwhile).
+    const waiting = await prisma.hubMembership.count({
+      where: { userId: user.id, status: { in: ["INVITED", "REQUESTED"] } },
+    });
+    if (waiting === 0) {
       try {
         const hub = await createHubFor(
           user.id,
